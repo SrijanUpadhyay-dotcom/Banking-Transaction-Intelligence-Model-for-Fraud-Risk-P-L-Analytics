@@ -1,1 +1,25 @@
+# Data files - large CSVs tracked separately or excluded
+data/raw/
+data/processed/
 
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+venv/
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# Output binaries (tracked explicitly when ready)
+# outputs/ is included intentionally for portfolio

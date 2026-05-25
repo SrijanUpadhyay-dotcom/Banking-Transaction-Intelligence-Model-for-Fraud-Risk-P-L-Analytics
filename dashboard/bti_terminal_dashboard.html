@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTI Terminal — Banking Transaction Intelligence</title>
+<style>
+  /* ── RESET & BASE ───────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-primary:   #0a0e1a;
+    --bg-secondary: #0f1629;
+    --bg-card:      #141d35;
+    --bg-panel:     #1a2442;
+    --border:       #1e2d50;
+    --border-bright:#2a4080;
+    --amber:        #f4a261;
+    --amber-dim:    #a06030;
+    --green:        #52b788;
+    --green-bright: #74c69d;
+    --green-dim:    #2d6a4f;
+    --red:          #e63946;
+    --red-dim:      #7b1d1d;
+    --blue:         #4895ef;
+    --blue-dim:     #1a3a6b;
+    --white:        #e8ecf0;
+    --grey:         #8892a4;
+    --grey-dim:     #3a4460;
+    --gold:         #e9c46a;
+    --purple:       #b07fef;
+    --font-mono:    "Courier New", "Lucida Console", monospace;
+    --font-ui:      "Segoe UI", Arial, sans-serif;
+  }
+  body {
+    background: var(--bg-primary);
+    color: var(--white);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── SCANLINES OVERLAY ──────────────────────────────────────────── */
+  body::after {
+    content: "";
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── TOP HEADER ────────────────────────────────────────────────── */
+  #top-bar {
+    background: linear-gradient(90deg, #050a16, var(--bg-secondary), #050a16);
+    border-bottom: 2px solid var(--border-bright);
+    padding: 0;
+    position: sticky; top: 0; z-index: 100;
+  }
+  #top-bar .bar-inner {
+    display: flex; align-items: stretch;
+    max-width: 1800px; margin: 0 auto;
+  }
+  .logo-block {
+    background: var(--blue-dim);
+    border-right: 2px solid var(--border-bright);
+    padding: 8px 20px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .logo-block .logo-main {
+    font-size: 22px; font-weight: bold; letter-spacing: 4px;
+    color: var(--amber);
+    text-shadow: 0 0 20px rgba(244,162,97,0.6);
+  }
+  .logo-block .logo-sub {
+    font-size: 8px; letter-spacing: 3px; color: var(--grey);
+    margin-top: 2px;
+  }
+  .header-tags {
+    display: flex; align-items: center; gap: 0;
+    flex: 1; padding: 0 12px;
+  }
+  .htag {
+    padding: 0 14px; height: 100%; display: flex;
+    align-items: center; font-size: 9px; letter-spacing: 2px;
+    color: var(--grey); border-right: 1px solid var(--border);
+    cursor: pointer; transition: all 0.2s;
+    text-transform: uppercase;
+  }
+  .htag:hover, .htag.active { color: var(--amber); background: rgba(244,162,97,0.07); }
+  .live-clock {
+    margin-left: auto; padding: 0 16px;
+    display: flex; flex-direction: column; justify-content: center; align-items: flex-end;
+    border-left: 1px solid var(--border);
+  }
+  .live-clock .clock-time { font-size: 16px; color: var(--green); letter-spacing: 2px; }
+  .live-clock .clock-date { font-size: 9px; color: var(--grey); margin-top: 1px; }
+  .live-indicator {
+    padding: 0 14px; display: flex; align-items: center; gap: 6px;
+    font-size: 9px; color: var(--green); letter-spacing: 2px;
+    border-left: 1px solid var(--border);
+  }
+  .blink { animation: blink 1.2s step-start infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ── NAV TABS ──────────────────────────────────────────────────── */
+  #nav-bar {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center;
+    padding: 0; overflow-x: auto;
+  }
+  .nav-tab {
+    padding: 9px 18px;
+    font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--grey); cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s; white-space: nowrap;
+    border-right: 1px solid var(--border);
+  }
+  .nav-tab:hover { color: var(--amber); border-bottom-color: var(--amber-dim); }
+  .nav-tab.active { color: var(--amber); border-bottom-color: var(--amber); background: rgba(244,162,97,0.05); }
+
+  /* ── MAIN CONTENT ──────────────────────────────────────────────── */
+  #content { max-width: 1800px; margin: 0 auto; padding: 12px; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* ── KPI CARDS ─────────────────────────────────────────────────── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 8px; margin-bottom: 12px;
+  }
+  .kpi-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-top: 2px solid;
+    padding: 12px 14px;
+    transition: all 0.2s;
+  }
+  .kpi-card:hover { border-color: var(--amber); background: var(--bg-panel); }
+  .kpi-card.green  { border-top-color: var(--green); }
+  .kpi-card.amber  { border-top-color: var(--amber); }
+  .kpi-card.red    { border-top-color: var(--red); }
+  .kpi-card.blue   { border-top-color: var(--blue); }
+  .kpi-card.purple { border-top-color: var(--purple); }
+  .kpi-card.gold   { border-top-color: var(--gold); }
+  .kpi-label {
+    font-size: 8px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--grey); margin-bottom: 8px;
+  }
+  .kpi-value {
+    font-size: 22px; font-weight: bold; letter-spacing: 1px; line-height: 1;
+  }
+  .kpi-card.green  .kpi-value { color: var(--green-bright); }
+  .kpi-card.amber  .kpi-value { color: var(--amber); }
+  .kpi-card.red    .kpi-value { color: var(--red); }
+  .kpi-card.blue   .kpi-value { color: var(--blue); }
+  .kpi-card.purple .kpi-value { color: var(--purple); }
+  .kpi-card.gold   .kpi-value { color: var(--gold); }
+  .kpi-sub {
+    font-size: 9px; color: var(--grey); margin-top: 4px;
+  }
+  .kpi-delta { margin-top: 4px; font-size: 9px; }
+  .kpi-delta.up   { color: var(--green); }
+  .kpi-delta.down { color: var(--red); }
+
+  /* ── PANEL / SECTION ───────────────────────────────────────────── */
+  .panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    margin-bottom: 10px;
+  }
+  .panel-header {
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .panel-title {
+    font-size: 9px; letter-spacing: 2.5px; text-transform: uppercase;
+    color: var(--amber);
+  }
+  .panel-meta { font-size: 8px; color: var(--grey); letter-spacing: 1px; }
+  .panel-body { padding: 12px 14px; }
+
+  /* ── TWO COLUMN LAYOUT ─────────────────────────────────────────── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+  /* ── DATA TABLE ────────────────────────────────────────────────── */
+  .data-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 10px;
+  }
+  .data-table th {
+    background: var(--bg-panel);
+    color: var(--amber);
+    font-size: 8px; letter-spacing: 1.5px; text-transform: uppercase;
+    padding: 6px 8px; text-align: left;
+    border-bottom: 1px solid var(--border-bright);
+    white-space: nowrap;
+  }
+  .data-table td {
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    color: var(--white);
+  }
+  .data-table tr:hover td { background: rgba(244,162,97,0.04); }
+  .data-table tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+  .badge {
+    display: inline-block; padding: 1px 7px;
+    font-size: 8px; letter-spacing: 1px; text-transform: uppercase;
+    border-radius: 2px; font-weight: bold;
+  }
+  .badge.critical { background: var(--red-dim);   color: var(--red); }
+  .badge.high     { background: rgba(244,162,97,0.15); color: var(--amber); }
+  .badge.medium   { background: var(--blue-dim);   color: var(--blue); }
+  .badge.low      { background: var(--green-dim);  color: var(--green); }
+
+  /* ── BAR CHART ─────────────────────────────────────────────────── */
+  .bar-chart { display: flex; flex-direction: column; gap: 6px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; }
+  .bar-label { width: 140px; font-size: 9px; color: var(--grey); text-align: right; flex-shrink: 0; }
+  .bar-track { flex: 1; height: 14px; background: var(--bg-panel); border: 1px solid var(--border); position: relative; }
+  .bar-fill { height: 100%; transition: width 1s ease; }
+  .bar-fill.green  { background: linear-gradient(90deg, var(--green-dim), var(--green)); }
+  .bar-fill.amber  { background: linear-gradient(90deg, var(--amber-dim), var(--amber)); }
+  .bar-fill.red    { background: linear-gradient(90deg, var(--red-dim), var(--red)); }
+  .bar-fill.blue   { background: linear-gradient(90deg, var(--blue-dim), var(--blue)); }
+  .bar-value { width: 80px; font-size: 9px; color: var(--white); flex-shrink: 0; }
+
+  /* ── RISK HEATMAP ──────────────────────────────────────────────── */
+  .heatmap-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 3px; margin-top: 4px;
+  }
+  .hmap-cell {
+    aspect-ratio: 1;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .hmap-cell:hover { transform: scale(1.15); z-index: 10; }
+  .hmap-cell.risk-0 { background: var(--green-dim); }
+  .hmap-cell.risk-1 { background: #3d8b5e; }
+  .hmap-cell.risk-2 { background: #8a9a20; }
+  .hmap-cell.risk-3 { background: var(--gold); }
+  .hmap-cell.risk-4 { background: var(--amber); }
+  .hmap-cell.risk-5 { background: #c45e20; }
+  .hmap-cell.risk-6 { background: #c43520; }
+  .hmap-cell.risk-7 { background: var(--red); }
+  .hmap-cell.risk-8 { background: #b00000; }
+  .hmap-cell.risk-9 { background: #7b0000; }
+
+  /* ── SEARCH BAR ────────────────────────────────────────────────── */
+  .search-box {
+    display: flex; gap: 8px; align-items: center;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-bright);
+    padding: 8px 12px;
+    margin-bottom: 12px;
+  }
+  .search-box input {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: var(--green); font-family: var(--font-mono); font-size: 12px;
+    letter-spacing: 1px;
+  }
+  .search-box input::placeholder { color: var(--grey-dim); }
+  .search-btn {
+    background: var(--border-bright); border: none; color: var(--amber);
+    padding: 4px 16px; font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 1.5px; cursor: pointer; text-transform: uppercase;
+  }
+  .search-btn:hover { background: var(--amber); color: var(--bg-primary); }
+
+  /* ── ALERT RIBBON ──────────────────────────────────────────────── */
+  #alert-ribbon {
+    background: rgba(230, 57, 70, 0.12);
+    border: 1px solid var(--red-dim);
+    border-left: 3px solid var(--red);
+    padding: 6px 14px;
+    margin-bottom: 10px;
+    display: flex; align-items: center; gap: 12px;
+    overflow: hidden;
+  }
+  #alert-ribbon .alert-tag {
+    font-size: 8px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--red); font-weight: bold; white-space: nowrap;
+  }
+  #alert-ticker {
+    color: var(--amber); font-size: 10px;
+    animation: ticker 30s linear infinite;
+    white-space: nowrap;
+  }
+  @keyframes ticker {
+    from { transform: translateX(100vw); }
+    to   { transform: translateX(-200%); }
+  }
+
+  /* ── CHART PLACEHOLDER ─────────────────────────────────────────── */
+  .chart-area {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    padding: 16px; text-align: center;
+    color: var(--grey-dim); font-size: 10px;
+    min-height: 120px; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 8px;
+  }
+  .chart-area .chart-icon { font-size: 28px; opacity: 0.4; }
+
+  /* ── MINI SPARKLINE ────────────────────────────────────────────── */
+  .sparkline {
+    display: flex; align-items: flex-end; gap: 2px;
+    height: 30px; margin-top: 6px;
+  }
+  .spark-bar {
+    flex: 1; background: var(--green-dim);
+    min-height: 3px; transition: height 0.5s;
+    border-top: 1px solid var(--green);
+  }
+
+  /* ── FORMULA CARD ──────────────────────────────────────────────── */
+  .formula-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .formula-card {
+    background: var(--bg-panel);
+    border-left: 2px solid var(--amber);
+    padding: 8px 12px;
+  }
+  .formula-name { font-size: 8px; color: var(--amber); letter-spacing: 1.5px; text-transform: uppercase; }
+  .formula-expr { font-size: 10px; color: var(--green); margin-top: 4px; font-family: var(--font-mono); }
+
+  /* ── ARCHITECTURE FLOW ─────────────────────────────────────────── */
+  .arch-flow {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 8px;
+  }
+  .arch-layer {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    position: relative;
+  }
+  .arch-layer::after {
+    content: "▼"; position: absolute;
+    bottom: -16px; left: 50%;
+    transform: translateX(-50%);
+    color: var(--grey-dim); font-size: 12px;
+    z-index: 1;
+  }
+  .arch-layer:last-child::after { display: none; }
+  .arch-num {
+    background: var(--amber); color: var(--bg-primary);
+    font-size: 9px; font-weight: bold;
+    width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .arch-name { font-size: 10px; color: var(--white); flex: 1; }
+  .arch-tools { font-size: 8px; color: var(--green); letter-spacing: 1px; }
+
+  /* ── FOOTER ────────────────────────────────────────────────────── */
+  #footer {
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    padding: 6px 16px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 8px; color: var(--grey); letter-spacing: 1px;
+    margin-top: 20px;
+  }
+
+  /* ── MEMO BOX ──────────────────────────────────────────────────── */
+  .memo-box {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-bright);
+    padding: 16px 20px;
+    font-size: 11px; line-height: 1.8;
+    color: var(--white);
+  }
+  .memo-section { color: var(--amber); font-weight: bold; margin-top: 12px; margin-bottom: 4px; letter-spacing: 2px; font-size: 10px; text-transform: uppercase; }
+  .memo-text { color: var(--white); }
+
+  /* ── SCROLLBAR ─────────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-primary); }
+  ::-webkit-scrollbar-thumb { background: var(--border-bright); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--amber-dim); }
+
+  /* ── RESPONSIVE ────────────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .two-col, .three-col { grid-template-columns: 1fr; }
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .heatmap-grid { grid-template-columns: repeat(8, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── TOP HEADER ──────────────────────────────────────────────────── -->
+<div id="top-bar">
+  <div class="bar-inner">
+    <div class="logo-block">
+      <div class="logo-main">BTI</div>
+      <div class="logo-sub">BANKING TRANSACTION INTELLIGENCE</div>
+    </div>
+    <div class="header-tags">
+      <div class="htag active">FRAUD</div>
+      <div class="htag">FP&amp;A</div>
+      <div class="htag">P&amp;L</div>
+      <div class="htag">RISK</div>
+      <div class="htag">TX MONITORING</div>
+      <div class="htag">EXCEPTION QUEUE</div>
+    </div>
+    <div class="live-indicator">
+      <span class="blink">●</span> LIVE
+    </div>
+    <div class="live-clock">
+      <div class="clock-time" id="clock">00:00:00</div>
+      <div class="clock-date" id="clock-date">--</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── NAV TABS ────────────────────────────────────────────────────── -->
+<div id="nav-bar">
+  <div class="nav-tab active" onclick="showScreen('overview')">F1 OVERVIEW</div>
+  <div class="nav-tab" onclick="showScreen('fraud')">F2 FRAUD MONITOR</div>
+  <div class="nav-tab" onclick="showScreen('pnl')">F3 P&amp;L HEATMAP</div>
+  <div class="nav-tab" onclick="showScreen('search')">F4 TX SEARCH</div>
+  <div class="nav-tab" onclick="showScreen('customer')">F5 CUSTOMER RISK</div>
+  <div class="nav-tab" onclick="showScreen('merchant')">F6 MERCHANT RISK</div>
+  <div class="nav-tab" onclick="showScreen('channel')">F7 CHANNEL P&amp;L</div>
+  <div class="nav-tab" onclick="showScreen('exceptions')">F8 EXCEPTION QUEUE</div>
+  <div class="nav-tab" onclick="showScreen('memo')">F9 ANALYST MEMO</div>
+  <div class="nav-tab" onclick="showScreen('architecture')">F10 ARCHITECTURE</div>
+</div>
+
+<!-- ── ALERT RIBBON ────────────────────────────────────────────────── -->
+<div id="alert-ribbon">
+  <div class="alert-tag">⚠ ALERT TICKER</div>
+  <div id="alert-ticker">
+    HIGH RISK: TXN-00048271 | Customer CUST-002841 | $47,320 | Crypto Exchange | Risk Score: 94 — CRITICAL |||
+    CHARGEBACK SPIKE: Gaming &amp; Gambling merchants +340% MoM — Escalation Required |||
+    OFF-HOURS CLUSTER: 23 transactions 02:00–04:00 | Mobile Banking | Device Mismatch Detected |||
+    FRAUD ALERT: Card Not Present Fraud Pattern — 14 linked accounts | P&amp;L Impact: -$128,400 |||
+    DUPLICATE TX: 8 potential duplicates — Customer CUST-005912 | Pending Investigation |||
+    REVENUE LEAKAGE: Refund-to-Sale ratio 42% in Online Marketplace segment — Action Required
+  </div>
+</div>
+
+<div id="content">
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SCREEN F1: OVERVIEW DASHBOARD
+═══════════════════════════════════════════════════════════════════ -->
+<div class="screen active" id="screen-overview">
+  <!-- KPI Row 1 -->
+  <div class="kpi-grid">
+    <div class="kpi-card amber">
+      <div class="kpi-label">Gross Tx Value</div>
+      <div class="kpi-value">$4.82B</div>
+      <div class="kpi-sub">50,000 Transactions</div>
+      <div class="kpi-delta up">↑ +7.3% MoM</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Net Revenue</div>
+      <div class="kpi-value">$12.4M</div>
+      <div class="kpi-sub">Fee + Interchange − Cost</div>
+      <div class="kpi-delta up">↑ +2.1% MoM</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Fraud Exposure</div>
+      <div class="kpi-value">$58.2M</div>
+      <div class="kpi-sub">Confirmed Fraud Loss</div>
+      <div class="kpi-delta down">↓ −4.2% MoM</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Chargeback Loss</div>
+      <div class="kpi-value">$38.7M</div>
+      <div class="kpi-sub">Chargeback P&amp;L Impact</div>
+      <div class="kpi-delta down">↑ +11.3% MoM</div>
+    </div>
+    <div class="kpi-card blue">
+      <div class="kpi-label">Suspicious Txns</div>
+      <div class="kpi-value">3,841</div>
+      <div class="kpi-sub">7.7% of Portfolio</div>
+      <div class="kpi-delta down">↑ +0.8% MoM</div>
+    </div>
+    <div class="kpi-card purple">
+      <div class="kpi-label">High-Risk Customers</div>
+      <div class="kpi-value">412</div>
+      <div class="kpi-sub">Score ≥ 80</div>
+      <div class="kpi-delta down">↑ +23 this week</div>
+    </div>
+    <div class="kpi-card gold">
+      <div class="kpi-label">Revenue Leakage</div>
+      <div class="kpi-value">18.4%</div>
+      <div class="kpi-sub">of Total Fee Income</div>
+      <div class="kpi-delta down">↑ +1.2% MoM</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Risk-Adj Revenue</div>
+      <div class="kpi-value">-$84.5M</div>
+      <div class="kpi-sub">After Fraud + CB Loss</div>
+      <div class="kpi-delta up">↑ Improving</div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <!-- Monthly Volume Sparkline -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Monthly P&amp;L Trend (24 Months)</div>
+        <div class="panel-meta">Jan 2023 — Dec 2024</div>
+      </div>
+      <div class="panel-body">
+        <div class="bar-chart">
+          <div class="bar-row">
+            <div class="bar-label">Jan 2023</div>
+            <div class="bar-track"><div class="bar-fill green" style="width:42%"></div></div>
+            <div class="bar-value">$521K</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Mar 2023</div>
+            <div class="bar-track"><div class="bar-fill green" style="width:58%"></div></div>
+            <div class="bar-value">$714K</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Jun 2023</div>
+            <div class="bar-track"><div class="bar-fill amber" style="width:71%"></div></div>
+            <div class="bar-value">$876K</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Sep 2023</div>
+            <div class="bar-track"><div class="bar-fill amber" style="width:65%"></div></div>
+            <div class="bar-value">$801K</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Dec 2023</div>
+            <div class="bar-track"><div class="bar-fill red" style="width:35%"></div></div>
+            <div class="bar-value">$432K</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Mar 2024</div>
+            <div class="bar-track"><div class="bar-fill green" style="width:80%"></div></div>
+            <div class="bar-value">$986K</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Jun 2024</div>
+            <div class="bar-track"><div class="bar-fill green" style="width:92%"></div></div>
+            <div class="bar-value">$1.13M</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Dec 2024</div>
+            <div class="bar-track"><div class="bar-fill amber" style="width:76%"></div></div>
+            <div class="bar-value">$936K</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- P&L Waterfall -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">P&amp;L Component Breakdown</div>
+        <div class="panel-meta">FY 2023–2024</div>
+      </div>
+      <div class="panel-body">
+        <div class="bar-chart">
+          <div class="bar-row">
+            <div class="bar-label">Fee Income</div>
+            <div class="bar-track"><div class="bar-fill green" style="width:100%"></div></div>
+            <div class="bar-value" style="color:var(--green)">+$8.4M</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Interchange</div>
+            <div class="bar-track"><div class="bar-fill green" style="width:70%"></div></div>
+            <div class="bar-value" style="color:var(--green)">+$5.9M</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Processing Cost</div>
+            <div class="bar-track"><div class="bar-fill red" style="width:25%"></div></div>
+            <div class="bar-value" style="color:var(--red)">-$2.1M</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Fraud Loss</div>
+            <div class="bar-track"><div class="bar-fill red" style="width:68%"></div></div>
+            <div class="bar-value" style="color:var(--red)">-$58.2M</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Chargeback Loss</div>
+            <div class="bar-track"><div class="bar-fill red" style="width:45%"></div></div>
+            <div class="bar-value" style="color:var(--red)">-$38.7M</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Refund Loss</div>
+            <div class="bar-track"><div class="bar-fill amber" style="width:18%"></div></div>
+            <div class="bar-value" style="color:var(--amber)">-$3.2M</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alert Table -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">Live Exception Queue — Critical &amp; High Priority</div>
+      <div class="panel-meta">Last Updated: <span id="last-updated">--</span></div>
+    </div>
+    <div class="panel-body" style="overflow-x:auto">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>TX ID</th><th>Customer</th><th>Date</th><th>Amount</th>
+            <th>Type</th><th>Channel</th><th>Merchant Cat</th>
+            <th>Risk Score</th><th>Alert Tier</th><th>P&amp;L Impact</th>
+          </tr>
+        </thead>
+        <tbody id="exception-tbody">
+          <!-- Populated by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SCREEN F2: FRAUD MONITOR
+═══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-fraud">
+  <div class="kpi-grid">
+    <div class="kpi-card red"><div class="kpi-label">Fraud Transactions</div><div class="kpi-value">2,487</div><div class="kpi-sub">5.0% of Portfolio</div></div>
+    <div class="kpi-card red"><div class="kpi-label">Fraud Loss Rate</div><div class="kpi-value">1.21%</div><div class="kpi-sub">of Gross TX Value</div></div>
+    <div class="kpi-card amber"><div class="kpi-label">Card Not Present</div><div class="kpi-value">782</div><div class="kpi-sub">Top Fraud Type</div></div>
+    <div class="kpi-card amber"><div class="kpi-label">Account Takeover</div><div class="kpi-value">641</div><div class="kpi-sub">2nd Fraud Type</div></div>
+    <div class="kpi-card purple"><div class="kpi-label">ML Flagged</div><div class="kpi-value">4,120</div><div class="kpi-sub">Isolation Forest + RF</div></div>
+    <div class="kpi-card blue"><div class="kpi-label">Rules Triggered</div><div class="kpi-value">3,841</div><div class="kpi-sub">≥3 Rules Fired</div></div>
+  </div>
+
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">Fraud by Channel</div></div>
+      <div class="panel-body">
+        <div class="bar-chart">
+          <div class="bar-row"><div class="bar-label">Mobile Banking</div><div class="bar-track"><div class="bar-fill red" style="width:72%"></div></div><div class="bar-value">847 txns</div></div>
+          <div class="bar-row"><div class="bar-label">Internet Banking</div><div class="bar-track"><div class="bar-fill red" style="width:58%"></div></div><div class="bar-value">682 txns</div></div>
+          <div class="bar-row"><div class="bar-label">API/Open Banking</div><div class="bar-track"><div class="bar-fill amber" style="width:42%"></div></div><div class="bar-value">494 txns</div></div>
+          <div class="bar-row"><div class="bar-label">ATM</div><div class="bar-track"><div class="bar-fill amber" style="width:30%"></div></div><div class="bar-value">353 txns</div></div>
+          <div class="bar-row"><div class="bar-label">USSD</div><div class="bar-track"><div class="bar-fill red" style="width:25%"></div></div><div class="bar-value">294 txns</div></div>
+          <div class="bar-row"><div class="bar-label">Branch</div><div class="bar-track"><div class="bar-fill green" style="width:12%"></div></div><div class="bar-value">141 txns</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">Top Fraud Typologies</div></div>
+      <div class="panel-body">
+        <table class="data-table">
+          <thead><tr><th>Fraud Type</th><th>Count</th><th>Loss ($)</th><th>Avg Risk</th></tr></thead>
+          <tbody>
+            <tr><td>Card Not Present</td><td>782</td><td>$18.4M</td><td>88</td></tr>
+            <tr><td>Account Takeover</td><td>641</td><td>$15.2M</td><td>84</td></tr>
+            <tr><td>Authorised Push Payment</td><td>482</td><td>$11.4M</td><td>79</td></tr>
+            <tr><td>Identity Theft</td><td>298</td><td>$7.1M</td><td>76</td></tr>
+            <tr><td>SIM Swap</td><td>184</td><td>$4.3M</td><td>82</td></tr>
+            <tr><td>First Party Fraud</td><td>100</td><td>$1.8M</td><td>65</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">Risk Score Heatmap — Transaction Portfolio (100 Cells = 500 Txns Each)</div></div>
+    <div class="panel-body">
+      <div class="heatmap-grid" id="heatmap-grid"></div>
+      <div style="display:flex;gap:12px;margin-top:12px;font-size:8px;color:var(--grey);align-items:center;">
+        <span>RISK SCALE:</span>
+        <span style="color:var(--green)">▮ LOW (0–20)</span>
+        <span style="color:var(--gold)">▮ MEDIUM (40–60)</span>
+        <span style="color:var(--amber)">▮ HIGH (60–80)</span>
+        <span style="color:var(--red)">▮ CRITICAL (80–100)</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SCREEN F3: P&L HEATMAP
+═══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-pnl">
+  <div class="kpi-grid">
+    <div class="kpi-card green"><div class="kpi-label">Gross TX Value</div><div class="kpi-value">$4.82B</div></div>
+    <div class="kpi-card green"><div class="kpi-label">Fee Income</div><div class="kpi-value">$8.4M</div></div>
+    <div class="kpi-card green"><div class="kpi-label">Interchange</div><div class="kpi-value">$5.9M</div></div>
+    <div class="kpi-card red"><div class="kpi-label">Total Losses</div><div class="kpi-value">$100.1M</div></div>
+    <div class="kpi-card amber"><div class="kpi-label">Cost-to-Income</div><div class="kpi-value">14.8%</div></div>
+    <div class="kpi-card blue"><div class="kpi-label">Fraud Loss Rate</div><div class="kpi-value">1.21%</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">P&amp;L Formula Reference</div></div>
+    <div class="panel-body">
+      <div class="formula-grid">
+        <div class="formula-card">
+          <div class="formula-name">Net Revenue</div>
+          <div class="formula-expr">= Fee Income + Interchange − Processing Cost</div>
+        </div>
+        <div class="formula-card">
+          <div class="formula-name">Net P&amp;L Impact</div>
+          <div class="formula-expr">= Net Revenue − CB Loss − Refund Loss − Fraud Loss</div>
+        </div>
+        <div class="formula-card">
+          <div class="formula-name">Fraud Loss Rate (%)</div>
+          <div class="formula-expr">= (Fraud Loss / Gross TX Value) × 100</div>
+        </div>
+        <div class="formula-card">
+          <div class="formula-name">Risk-Adjusted Revenue</div>
+          <div class="formula-expr">= Net Revenue − Fraud Loss − Chargeback Loss</div>
+        </div>
+        <div class="formula-card">
+          <div class="formula-name">Revenue Leakage %</div>
+          <div class="formula-expr">= |MIN(0, Net P&amp;L)| / Fee Income × 100</div>
+        </div>
+        <div class="formula-card">
+          <div class="formula-name">Cost-to-Income Ratio</div>
+          <div class="formula-expr">= Processing Cost / (Fee + Interchange) × 100</div>
+        </div>
+        <div class="formula-card">
+          <div class="formula-name">MoM Variance %</div>
+          <div class="formula-expr">= (Current − Prior P&amp;L) / |Prior P&amp;L| × 100</div>
+        </div>
+        <div class="formula-card">
+          <div class="formula-name">Exception Rate (%)</div>
+          <div class="formula-expr">= High-Risk Txns / Total Txns × 100</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">Segment P&amp;L Summary</div></div>
+    <div class="panel-body" style="overflow-x:auto">
+      <table class="data-table">
+        <thead>
+          <tr><th>Segment</th><th>Txns</th><th>Gross TV</th><th>Net Revenue</th><th>Fraud Loss</th><th>Net P&amp;L</th><th>Fraud Rate</th><th>Avg Risk</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Corporate</td><td>3,982</td><td>$1.24B</td><td style="color:var(--green)">$4.2M</td><td style="color:var(--red)">$24.1M</td><td style="color:var(--red)">-$31.2M</td><td>5.8%</td><td>48</td></tr>
+          <tr><td>Private Banking</td><td>2,511</td><td>$892M</td><td style="color:var(--green)">$3.1M</td><td style="color:var(--red)">$18.4M</td><td style="color:var(--red)">-$22.8M</td><td>5.2%</td><td>44</td></tr>
+          <tr><td>SME</td><td>6,024</td><td>$621M</td><td style="color:var(--green)">$2.1M</td><td style="color:var(--red)">$8.7M</td><td style="color:var(--red)">-$11.4M</td><td>4.9%</td><td>41</td></tr>
+          <tr><td>Premium</td><td>9,981</td><td>$482M</td><td style="color:var(--green)">$1.6M</td><td style="color:var(--red)">$5.2M</td><td style="color:var(--red)">-$7.1M</td><td>4.6%</td><td>38</td></tr>
+          <tr><td>NRI / Diaspora</td><td>1,489</td><td>$124M</td><td style="color:var(--green)">$0.4M</td><td style="color:var(--red)">$1.4M</td><td style="color:var(--red)">-$1.9M</td><td>5.1%</td><td>42</td></tr>
+          <tr><td>Retail</td><td>22,412</td><td>$281M</td><td style="color:var(--green)">$0.9M</td><td style="color:var(--amber)">$0.3M</td><td style="color:var(--green)">$0.5M</td><td>3.8%</td><td>32</td></tr>
+          <tr><td>Student</td><td>3,601</td><td>$28M</td><td style="color:var(--green)">$0.1M</td><td style="color:var(--green)">$0.02M</td><td style="color:var(--green)">$0.08M</td><td>2.1%</td><td>26</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SCREEN F4: TRANSACTION SEARCH
+═══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-search">
+  <div class="search-box">
+    <span style="color:var(--amber);letter-spacing:2px;font-size:11px">BTI:&gt;</span>
+    <input type="text" id="search-input" placeholder="Search by TX ID, Customer ID, Merchant, Amount, Fraud Type..." autocomplete="off">
+    <button class="search-btn" onclick="performSearch()">SEARCH</button>
+    <span style="color:var(--grey);font-size:9px">Press ENTER or click SEARCH</span>
+  </div>
+
+  <div class="two-col" style="margin-bottom:10px">
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">Quick Filters</div></div>
+      <div class="panel-body" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="filterSearch('Fraud')"   style="background:var(--red-dim);color:var(--red);border:1px solid var(--red);padding:5px 12px;font-family:var(--font-mono);font-size:9px;cursor:pointer;letter-spacing:1px">FRAUD ONLY</button>
+        <button onclick="filterSearch('Crypto')"  style="background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue);padding:5px 12px;font-family:var(--font-mono);font-size:9px;cursor:pointer;letter-spacing:1px">CRYPTO TX</button>
+        <button onclick="filterSearch('Critical')"style="background:var(--red-dim);color:var(--amber);border:1px solid var(--amber);padding:5px 12px;font-family:var(--font-mono);font-size:9px;cursor:pointer;letter-spacing:1px">CRITICAL RISK</button>
+        <button onclick="filterSearch('Chargeback')" style="background:var(--grey-dim);color:var(--white);border:1px solid var(--border-bright);padding:5px 12px;font-family:var(--font-mono);font-size:9px;cursor:pointer;letter-spacing:1px">CHARGEBACKS</button>
+        <button onclick="filterSearch('Off-Hours')" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green);padding:5px 12px;font-family:var(--font-mono);font-size:9px;cursor:pointer;letter-spacing:1px">OFF-HOURS</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">Search Status</div></div>
+      <div class="panel-body">
+        <div id="search-status" style="font-size:10px;color:var(--grey)">
+          &gt; System ready. Enter transaction ID, customer ID, or keyword.<br>
+          &gt; Dataset: 50,000 transactions | 8,000 customers | 24 months
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">Search Results</div><div class="panel-meta" id="result-count">—</div></div>
+    <div class="panel-body" style="overflow-x:auto">
+      <table class="data-table" id="search-results-table">
+        <thead>
+          <tr><th>TX ID</th><th>Customer</th><th>Date</th><th>Amount</th><th>Type</th><th>Channel</th><th>Merchant</th><th>Risk</th><th>Alert</th><th>P&amp;L</th></tr>
+        </thead>
+        <tbody id="search-tbody">
+          <tr><td colspan="10" style="text-align:center;color:var(--grey);padding:20px">Enter a search term above to query transactions</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SCREEN F8: EXCEPTION QUEUE (detailed)
+═══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-exceptions">
+  <div class="kpi-grid">
+    <div class="kpi-card red"><div class="kpi-label">Critical Alerts</div><div class="kpi-value">48</div><div class="kpi-sub">Score ≥ 85 | Immediate</div></div>
+    <div class="kpi-card amber"><div class="kpi-label">High Priority</div><div class="kpi-value">187</div><div class="kpi-sub">Score 70–84 | 24hr</div></div>
+    <div class="kpi-card blue"><div class="kpi-label">Medium Priority</div><div class="kpi-value">265</div><div class="kpi-sub">Score 50–69 | 48hr</div></div>
+    <div class="kpi-card green"><div class="kpi-label">Total Exception Queue</div><div class="kpi-value">500</div><div class="kpi-sub">Pending Investigation</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">Exception Investigation Queue — Top 500 Transactions</div>
+      <div class="panel-meta">Sorted by Composite Risk Score Descending</div>
+    </div>
+    <div class="panel-body" style="overflow-x:auto">
+      <table class="data-table">
+        <thead>
+          <tr><th>#</th><th>TX ID</th><th>Customer</th><th>Date</th><th>Amount</th><th>Channel</th><th>Merchant Cat</th><th>Fraud Type</th><th>Risk Score</th><th>Rules Fired</th><th>Priority</th><th>P&amp;L Impact</th></tr>
+        </thead>
+        <tbody id="exception-queue-tbody">
+          <!-- Populated by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SCREEN F9: ANALYST MEMO
+═══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-memo">
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">Analyst Investigation Memo — Confidential</div>
+      <div class="panel-meta">Classification: RESTRICTED | For Senior Management</div>
+    </div>
+    <div class="panel-body">
+      <div class="memo-box">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;font-size:10px">
+          <div><span style="color:var(--grey)">TO: </span><span>Senior VP, Fraud Risk &amp; Financial Intelligence</span></div>
+          <div><span style="color:var(--grey)">FROM: </span><span>Transaction Monitoring &amp; Analytics Team</span></div>
+          <div><span style="color:var(--grey)">DATE: </span><span id="memo-date">--</span></div>
+          <div><span style="color:var(--grey)">CLASSIFICATION: </span><span style="color:var(--red)">RESTRICTED</span></div>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:12px">
+          <div style="color:var(--amber);font-size:14px;font-weight:bold;letter-spacing:2px;margin-bottom:12px">
+            RE: BANKING TRANSACTION INTELLIGENCE — FRAUD, RISK &amp; P&amp;L ANALYTICS REVIEW
+          </div>
+
+          <div class="memo-section">1. Executive Summary</div>
+          <div class="memo-text">A comprehensive analytics review of 50,000 banking transactions across digital, card, ATM, branch, and payment channels was conducted for the fiscal period January 2023 – December 2024. The analysis identified statistically significant fraud clusters, revenue leakage patterns, and P&L variances requiring immediate executive attention and targeted risk controls. Approximately 5.0% of transactions were confirmed as fraudulent, with concentrated losses in Card Not Present, Account Takeover, and Authorised Push Payment typologies.</div>
+
+          <div class="memo-section">2. Key Findings</div>
+          <div class="memo-text">
+            ▸ Fraud Loss Rate of 1.21% of Gross Transaction Value — above industry benchmark of 0.8%.<br>
+            ▸ Crypto Exchange and Gaming/Gambling merchant categories show chargeback ratios 3.2× above portfolio average.<br>
+            ▸ Off-hours transactions (00:00–05:59) exhibit a fraud rate 4.7× higher than daytime transactions.<br>
+            ▸ USSD and API/Open Banking channels exhibit the highest fraud concentration per transaction volume.<br>
+            ▸ Revenue leakage from refunds and reversals represents approximately 18.4% of total fee income.<br>
+            ▸ Machine Learning (Isolation Forest + Random Forest ensemble) achieved ROC-AUC of 0.96 on held-out test data.
+          </div>
+
+          <div class="memo-section">3. P&amp;L Impact Summary</div>
+          <div class="memo-text">
+            ▸ Gross Transaction Value: $4.82B | Net Revenue: $12.4M | Net P&L Impact: -$84.5M<br>
+            ▸ Fraud Loss: $58.2M | Chargeback Loss: $38.7M | Refund Loss: $3.2M<br>
+            ▸ P&L compression estimated at 22–28% vs. gross fee income due to fraud, chargebacks, and refund losses.<br>
+            ▸ Corporate and Private Banking segments represent 63% of total fraud loss despite 13% of transaction count.
+          </div>
+
+          <div class="memo-section">4. Recommended Actions</div>
+          <div class="memo-text">
+            1. Implement enhanced transaction velocity controls for USSD and API channels.<br>
+            2. Deploy real-time device fingerprinting and IP geolocation for all Card Not Present transactions above $500.<br>
+            3. Escalate 500-transaction exception queue to Level 2 investigation — estimated exposure exceeds materiality threshold.<br>
+            4. Engage Crypto Exchange and Gaming merchants for enhanced monitoring or volume restriction.<br>
+            5. Commission full reconciliation review on the 12% of transactions with balance inconsistency flags.
+          </div>
+
+          <div class="memo-section">5. Next Steps</div>
+          <div class="memo-text">
+            ▸ Q1: Promote ML ensemble to production transaction monitoring stack (target &lt;2% FPR, &gt;85% recall).<br>
+            ▸ Q1: Integrate BTI Terminal into senior management reporting cadence (weekly P&L + fraud pack).<br>
+            ▸ Q2: Commission external benchmark comparison against LexisNexis / FraudNet industry data.<br>
+            ▸ Q2: Review and update 19-rule fraud engine based on Q1 model performance metrics.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SCREEN F10: ARCHITECTURE
+═══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-architecture">
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">System Architecture — 10-Layer Intelligence Framework</div></div>
+    <div class="panel-body">
+      <div class="arch-flow">
+        <div class="arch-layer"><div class="arch-num">1</div><div class="arch-name">Data Ingestion Layer</div><div class="arch-tools">Python · pandas · CSV / API / SQL</div></div>
+        <div class="arch-layer"><div class="arch-num">2</div><div class="arch-name">Data Cleaning &amp; Validation Layer</div><div class="arch-tools">Python · pandas · numpy · SQL quality checks</div></div>
+        <div class="arch-layer"><div class="arch-num">3</div><div class="arch-name">Transaction Intelligence Layer</div><div class="arch-tools">Python · Feature Engineering · Temporal · Velocity · Amount Bands</div></div>
+        <div class="arch-layer"><div class="arch-num">4</div><div class="arch-name">Fraud Rules Engine (19 Rules)</div><div class="arch-tools">Python · SQL · Rule Weights · Composite Fraud Score</div></div>
+        <div class="arch-layer"><div class="arch-num">5</div><div class="arch-name">Machine Learning Anomaly Detection</div><div class="arch-tools">scikit-learn · Isolation Forest · Random Forest · Logistic Regression · Z-Score</div></div>
+        <div class="arch-layer"><div class="arch-num">6</div><div class="arch-name">Risk Scoring Model</div><div class="arch-tools">Composite Score (0–100) · Alert Tiers · Exception Queue</div></div>
+        <div class="arch-layer"><div class="arch-num">7</div><div class="arch-name">FP&amp;A &amp; P&amp;L Analytics Layer</div><div class="arch-tools">Python · Excel · Net Revenue · Fraud Loss Rate · Channel &amp; Segment Profitability</div></div>
+        <div class="arch-layer"><div class="arch-num">8</div><div class="arch-name">Dashboard &amp; Reporting Layer</div><div class="arch-tools">Power BI · Streamlit · Excel · BTI Terminal (HTML/CSS/JS)</div></div>
+        <div class="arch-layer"><div class="arch-num">9</div><div class="arch-name">AI Investigation Memo Layer</div><div class="arch-tools">LLM · Natural Language Generation · Analyst Memos · Executive Summaries</div></div>
+        <div class="arch-layer"><div class="arch-num">10</div><div class="arch-name">Executive Decision-Support Layer</div><div class="arch-tools">PDF Reports · Excel Workbook · Portfolio Presentation · Interview Materials</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">Technical Stack Reference</div></div>
+    <div class="panel-body" style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr><th>Layer</th><th>Tool / Language</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>Data Generation</td><td style="color:var(--blue)">Python (pandas, numpy)</td><td>50,000 synthetic banking transactions</td></tr>
+          <tr><td>Data Cleaning</td><td style="color:var(--blue)">Python, SQL</td><td>Validation, deduplication, enrichment</td></tr>
+          <tr><td>Transaction Querying</td><td style="color:var(--amber)">SQL (PostgreSQL/BigQuery)</td><td>CTEs, window functions, aggregations</td></tr>
+          <tr><td>Fraud Rules Engine</td><td style="color:var(--blue)">Python, SQL</td><td>19 weighted rule signals</td></tr>
+          <tr><td>Anomaly Detection</td><td style="color:var(--purple)">scikit-learn</td><td>Isolation Forest, Random Forest, LR</td></tr>
+          <tr><td>FP&amp;A Modeling</td><td style="color:var(--green)">Excel, Python</td><td>P&L formulas, variance analysis</td></tr>
+          <tr><td>Dashboarding</td><td style="color:var(--green)">Power BI / Streamlit</td><td>Interactive KPI dashboards</td></tr>
+          <tr><td>Terminal Interface</td><td style="color:var(--amber)">HTML, CSS, JavaScript</td><td>Bloomberg-style BTI Terminal</td></tr>
+          <tr><td>PDF Reporting</td><td style="color:var(--blue)">Python (fpdf2)</td><td>Consulting-grade report</td></tr>
+          <tr><td>Analyst Memos</td><td style="color:var(--purple)">LLM (Claude / GPT)</td><td>NL investigation memos, summaries</td></tr>
+          <tr><td>NL Querying</td><td style="color:var(--purple)">LLM</td><td>Natural language transaction queries</td></tr>
+          <tr><td>Portfolio</td><td style="color:var(--gold)">PDF, Excel, GitHub, LinkedIn</td><td>Recruiter-grade presentation</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Remaining screens: F5 Customer Risk, F6 Merchant Risk, F7 Channel -->
+<div class="screen" id="screen-customer">
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">Customer Risk Intelligence</div><div class="panel-meta">Top 20 High-Risk Customers by Composite Risk Score</div></div>
+    <div class="panel-body" style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr><th>Customer ID</th><th>Segment</th><th>Geography</th><th>Txns</th><th>Fraud Count</th><th>CB Count</th><th>Fraud Loss</th><th>Risk Score</th><th>Risk Tier</th><th>Customer P&L</th></tr></thead>
+        <tbody id="customer-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="screen-merchant">
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">Merchant Risk Analysis</div><div class="panel-meta">Ranked by Fraud Loss</div></div>
+    <div class="panel-body" style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr><th>Merchant</th><th>Category</th><th>Txns</th><th>Fraud Rate</th><th>CB Rate</th><th>Fraud Loss</th><th>Refund Loss</th><th>Net P&L</th><th>Risk Tier</th></tr></thead>
+        <tbody id="merchant-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="screen-channel">
+  <div class="kpi-grid">
+    <div class="kpi-card green"><div class="kpi-label">Branch Net P&L</div><div class="kpi-value">+$2.1M</div><div class="kpi-sub">Lowest fraud rate</div></div>
+    <div class="kpi-card amber"><div class="kpi-label">Mobile Banking</div><div class="kpi-value">-$18.4M</div><div class="kpi-sub">Highest volume</div></div>
+    <div class="kpi-card red"><div class="kpi-label">API/Open Banking</div><div class="kpi-value">-$9.7M</div><div class="kpi-sub">High fraud conc.</div></div>
+    <div class="kpi-card red"><div class="kpi-label">USSD</div><div class="kpi-value">-$4.2M</div><div class="kpi-sub">Controls needed</div></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">Channel Profitability Breakdown</div></div>
+    <div class="panel-body" style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr><th>Channel</th><th>Txns</th><th>Gross TV</th><th>Fee Income</th><th>Processing Cost</th><th>Fraud Loss</th><th>Net P&L</th><th>Fraud Rate</th><th>P&L/Tx</th></tr></thead>
+        <tbody>
+          <tr><td>Mobile Banking</td><td>14,982</td><td>$1.44B</td><td style="color:var(--green)">$3.6M</td><td style="color:var(--red)">$0.5M</td><td style="color:var(--red)">$21.5M</td><td style="color:var(--red)">-$18.4M</td><td style="color:var(--red)">5.8%</td><td>-$1.23</td></tr>
+          <tr><td>Internet Banking</td><td>11,024</td><td>$1.06B</td><td style="color:var(--green)">$2.7M</td><td style="color:var(--red)">$0.4M</td><td style="color:var(--red)">$14.1M</td><td style="color:var(--red)">-$11.8M</td><td>5.1%</td><td>-$1.07</td></tr>
+          <tr><td>ATM</td><td>9,012</td><td>$482M</td><td style="color:var(--green)">$1.0M</td><td style="color:var(--red)">$0.2M</td><td style="color:var(--red)">$7.2M</td><td style="color:var(--red)">-$6.4M</td><td>4.2%</td><td>-$0.71</td></tr>
+          <tr><td>POS Terminal</td><td>4,992</td><td>$367M</td><td style="color:var(--green)">$0.9M</td><td style="color:var(--red)">$0.1M</td><td style="color:var(--red)">$3.8M</td><td style="color:var(--red)">-$3.0M</td><td>3.8%</td><td>-$0.60</td></tr>
+          <tr><td>API/Open Banking</td><td>2,003</td><td>$214M</td><td style="color:var(--green)">$0.5M</td><td>$0.08M</td><td style="color:var(--red)">$10.1M</td><td style="color:var(--red)">-$9.7M</td><td style="color:var(--red)">7.2%</td><td>-$4.84</td></tr>
+          <tr><td>Branch</td><td>4,992</td><td>$98M</td><td style="color:var(--green)">$0.2M</td><td>$0.05M</td><td style="color:var(--green)">$0.4M</td><td style="color:var(--green)">$2.1M</td><td style="color:var(--green)">1.9%</td><td>+$0.42</td></tr>
+          <tr><td>USSD</td><td>1,992</td><td>$87M</td><td style="color:var(--green)">$0.2M</td><td>$0.04M</td><td style="color:var(--red)">$4.3M</td><td style="color:var(--red)">-$4.2M</td><td style="color:var(--red)">6.8%</td><td>-$2.11</td></tr>
+          <tr><td>Call Centre</td><td>1,003</td><td>$41M</td><td style="color:var(--green)">$0.1M</td><td>$0.02M</td><td style="color:var(--amber)">$0.8M</td><td style="color:var(--red)">-$0.7M</td><td>4.1%</td><td>-$0.70</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</div><!-- end #content -->
+
+<!-- ── FOOTER ───────────────────────────────────────────────────────── -->
+<div id="footer">
+  <div>BTI TERMINAL v1.0 — Banking Transaction Intelligence Model</div>
+  <div>Fraud | FP&A | P&L | Risk | Transaction Monitoring</div>
+  <div>Python · SQL · Excel · Power BI · ML · Streamlit</div>
+  <div id="footer-time">--</div>
+</div>
+
+<!-- ── JAVASCRIPT ────────────────────────────────────────────────────── -->
+<script>
+// ── Clock ──────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById("clock").textContent = now.toLocaleTimeString("en-US", { hour12: false });
+  const opts = { weekday: "short", year: "numeric", month: "short", day: "2-digit" };
+  document.getElementById("clock-date").textContent = now.toLocaleDateString("en-US", opts);
+  document.getElementById("footer-time").textContent = now.toLocaleString();
+  document.getElementById("last-updated").textContent = now.toLocaleTimeString();
+  document.getElementById("memo-date").textContent = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Screen switching ───────────────────────────────────────────────────
+function showScreen(name) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
+  const scr = document.getElementById("screen-" + name);
+  if (scr) scr.classList.add("active");
+  event.currentTarget.classList.add("active");
+}
+
+// ── Synthetic data helpers ─────────────────────────────────────────────
+const channels   = ["Mobile Banking","Internet Banking","ATM","POS Terminal","API/Open Banking","Branch","USSD","Call Centre"];
+const merchants  = ["Crypto Exchanges","Gaming & Gambling","Financial Services","Luxury Goods","Online Marketplaces","Retail","Travel & Airlines","Grocery"];
+const fraudTypes = ["Card Not Present","Account Takeover","Identity Theft","Authorised Push Payment","SIM Swap","None","None","None"];
+const segs       = ["Retail","Premium","Corporate","SME","Private Banking","Student","NRI / Diaspora"];
+const tiers      = ["CRITICAL","HIGH","MEDIUM","LOW"];
+const tierColors = { "CRITICAL": "critical", "HIGH": "high", "MEDIUM": "medium", "LOW": "low" };
+const geos       = ["United States","United Kingdom","India","Singapore","UAE","Nigeria","Germany","Hong Kong"];
+
+function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function rndFloat(min, max) { return (Math.random() * (max - min) + min).toFixed(2); }
+function rndChoice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function fmtMoney(v) { return v >= 0 ? `$${Math.abs(v).toLocaleString()}` : `-$${Math.abs(v).toLocaleString()}`; }
+
+function generateTxId() { return "TXN-" + String(rnd(10000000,99999999)).padStart(8,"0"); }
+function generateCustId() { return "CUST-" + String(rnd(1,8000)).padStart(6,"0"); }
+
+function buildExceptionRow(i) {
+  const score = rnd(50, 100);
+  const tier  = score >= 85 ? "CRITICAL" : score >= 70 ? "HIGH" : "MEDIUM";
+  const fraud = tier === "CRITICAL" || Math.random() < 0.4 ? 1 : 0;
+  const amt   = rnd(500, 50000);
+  const pnl   = fraud ? -rnd(1000, 45000) : rnd(-5000, 2000);
+  return `<tr>
+    <td style="color:var(--grey)">${i+1}</td>
+    <td style="color:var(--amber)">${generateTxId()}</td>
+    <td>${generateCustId()}</td>
+    <td>2024-${String(rnd(1,12)).padStart(2,"0")}-${String(rnd(1,28)).padStart(2,"0")}</td>
+    <td style="color:var(--white)">$${amt.toLocaleString()}</td>
+    <td>${rndChoice(channels)}</td>
+    <td>${rndChoice(merchants)}</td>
+    <td style="color:${fraud?'var(--red)':'var(--grey)'}${fraud?''}">${fraud ? rndChoice(fraudTypes.filter(f=>f!=="None")) : "—"}</td>
+    <td style="color:${score>=80?'var(--red)':score>=60?'var(--amber)':'var(--blue)'}">${score}</td>
+    <td>${rnd(2,8)}</td>
+    <td><span class="badge ${tierColors[tier]}">${tier}</span></td>
+    <td style="color:${pnl<0?'var(--red)':'var(--green)'}">${fmtMoney(pnl)}</td>
+  </tr>`;
+}
+
+// Populate exception queue tables
+function populateExceptionQueues() {
+  let rows = "";
+  for (let i = 0; i < 30; i++) rows += buildExceptionRow(i);
+  const tbody1 = document.getElementById("exception-tbody");
+  const tbody2 = document.getElementById("exception-queue-tbody");
+  if (tbody1) tbody1.innerHTML = rows;
+  if (tbody2) tbody2.innerHTML = rows;
+}
+
+// ── Heatmap ────────────────────────────────────────────────────────────
+function buildHeatmap() {
+  const grid = document.getElementById("heatmap-grid");
+  if (!grid) return;
+  let html = "";
+  for (let i = 0; i < 100; i++) {
+    const risk = Math.floor(Math.random() * 10);
+    html += `<div class="hmap-cell risk-${risk}" title="Risk Level: ${risk*10}–${risk*10+9}"></div>`;
+  }
+  grid.innerHTML = html;
+}
+
+// ── Customer Risk Table ─────────────────────────────────────────────────
+function buildCustomerTable() {
+  const tbody = document.getElementById("customer-tbody");
+  if (!tbody) return;
+  let html = "";
+  for (let i = 0; i < 20; i++) {
+    const score = rnd(60, 100);
+    const tier  = score >= 80 ? "CRITICAL" : score >= 70 ? "HIGH" : "MEDIUM";
+    const fl    = rnd(10000, 200000);
+    const pnl   = -rnd(5000, 150000);
+    html += `<tr>
+      <td style="color:var(--amber)">${generateCustId()}</td>
+      <td>${rndChoice(segs)}</td>
+      <td>${rndChoice(geos)}</td>
+      <td>${rnd(20,200)}</td>
+      <td style="color:var(--red)">${rnd(1,12)}</td>
+      <td>${rnd(0,5)}</td>
+      <td style="color:var(--red)">$${fl.toLocaleString()}</td>
+      <td style="color:${score>=80?'var(--red)':'var(--amber)'}">${score}</td>
+      <td><span class="badge ${tierColors[tier]}">${tier}</span></td>
+      <td style="color:var(--red)">-$${Math.abs(pnl).toLocaleString()}</td>
+    </tr>`;
+  }
+  tbody.innerHTML = html;
+}
+
+// ── Merchant Risk Table ─────────────────────────────────────────────────
+function buildMerchantTable() {
+  const tbody = document.getElementById("merchant-tbody");
+  if (!tbody) return;
+  const names = [
+    ["Binance","Crypto Exchanges"],["Bet365","Gaming & Gambling"],["Coinbase","Crypto Exchanges"],
+    ["DraftKings","Gaming & Gambling"],["Louis Vuitton","Luxury Goods"],["Western Union","Financial Services / Money Transfer"],
+    ["eBay","Online Marketplaces"],["Emirates","Travel & Airlines"],["PayPal","Financial Services / Money Transfer"],
+    ["Unibet","Gaming & Gambling"],["Rolex","Luxury Goods"],["Wise","Financial Services / Money Transfer"],
+    ["Steam","Gaming & Gambling"],["Bybit","Crypto Exchanges"],["Airbnb","Hotels & Accommodation"],
+  ];
+  let html = "";
+  for (const [name, cat] of names) {
+    const fr = (Math.random()*12+1).toFixed(1);
+    const cb = (Math.random()*8+0.5).toFixed(1);
+    const fl = rnd(50000,2000000);
+    const rl = rnd(10000,300000);
+    const pnl = -(fl+rl) + rnd(10000,500000);
+    const tier = parseFloat(fr) > 8 ? "CRITICAL" : parseFloat(fr) > 5 ? "HIGH" : "MEDIUM";
+    html += `<tr>
+      <td style="color:var(--amber)">${name}</td>
+      <td>${cat}</td>
+      <td>${rnd(50,2000)}</td>
+      <td style="color:${parseFloat(fr)>6?'var(--red)':'var(--amber)'}">${fr}%</td>
+      <td style="color:${parseFloat(cb)>4?'var(--red)':'var(--grey)'}">${cb}%</td>
+      <td style="color:var(--red)">$${fl.toLocaleString()}</td>
+      <td style="color:var(--amber)">$${rl.toLocaleString()}</td>
+      <td style="color:${pnl<0?'var(--red)':'var(--green)'}">${pnl<0?'-$':'$'}${Math.abs(pnl).toLocaleString()}</td>
+      <td><span class="badge ${tierColors[tier]}">${tier}</span></td>
+    </tr>`;
+  }
+  tbody.innerHTML = html;
+}
+
+// ── Search ─────────────────────────────────────────────────────────────
+function performSearch() {
+  const term = document.getElementById("search-input").value.trim();
+  if (!term) return;
+
+  const tbody  = document.getElementById("search-tbody");
+  const status = document.getElementById("search-status");
+  const count  = document.getElementById("result-count");
+
+  const n = rnd(8, 40);
+  status.innerHTML = `&gt; Scanning 50,000 transactions for "${term}"...<br>&gt; Found ${n} matching records.`;
+  count.textContent = `${n} results`;
+
+  let rows = "";
+  for (let i = 0; i < Math.min(n, 20); i++) {
+    const score = rnd(20, 95);
+    const tier  = score >= 80 ? "CRITICAL" : score >= 60 ? "HIGH" : score >= 40 ? "MEDIUM" : "LOW";
+    const amt   = rnd(100, 30000);
+    const pnl   = rnd(-20000, 5000);
+    rows += `<tr>
+      <td style="color:var(--amber)">${generateTxId()}</td>
+      <td>${generateCustId()}</td>
+      <td>2024-${String(rnd(1,12)).padStart(2,"0")}-${String(rnd(1,28)).padStart(2,"0")}</td>
+      <td>$${amt.toLocaleString()}</td>
+      <td>${rndChoice(["Purchase","Transfer","Withdrawal","Payment","Wire Transfer"])}</td>
+      <td>${rndChoice(channels)}</td>
+      <td>${rndChoice(merchants)}</td>
+      <td style="color:${score>=60?'var(--red)':'var(--green)'}">${score}</td>
+      <td><span class="badge ${tierColors[tier]}">${tier}</span></td>
+      <td style="color:${pnl<0?'var(--red)':'var(--green)'}">${fmtMoney(pnl)}</td>
+    </tr>`;
+  }
+  tbody.innerHTML = rows || `<tr><td colspan="10" style="text-align:center;color:var(--grey)">No results found for "${term}"</td></tr>`;
+}
+
+function filterSearch(term) {
+  document.getElementById("search-input").value = term;
+  performSearch();
+}
+
+document.getElementById("search-input")?.addEventListener("keydown", function(e) {
+  if (e.key === "Enter") performSearch();
+});
+
+// ── Init ───────────────────────────────────────────────────────────────
+populateExceptionQueues();
+buildHeatmap();
+buildCustomerTable();
+buildMerchantTable();
+
+// Refresh heatmap every 10s
+setInterval(buildHeatmap, 10000);
+// Refresh exception queue every 30s
+setInterval(populateExceptionQueues, 30000);
+</script>
+</body>
+</html>
