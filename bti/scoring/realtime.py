@@ -87,25 +87,28 @@ def _apply_standalone_rules(txn: dict) -> Dict[str, int]:
     Returns {rule_name: 0|1}.
     """
     flags: Dict[str, int] = {}
-    amount = float(txn.get("transaction_amount", 0))
-    hist_avg = float(txn.get("historical_average_transaction_amount", 0) or 1)
-    risk_score = float(txn.get("risk_score", 0))
-    failed_auth = int(txn.get("failed_attempt_count", 0))
-    login_att = int(txn.get("login_attempts", 1))
-    hour_str = str(txn.get("transaction_time", "12:00:00"))[:2]
+    amount = float(txn.get("transaction_amount") or 0)
+    hist_avg_raw = txn.get("historical_average_transaction_amount")
+    # Only use hist_avg for ratio if the caller actually provided it (non-zero)
+    hist_avg = float(hist_avg_raw) if hist_avg_raw else None
+    risk_score = float(txn.get("risk_score") or 0)
+    # Use `or 0` guards for all Optional int fields — Pydantic passes None when omitted
+    failed_auth = int(txn.get("failed_attempt_count") or 0)
+    login_att = int(txn.get("login_attempts") or 1)
+    hour_str = str(txn.get("transaction_time") or "12:00:00")[:2]
     hour = int(hour_str) if hour_str.isdigit() else 12
-    ip = str(txn.get("ip_location", ""))
-    bal_after = float(txn.get("account_balance_after", 0))
-    dc_flag = str(txn.get("debit_credit_flag", "Debit"))
-    merchant_cat = str(txn.get("merchant_category", ""))
-    refund_flag = int(txn.get("refund_flag", 0))
-    cb_flag = int(txn.get("chargeback_flag", 0))
-    segment = str(txn.get("customer_segment", ""))
-    channel = str(txn.get("channel", ""))
-    device_id = str(txn.get("device_id", ""))
+    ip = str(txn.get("ip_location") or "")
+    bal_after = float(txn.get("account_balance_after") or 0)
+    dc_flag = str(txn.get("debit_credit_flag") or "Debit")
+    merchant_cat = str(txn.get("merchant_category") or "")
+    refund_flag = int(txn.get("refund_flag") or 0)
+    cb_flag = int(txn.get("chargeback_flag") or 0)
+    segment = str(txn.get("customer_segment") or "")
+    channel = str(txn.get("channel") or "")
+    device_id = str(txn.get("device_id") or "")
 
-    # R01 — high value vs average
-    ratio = amount / hist_avg if hist_avg else 0
+    # R01 — high value vs average; skip if no historical average was supplied
+    ratio = (amount / hist_avg) if hist_avg else 0
     flags["R01_high_value_vs_avg"] = 1 if ratio >= settings.high_value_ratio else 0
 
     # R03 — failed auth
@@ -114,8 +117,8 @@ def _apply_standalone_rules(txn: dict) -> Dict[str, int]:
     # R04 — multiple login attempts
     flags["R04_multi_login"] = 1 if login_att >= settings.login_attempts_threshold else 0
 
-    # R05 — off hours
-    flags["R05_off_hours"] = 1 if hour < settings.off_hours_end else 0
+    # R05 — off hours: early-morning window (00:00–off_hours_end) OR late-night (22:00–23:59)
+    flags["R05_off_hours"] = 1 if (hour < settings.off_hours_end or hour >= 22) else 0
 
     # R06 — geography mismatch proxy (non-RFC-1918 IP + high risk)
     known_private = ip.startswith(("192.", "10.", "172."))
@@ -183,20 +186,39 @@ def _apply_db_rules(txn: dict, db_session) -> Dict[str, int]:
         return flags
 
     customer_id = txn.get("customer_id")
-    txn_date = txn.get("transaction_date", "")
-    merchant = txn.get("merchant_name", "")
-    amount = float(txn.get("transaction_amount", 0))
-    segment = str(txn.get("customer_segment", ""))
-    refund_flag = int(txn.get("refund_flag", 0))
-    cb_flag = int(txn.get("chargeback_flag", 0))
+    txn_date = txn.get("transaction_date")
+    merchant = txn.get("merchant_name") or ""
+    amount = float(txn.get("transaction_amount") or 0)
+    segment = str(txn.get("customer_segment") or "")
+    refund_flag = int(txn.get("refund_flag") or 0)
+    cb_flag = int(txn.get("chargeback_flag") or 0)
+
+    # Parse txn_date to a reliable date string "YYYY-MM-DD" for daily filtering
+    txn_date_str: Optional[str] = None
+    if txn_date is not None:
+        try:
+            txn_date_str = str(txn_date)[:10]  # handles datetime, date, and "YYYY-MM-DD" strings
+        except Exception:
+            pass
+    txn_month_str: Optional[str] = txn_date_str[:7] if txn_date_str else None
 
     try:
-        # R02 / R16: daily transaction count for this customer
-        daily_count = (db_session.query(func.count(Transaction.transaction_id))
-                       .filter(Transaction.customer_id == customer_id,
-                               Transaction.month_year == str(txn_date)[:7])
-                       .scalar() or 0)
-        flags["R02_velocity_spike"] = 1 if daily_count > settings.velocity_spike_threshold else 0
+        # R02: monthly velocity — how many txns this customer had in the same calendar month
+        monthly_count = 0
+        if txn_month_str:
+            monthly_count = (db_session.query(func.count(Transaction.transaction_id))
+                             .filter(Transaction.customer_id == customer_id,
+                                     Transaction.month_year == txn_month_str)
+                             .scalar() or 0)
+        flags["R02_velocity_spike"] = 1 if monthly_count > settings.velocity_spike_threshold else 0
+
+        # R16: daily velocity — transactions on the exact same calendar day
+        daily_count = 0
+        if txn_date_str:
+            daily_count = (db_session.query(func.count(Transaction.transaction_id))
+                           .filter(Transaction.customer_id == customer_id,
+                                   Transaction.transaction_date == txn_date_str)
+                           .scalar() or 0)
         flags["R16_rapid_sequential"] = 1 if daily_count > 5 else 0
 
         # R07: repeated merchant same customer
@@ -213,30 +235,28 @@ def _apply_db_rules(txn: dict, db_session) -> Dict[str, int]:
         ).filter(Transaction.customer_segment == segment).one())
         seg_mean = float(seg_stats[0] or amount)
         if seg_stats[1] and seg_stats[1] > 1:
-            # approximate std from mean (rough but avoids a second query)
             z = abs(amount - seg_mean) / (seg_mean * 0.5 + 1e-9)
             flags["R10_amount_outlier"] = 1 if z > settings.amount_outlier_zscore else 0
 
-        # R15: same customer+amount+merchant (duplicate proxy)
+        # R15: same customer+amount+merchant ≥2 occurrences (duplicate proxy; 1 = just this txn)
         dup_count = (db_session.query(func.count(Transaction.transaction_id))
                      .filter(Transaction.customer_id == customer_id,
                              Transaction.transaction_amount == amount,
                              Transaction.merchant_name == merchant)
                      .scalar() or 0)
-        flags["R15_duplicate"] = 1 if dup_count >= 1 else 0
+        flags["R15_duplicate"] = 1 if dup_count >= 2 else 0
 
-        # R18: merchant refund ratio
-        m_total = (db_session.query(func.count(Transaction.transaction_id))
-                   .filter(Transaction.merchant_name == merchant).scalar() or 0)
-        m_refund = (db_session.query(func.sum(Transaction.refund_flag))
-                    .filter(Transaction.merchant_name == merchant).scalar() or 0)
+        # R18 + R19: combined count/sum queries to halve round-trips
+        m_row = (db_session.query(func.count(Transaction.transaction_id),
+                                  func.sum(Transaction.refund_flag))
+                 .filter(Transaction.merchant_name == merchant).one())
+        m_total, m_refund = (m_row[0] or 0), (m_row[1] or 0)
         flags["R18_refund_ratio"] = 1 if (m_total and m_refund / m_total > settings.refund_ratio_threshold) else 0
 
-        # R19: customer chargeback ratio
-        c_total = (db_session.query(func.count(Transaction.transaction_id))
-                   .filter(Transaction.customer_id == customer_id).scalar() or 0)
-        c_cb = (db_session.query(func.sum(Transaction.chargeback_flag))
-                .filter(Transaction.customer_id == customer_id).scalar() or 0)
+        c_row = (db_session.query(func.count(Transaction.transaction_id),
+                                  func.sum(Transaction.chargeback_flag))
+                 .filter(Transaction.customer_id == customer_id).one())
+        c_total, c_cb = (c_row[0] or 0), (c_row[1] or 0)
         flags["R19_chargeback_ratio"] = 1 if (c_total and c_cb / c_total > settings.chargeback_ratio_threshold) else 0
 
     except Exception as exc:
@@ -245,27 +265,32 @@ def _apply_db_rules(txn: dict, db_session) -> Dict[str, int]:
     return flags
 
 
-def _build_feature_vector(txn: dict, feature_cols: list):
+def _build_feature_vector(txn: dict, feature_cols: list, label_encoders: dict = None):
     """
     Build the ML feature vector as a pandas DataFrame (preserving column names
     so sklearn scalers fitted on DataFrames don't emit feature-name warnings).
+    Uses saved LabelEncoders from training so categorical ordinals match.
     Missing features are filled with 0.
     """
     import pandas as pd
-    from sklearn.preprocessing import LabelEncoder
-    le = LabelEncoder()
+    label_encoders = label_encoders or {}
 
     row = {}
     for col in feature_cols:
         if col.endswith("_enc"):
             base = col[:-4]
-            val = txn.get(base, "unknown")
-            try:
-                row[col] = float(le.fit_transform([str(val)])[0])
-            except Exception:
+            val = str(txn.get(base) or "unknown")
+            enc = label_encoders.get(base)
+            if enc is not None:
+                try:
+                    row[col] = float(enc.transform([val])[0])
+                except ValueError:
+                    # Unseen category at inference — use the last known ordinal as sentinel
+                    row[col] = float(len(enc.classes_))
+            else:
                 row[col] = 0.0
         else:
-            row[col] = float(txn.get(col, 0) or 0)
+            row[col] = float(txn.get(col) or 0)
 
     return pd.DataFrame([row], columns=feature_cols)
 
@@ -303,7 +328,7 @@ def score_transaction(
     rules_triggered = len(rules_fired)
 
     # ── 2. ML ensemble ────────────────────────────────────────────────────────
-    X = _build_feature_vector(txn, bundle.feature_cols)
+    X = _build_feature_vector(txn, bundle.feature_cols, bundle.label_encoders)
     X = X.fillna(0).replace([float("inf"), float("-inf")], 0)
 
     # iso_scaler was fitted on a DataFrame (feature names present)

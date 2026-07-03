@@ -149,9 +149,12 @@ def merchant_risk_analysis(df):
     merch["fraud_rate"]      = (merch["fraud_count"] / merch["transactions"] * 100).round(2)
     merch["chargeback_rate"] = (merch["chargeback_count"] / merch["transactions"] * 100).round(2)
     merch["refund_rate"]     = (merch["refund_loss"] / merch["gross_tv"].replace(0, np.nan) * 100).round(4)
-    merch["merchant_risk_rank"] = pd.qcut(merch["avg_risk"], q=5,
-                                           labels=["Low", "Moderate", "Medium", "High", "Critical"],
-                                           duplicates="drop")
+    _risk_labels = ["Low", "Moderate", "Medium", "High", "Critical"]
+    _risk_bins = pd.qcut(merch["avg_risk"], q=5, labels=False, duplicates="drop")
+    _n_bins = int(_risk_bins.max() + 1) if not _risk_bins.isna().all() else 1
+    merch["merchant_risk_rank"] = _risk_bins.map(
+        lambda x: _risk_labels[int(x)] if not pd.isna(x) else "Low"
+    )
     return merch.sort_values("fraud_loss", ascending=False)
 
 

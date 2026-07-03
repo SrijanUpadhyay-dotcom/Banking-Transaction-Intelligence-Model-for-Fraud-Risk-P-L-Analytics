@@ -1,5 +1,5 @@
 {
-  "trained_at": "2026-07-03T11:25:44.273243Z",
+  "trained_at": "2026-07-03T11:50:52.698960Z",
   "feature_cols": [
     "transaction_amount",
     "account_balance_before",
@@ -43,6 +43,7 @@
     "iso_scaler": "models/iso_scaler.joblib",
     "logistic_regression": "models/logistic_regression.joblib",
     "lr_scaler": "models/lr_scaler.joblib",
-    "random_forest": "models/random_forest.joblib"
+    "random_forest": "models/random_forest.joblib",
+    "label_encoders": "models/label_encoders.joblib"
   }
 }

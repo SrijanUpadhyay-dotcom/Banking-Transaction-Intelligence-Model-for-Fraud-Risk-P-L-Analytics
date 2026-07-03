@@ -46,10 +46,10 @@ def get_pnl_kpis(
         func.sum(Transaction.is_revenue_leakage).label("leakage_count"),
     ).one()
 
-    fraud_loss_rate = (agg.fraud_loss / agg.total_volume * 100) if agg.total_volume else 0
+    fraud_loss_rate = ((agg.fraud_loss or 0) / agg.total_volume * 100) if agg.total_volume else 0
     cb_ratio = (agg.chargeback_count / total * 100) if total else 0
-    cti = (agg.processing_cost / agg.gross_income * 100) if agg.gross_income else 0
-    risk_adj_rev = agg.net_revenue - (agg.fraud_loss + agg.chargeback_loss)
+    cti = ((agg.processing_cost or 0) / agg.gross_income * 100) if agg.gross_income else 0
+    risk_adj_rev = (agg.net_revenue or 0) - ((agg.fraud_loss or 0) + (agg.chargeback_loss or 0))
 
     return PnLKPIs(
         total_transactions=total,

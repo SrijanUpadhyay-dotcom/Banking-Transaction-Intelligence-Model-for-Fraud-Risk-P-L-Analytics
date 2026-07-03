@@ -86,8 +86,9 @@ def refresh_exception_queue(db: Session = Depends(get_db)):
     Run after each pipeline execution.
     """
     critical_tiers = ("CRITICAL", "VERY HIGH")
-    existing_ids = {row[0] for row in db.query(FraudAlert.transaction_id)
-                    .filter(FraudAlert.status == "OPEN").all()}
+    # Exclude transactions that already have any alert (open OR previously resolved)
+    # so that closing/escalating an alert does not re-open it on the next refresh
+    existing_ids = {row[0] for row in db.query(FraudAlert.transaction_id).all()}
 
     new_alerts = (db.query(Transaction)
                   .filter(Transaction.final_alert_tier.in_(critical_tiers))

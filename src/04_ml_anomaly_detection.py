@@ -68,18 +68,20 @@ CATEGORICAL_FEATURES = [
 def prepare_features(df):
     df = df.copy()
 
-    # Encode categorical variables
-    le = LabelEncoder()
+    # Encode categorical variables — save each encoder so inference can reuse it
+    label_encoders = {}
     for col in CATEGORICAL_FEATURES:
         if col in df.columns:
-            df[col + "_enc"] = le.fit_transform(df[col].astype(str))
+            enc = LabelEncoder()
+            df[col + "_enc"] = enc.fit_transform(df[col].astype(str))
+            label_encoders[col] = enc
 
     encoded_cats = [c + "_enc" for c in CATEGORICAL_FEATURES if c in df.columns]
     feature_cols = NUMERIC_FEATURES + encoded_cats
 
     # Drop missing
     feature_df = df[feature_cols].fillna(0).replace([np.inf, -np.inf], 0)
-    return feature_df, feature_cols
+    return feature_df, feature_cols, label_encoders
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -342,17 +344,18 @@ def create_eda_charts(df):
     print("  Chart saved: outputs/charts/eda_overview.png")
 
 
-def save_models(iso, iso_scaler, lr, lr_scaler, rf, feature_cols, metrics):
+def save_models(iso, iso_scaler, lr, lr_scaler, rf, feature_cols, label_encoders, metrics):
     """Persist trained models and metadata to disk for real-time serving."""
     import joblib, json
     from datetime import datetime
     os.makedirs("models", exist_ok=True)
 
-    joblib.dump(iso,        "models/isolation_forest.joblib")
-    joblib.dump(iso_scaler, "models/iso_scaler.joblib")
-    joblib.dump(lr,         "models/logistic_regression.joblib")
-    joblib.dump(lr_scaler,  "models/lr_scaler.joblib")
-    joblib.dump(rf,         "models/random_forest.joblib")
+    joblib.dump(iso,            "models/isolation_forest.joblib")
+    joblib.dump(iso_scaler,     "models/iso_scaler.joblib")
+    joblib.dump(lr,             "models/logistic_regression.joblib")
+    joblib.dump(lr_scaler,      "models/lr_scaler.joblib")
+    joblib.dump(rf,             "models/random_forest.joblib")
+    joblib.dump(label_encoders, "models/label_encoders.joblib")
 
     manifest = {
         "trained_at":   datetime.utcnow().isoformat() + "Z",
@@ -360,11 +363,12 @@ def save_models(iso, iso_scaler, lr, lr_scaler, rf, feature_cols, metrics):
         "lr_metrics":   metrics.get("lr", {}),
         "rf_metrics":   metrics.get("rf", {}),
         "models": {
-            "isolation_forest": "models/isolation_forest.joblib",
-            "iso_scaler":       "models/iso_scaler.joblib",
+            "isolation_forest":    "models/isolation_forest.joblib",
+            "iso_scaler":          "models/iso_scaler.joblib",
             "logistic_regression": "models/logistic_regression.joblib",
-            "lr_scaler":        "models/lr_scaler.joblib",
-            "random_forest":    "models/random_forest.joblib",
+            "lr_scaler":           "models/lr_scaler.joblib",
+            "random_forest":       "models/random_forest.joblib",
+            "label_encoders":      "models/label_encoders.joblib",
         },
     }
     with open("models/manifest.json", "w") as f:
@@ -381,7 +385,7 @@ if __name__ == "__main__":
     df = pd.read_csv("data/processed/banking_transactions_flagged.csv",
                      parse_dates=["transaction_date"])
 
-    X, feature_cols = prepare_features(df)
+    X, feature_cols, label_encoders = prepare_features(df)
 
     df, iso, iso_scaler     = run_isolation_forest(df, X)
     df                      = run_zscore_detection(df)
@@ -390,7 +394,7 @@ if __name__ == "__main__":
     df                      = build_composite_ml_score(df)
     create_eda_charts(df)
 
-    save_models(iso, iso_scaler, lr, lr_scaler, rf, feature_cols,
+    save_models(iso, iso_scaler, lr, lr_scaler, rf, feature_cols, label_encoders,
                 metrics={"lr": lr_m, "rf": {k: v for k, v in rf_m.items()
                                              if k != "importances"}})
 

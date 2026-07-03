@@ -115,9 +115,8 @@ class PipelineOrchestrator:
             script_path = stage.script
             if not Path(script_path).exists():
                 raise FileNotFoundError(f"Script not found: {script_path}")
-            mod = _dynamic_import(f"stage_{stage.name}", script_path)
-            # Each script's __main__ block is the canonical entrypoint
-            # We re-run it by re-executing via exec with controlled cwd
+            # Execute via exec() with __name__ == "__main__" so each script's
+            # if __name__ == "__main__": block runs exactly once.
             orig_dir = os.getcwd()
             project_root = str(Path(script_path).parent.parent)
             os.chdir(project_root)
@@ -144,8 +143,10 @@ class PipelineOrchestrator:
             inserted = seed_from_csv(ml_csv)
             results["db_rows_inserted"] = inserted
             log.info("Database persistence complete", extra={"rows": inserted})
-        except Exception:
+        except Exception as exc:
             log.exception("Database persistence failed — data still available in CSVs")
+            results["db_rows_inserted"] = 0
+            results["db_error"] = str(exc)
 
     def _dispatch_alerts(self) -> None:
         ml_csv = os.path.join(settings.processed_data_dir, "banking_transactions_ml_scored.csv")

@@ -3,6 +3,8 @@
 Protected: requires X-API-Key header in non-dev environments.
 """
 
+import hmac
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Header, Depends
 from typing import Optional
 
@@ -18,8 +20,9 @@ _last_run: Optional[dict] = None
 
 
 def _verify_api_key(x_api_key: Optional[str] = Header(default=None)):
-    if settings.environment != "development" and x_api_key != settings.api_key:
-        raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key header")
+    if settings.environment != "development":
+        if not hmac.compare_digest(x_api_key or "", settings.api_key or ""):
+            raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key header")
 
 
 @router.post("/run", response_model=PipelineRunResponse,

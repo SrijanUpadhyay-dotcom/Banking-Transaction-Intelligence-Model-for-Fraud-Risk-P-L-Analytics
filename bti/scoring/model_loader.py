@@ -22,17 +22,18 @@ _cached_bundle: Optional["ModelBundle"] = None
 @dataclass
 class ModelBundle:
     """All ML artifacts needed for real-time scoring, loaded into memory once."""
-    iso_forest:    Any
-    iso_scaler:    Any
-    lr_model:      Any
-    lr_scaler:     Any
-    rf_model:      Any
-    feature_cols:  List[str]
-    trained_at:    str
-    lr_roc_auc:    float = 0.0
-    rf_roc_auc:    float = 0.0
-    rf_f1:         float = 0.0
-    manifest_path: str = ""
+    iso_forest:     Any
+    iso_scaler:     Any
+    lr_model:       Any
+    lr_scaler:      Any
+    rf_model:       Any
+    feature_cols:   List[str]
+    trained_at:     str
+    label_encoders: dict = field(default_factory=dict)
+    lr_roc_auc:     float = 0.0
+    rf_roc_auc:     float = 0.0
+    rf_f1:          float = 0.0
+    manifest_path:  str = ""
 
 
 def load_models(models_dir: Optional[str] = None, force_reload: bool = False) -> ModelBundle:
@@ -66,6 +67,9 @@ def load_models(models_dir: Optional[str] = None, force_reload: bool = False) ->
 
         log.info("Loading ML models from disk", extra={"models_dir": str(mdir)})
 
+        le_path = mdir / "label_encoders.joblib"
+        label_encoders = joblib.load(le_path) if le_path.exists() else {}
+
         bundle = ModelBundle(
             iso_forest=joblib.load(mdir / "isolation_forest.joblib"),
             iso_scaler=joblib.load(mdir / "iso_scaler.joblib"),
@@ -74,6 +78,7 @@ def load_models(models_dir: Optional[str] = None, force_reload: bool = False) ->
             rf_model=joblib.load(mdir / "random_forest.joblib"),
             feature_cols=manifest["feature_cols"],
             trained_at=manifest.get("trained_at", "unknown"),
+            label_encoders=label_encoders,
             lr_roc_auc=manifest.get("lr_metrics", {}).get("roc_auc", 0.0),
             rf_roc_auc=manifest.get("rf_metrics", {}).get("roc_auc", 0.0),
             rf_f1=manifest.get("rf_metrics", {}).get("f1", 0.0),
