@@ -1,0 +1,89 @@
+app:
+  name: "Banking Transaction Intelligence Model"
+  version: "2.0.0"
+  environment: "production"
+  log_level: "INFO"
+  log_format: "json"
+
+database:
+  url: "sqlite:///./data/bti.db"
+  # For PostgreSQL (set via BTI_DATABASE_URL env var):
+  # url: "postgresql://user:password@localhost:5432/bti_db"
+  pool_size: 10
+  max_overflow: 20
+  echo: false
+
+pipeline:
+  raw_data_path: "data/raw/banking_transactions_raw.csv"
+  processed_data_dir: "data/processed"
+  outputs_dir: "outputs"
+  models_dir: "models"
+  run_schedule_cron: "0 2 * * *"   # daily at 02:00 UTC
+  fraud_rate: 0.05
+  synthetic_rows: 50000
+
+fraud_rules:
+  velocity_spike_threshold: 10
+  failed_auth_threshold: 3
+  login_attempts_threshold: 4
+  off_hours_end: 6
+  high_value_ratio: 5.0
+  high_risk_score: 60
+  amount_outlier_zscore: 3.5
+  duplicate_window_minutes: 10
+  refund_ratio_threshold: 0.30
+  chargeback_ratio_threshold: 0.10
+  high_risk_categories:
+    - "Gaming & Gambling"
+    - "Crypto Exchanges"
+    - "Financial Services / Money Transfer"
+    - "Luxury Goods"
+    - "Online Marketplaces"
+
+ml_models:
+  isolation_forest:
+    n_estimators: 200
+    contamination: 0.06
+    random_state: 42
+  random_forest:
+    n_estimators: 200
+    max_depth: 12
+    random_state: 42
+  logistic_regression:
+    max_iter: 500
+    random_state: 42
+  fraud_prob_threshold: 0.40
+  retrain_schedule_cron: "0 3 * * 0"  # weekly Sunday 03:00 UTC
+
+alerts:
+  enabled: true
+  critical_threshold: 85
+  high_threshold: 70
+  email:
+    enabled: false
+    smtp_host: "smtp.gmail.com"
+    smtp_port: 587
+    from_address: "bti-alerts@bank.internal"
+    to_addresses:
+      - "fraud-team@bank.internal"
+      - "risk-team@bank.internal"
+  webhook:
+    enabled: false
+    url: "https://hooks.bank.internal/bti-alerts"
+    timeout_seconds: 10
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  cors_origins:
+    - "http://localhost:8501"
+    - "http://localhost:3000"
+  rate_limit_per_minute: 100
+  jwt_algorithm: "HS256"
+  access_token_expire_minutes: 60
+
+audit:
+  enabled: true
+  log_path: "logs/audit.jsonl"
+  retention_days: 365
