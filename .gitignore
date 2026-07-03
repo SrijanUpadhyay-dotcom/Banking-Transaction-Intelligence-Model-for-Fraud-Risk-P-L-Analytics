@@ -23,3 +23,7 @@ Thumbs.db
 
 # Output binaries (tracked explicitly when ready)
 # outputs/ is included intentionally for portfolio
+
+# Runtime logs — keep the directory, ignore log files
+logs/*.log
+logs/*.jsonl
