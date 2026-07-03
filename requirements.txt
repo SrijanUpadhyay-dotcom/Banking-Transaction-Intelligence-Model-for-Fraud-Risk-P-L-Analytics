@@ -20,7 +20,7 @@ Pillow==10.3.0
 # ── Database ─────────────────────────────────────────────────────────────────
 sqlalchemy>=2.0.0
 alembic>=1.12.0
-# Uncomment for PostgreSQL: psycopg2-binary>=2.9.0
+psycopg2-binary>=2.9.0
 
 # ── REST API ─────────────────────────────────────────────────────────────────
 fastapi>=0.104.0
