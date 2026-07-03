@@ -211,10 +211,12 @@ class TestPipelineAPI:
         assert r.status_code == 401
 
     def test_trigger_with_api_key_accepted(self, client):
+        from bti.config import get_settings
+        api_key = get_settings().api_key
         r = client.post(
             "/api/v1/pipeline/run",
             json={"force": False},
-            headers={"X-API-Key": "test-api-key"},
+            headers={"X-API-Key": api_key},
         )
         assert r.status_code == 200
         body = r.json()

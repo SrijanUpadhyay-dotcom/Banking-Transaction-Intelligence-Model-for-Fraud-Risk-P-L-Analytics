@@ -342,6 +342,41 @@ def create_eda_charts(df):
     print("  Chart saved: outputs/charts/eda_overview.png")
 
 
+def save_models(iso, iso_scaler, lr, lr_scaler, rf, feature_cols, metrics):
+    """Persist trained models and metadata to disk for real-time serving."""
+    import joblib, json
+    from datetime import datetime
+    os.makedirs("models", exist_ok=True)
+
+    joblib.dump(iso,        "models/isolation_forest.joblib")
+    joblib.dump(iso_scaler, "models/iso_scaler.joblib")
+    joblib.dump(lr,         "models/logistic_regression.joblib")
+    joblib.dump(lr_scaler,  "models/lr_scaler.joblib")
+    joblib.dump(rf,         "models/random_forest.joblib")
+
+    manifest = {
+        "trained_at":   datetime.utcnow().isoformat() + "Z",
+        "feature_cols": list(feature_cols),
+        "lr_metrics":   metrics.get("lr", {}),
+        "rf_metrics":   metrics.get("rf", {}),
+        "models": {
+            "isolation_forest": "models/isolation_forest.joblib",
+            "iso_scaler":       "models/iso_scaler.joblib",
+            "logistic_regression": "models/logistic_regression.joblib",
+            "lr_scaler":        "models/lr_scaler.joblib",
+            "random_forest":    "models/random_forest.joblib",
+        },
+    }
+    with open("models/manifest.json", "w") as f:
+        json.dump(manifest, f, indent=2)
+
+    print("\n── Model Artifacts Saved ─────────────────────────────────")
+    for name, path in manifest["models"].items():
+        size_kb = os.path.getsize(path) // 1024
+        print(f"  {name:<25} → {path} ({size_kb}KB)")
+    print(f"  manifest                  → models/manifest.json")
+
+
 if __name__ == "__main__":
     df = pd.read_csv("data/processed/banking_transactions_flagged.csv",
                      parse_dates=["transaction_date"])
@@ -354,6 +389,10 @@ if __name__ == "__main__":
     df, rf, rf_m            = run_random_forest(df, X, feature_cols)
     df                      = build_composite_ml_score(df)
     create_eda_charts(df)
+
+    save_models(iso, iso_scaler, lr, lr_scaler, rf, feature_cols,
+                metrics={"lr": lr_m, "rf": {k: v for k, v in rf_m.items()
+                                             if k != "importances"}})
 
     df.to_csv("data/processed/banking_transactions_ml_scored.csv", index=False)
     print("\nML anomaly detection complete. File saved.")

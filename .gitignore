@@ -1,6 +1,7 @@
-# Data files - large CSVs tracked separately or excluded
+# Data files - large CSVs and DB excluded (recreate with: python main.py db-init --seed)
 data/raw/
 data/processed/
+data/*.db
 
 # Python
 __pycache__/

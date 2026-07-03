@@ -16,6 +16,9 @@ Endpoints:
   POST /api/v1/pipeline/run        — async pipeline trigger (requires X-API-Key)
   POST /api/v1/pipeline/run/sync   — sync pipeline trigger (dev)
   GET  /api/v1/pipeline/status
+  POST /api/v1/score/              — real-time single-transaction scoring (<100ms)
+  GET  /api/v1/score/model-info    — current model version and metrics
+  POST /api/v1/score/reload-models — reload models after retraining
 
 Swagger UI: http://localhost:8000/docs
 ReDoc:      http://localhost:8000/redoc
@@ -31,7 +34,7 @@ from fastapi.responses import JSONResponse
 from bti.config import get_settings
 from bti.logging_config import setup_logging, get_logger
 from bti.database.init_db import create_tables
-from api.routers import transactions, alerts, analytics, pipeline
+from api.routers import transactions, alerts, analytics, pipeline, scoring
 
 settings = get_settings()
 log = setup_logging(log_level=settings.log_level, log_format="json")
@@ -121,6 +124,7 @@ app.include_router(transactions.router, prefix=API_PREFIX)
 app.include_router(alerts.router, prefix=API_PREFIX)
 app.include_router(analytics.router, prefix=API_PREFIX)
 app.include_router(pipeline.router, prefix=API_PREFIX)
+app.include_router(scoring.router, prefix=API_PREFIX)
 
 
 if __name__ == "__main__":
