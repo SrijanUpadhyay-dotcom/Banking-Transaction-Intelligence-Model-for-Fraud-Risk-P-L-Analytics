@@ -1,0 +1,114 @@
+version: "3.9"
+
+# ─── Banking Transaction Intelligence Model ─────────────────────────────────
+# Full production stack:
+#   bti-api       — FastAPI REST service
+#   bti-scheduler — APScheduler pipeline orchestration
+#   bti-dashboard — Streamlit analytics dashboard
+#   postgres      — PostgreSQL database (optional, SQLite used by default)
+#
+# Quick start:  docker compose up --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+x-common-env: &common-env
+  BTI_ENVIRONMENT: ${BTI_ENVIRONMENT:-production}
+  BTI_LOG_LEVEL: ${BTI_LOG_LEVEL:-INFO}
+  BTI_DATABASE_URL: ${BTI_DATABASE_URL:-sqlite:////data/bti.db}
+  BTI_SECRET_KEY: ${BTI_SECRET_KEY:-CHANGE_ME_IN_PRODUCTION}
+  BTI_API_KEY: ${BTI_API_KEY:-CHANGE_ME_API_KEY}
+  BTI_ALERTS_ENABLED: ${BTI_ALERTS_ENABLED:-true}
+
+services:
+
+  # ── PostgreSQL (optional — switch BTI_DATABASE_URL to use it) ───────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: bti-postgres
+    profiles: ["postgres"]   # only starts with: docker compose --profile postgres up
+    environment:
+      POSTGRES_DB: bti_db
+      POSTGRES_USER: bti_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CHANGE_ME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bti_user -d bti_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── FastAPI REST API ─────────────────────────────────────────────────────────
+  bti-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bti-api
+    environment:
+      <<: *common-env
+    volumes:
+      - bti_data:/app/data
+      - bti_outputs:/app/outputs
+      - bti_models:/app/models
+      - bti_logs:/app/logs
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+
+  # ── Pipeline Scheduler ────────────────────────────────────────────────────────
+  bti-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bti-scheduler
+    command: ["python", "scheduler/pipeline_scheduler.py"]
+    environment:
+      <<: *common-env
+    volumes:
+      - bti_data:/app/data
+      - bti_outputs:/app/outputs
+      - bti_models:/app/models
+      - bti_logs:/app/logs
+    restart: unless-stopped
+    depends_on:
+      bti-api:
+        condition: service_healthy
+
+  # ── Streamlit Dashboard ───────────────────────────────────────────────────────
+  bti-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bti-dashboard
+    command: ["python", "-m", "streamlit", "run", "dashboard/streamlit_bti_dashboard.py",
+              "--server.port=8501", "--server.address=0.0.0.0",
+              "--server.headless=true", "--browser.gatherUsageStats=false"]
+    environment:
+      <<: *common-env
+      BTI_API_BASE_URL: http://bti-api:8000
+    volumes:
+      - bti_data:/app/data
+      - bti_outputs:/app/outputs
+    ports:
+      - "${DASHBOARD_PORT:-8501}:8501"
+    restart: unless-stopped
+    depends_on:
+      bti-api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  bti_data:
+  bti_outputs:
+  bti_models:
+  bti_logs:

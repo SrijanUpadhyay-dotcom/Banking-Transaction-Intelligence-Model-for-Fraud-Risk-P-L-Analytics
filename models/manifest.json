@@ -1,0 +1,49 @@
+{
+  "trained_at": "2026-07-03T11:50:52.698960Z",
+  "feature_cols": [
+    "transaction_amount",
+    "account_balance_before",
+    "account_balance_after",
+    "failed_attempt_count",
+    "login_attempts",
+    "risk_score",
+    "historical_average_transaction_amount",
+    "monthly_customer_transaction_count",
+    "fee_income",
+    "interchange_income",
+    "processing_cost",
+    "chargeback_loss",
+    "refund_loss",
+    "fraud_loss",
+    "net_revenue",
+    "net_pnl_impact",
+    "amount_vs_hist_avg_ratio",
+    "fraud_rule_score",
+    "rules_triggered",
+    "is_off_hours",
+    "reversal_flag",
+    "refund_flag",
+    "chargeback_flag",
+    "channel_enc",
+    "merchant_category_enc",
+    "customer_segment_enc",
+    "transaction_type_enc",
+    "authorization_method_enc"
+  ],
+  "lr_metrics": {
+    "roc_auc": 1.0,
+    "f1": 1.0
+  },
+  "rf_metrics": {
+    "roc_auc": 0.9999998646474961,
+    "f1": 0.9991967871485944
+  },
+  "models": {
+    "isolation_forest": "models/isolation_forest.joblib",
+    "iso_scaler": "models/iso_scaler.joblib",
+    "logistic_regression": "models/logistic_regression.joblib",
+    "lr_scaler": "models/lr_scaler.joblib",
+    "random_forest": "models/random_forest.joblib",
+    "label_encoders": "models/label_encoders.joblib"
+  }
+}

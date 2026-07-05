@@ -1,1 +1,30 @@
+# Data files - large CSVs and DB excluded (recreate with: python main.py db-init --seed)
+data/raw/
+data/processed/
+data/*.db
 
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+venv/
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# Output binaries (tracked explicitly when ready)
+# outputs/ is included intentionally for portfolio
+
+# Runtime logs — keep the directory, ignore log files
+logs/*.log
+logs/*.jsonl

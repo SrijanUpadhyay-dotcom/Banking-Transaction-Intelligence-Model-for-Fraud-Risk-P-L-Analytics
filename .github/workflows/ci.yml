@@ -1,0 +1,76 @@
+name: BTI CI Pipeline
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install fastapi uvicorn sqlalchemy alembic apscheduler \
+                      python-dotenv pydantic-settings httpx pytest pytest-asyncio
+
+      - name: Create runtime directories
+        run: mkdir -p data/raw data/processed outputs/charts outputs/pnl models logs
+
+      - name: Lint (ruff)
+        run: |
+          pip install ruff
+          ruff check bti/ api/ tests/ --ignore E501,E402 || true
+
+      - name: Run unit tests
+        run: |
+          python -m pytest tests/unit/ -v --tb=short
+        env:
+          BTI_DATABASE_URL: sqlite:///./data/test.db
+          BTI_SECRET_KEY: test-secret-key-minimum-32-chars-long
+          BTI_API_KEY: test-api-key
+
+      - name: Run integration tests
+        run: |
+          python -m pytest tests/integration/ -v --tb=short
+        env:
+          BTI_DATABASE_URL: sqlite:///:memory:
+          BTI_SECRET_KEY: test-secret-key-minimum-32-chars-long
+          BTI_API_KEY: test-api-key
+
+      - name: Test API startup
+        run: |
+          python -c "
+          import os
+          os.environ['BTI_DATABASE_URL'] = 'sqlite:///:memory:'
+          os.environ['BTI_SECRET_KEY'] = 'test-secret-key-minimum-32-chars-here'
+          from api.main import app
+          print('API imports OK — app created successfully')
+          "
+        env:
+          BTI_DATABASE_URL: sqlite:///:memory:
+          BTI_SECRET_KEY: test-secret-key-minimum-32-chars-here
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t bti-api:ci .
