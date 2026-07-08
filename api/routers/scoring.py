@@ -7,10 +7,14 @@ fraud risk assessment back in <100ms.
 No pipeline needed — uses pre-trained models loaded into memory at startup.
 """
 
+import io
+from collections import Counter
 from datetime import datetime
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException
+import pandas as pd
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -222,3 +226,194 @@ def reload_models():
     """Forces the scorer to reload all model artifacts from disk."""
     _scorer.reload()
     return {"status": "reloaded", "trained_at": _scorer.bundle.trained_at}
+
+
+# ── Bulk CSV / Excel Upload ────────────────────────────────────────────────────
+
+_COL_ALIASES = {
+    "txn_id": "transaction_id",
+    "id": "transaction_id",
+    "amount": "transaction_amount",
+    "cust_id": "customer_id",
+    "date": "transaction_date",
+    "time": "transaction_time",
+}
+
+
+def _normalise_df(df: pd.DataFrame) -> pd.DataFrame:
+    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+    df.rename(columns=_COL_ALIASES, inplace=True)
+    return df
+
+
+def _row_to_txn(row: dict, idx: int) -> dict:
+    txn: dict = {}
+    txn["transaction_id"] = str(row.get("transaction_id") or f"UPLOAD-{idx:06d}")
+    txn["customer_id"]    = str(row.get("customer_id")    or f"CUST-UNKNOWN-{idx:06d}")
+    txn["transaction_amount"] = float(row.get("transaction_amount") or 0)
+    txn["transaction_date"]   = str(row.get("transaction_date") or "2024-01-01")
+    txn["transaction_time"]   = str(row.get("transaction_time") or "12:00:00")
+
+    for field in ["channel", "merchant_category", "merchant_name", "customer_segment",
+                  "debit_credit_flag", "device_id", "ip_location", "currency",
+                  "authorization_method", "transaction_type", "account_id"]:
+        val = row.get(field)
+        if val is not None and str(val) not in ("", "nan", "NaN", "None"):
+            txn[field] = str(val)
+
+    for field in ["risk_score", "historical_average_transaction_amount",
+                  "account_balance_before", "account_balance_after"]:
+        val = row.get(field)
+        if val is not None:
+            try:
+                txn[field] = float(val)
+            except (ValueError, TypeError):
+                pass
+
+    for field in ["failed_attempt_count", "login_attempts", "refund_flag",
+                  "chargeback_flag", "reversal_flag", "monthly_customer_transaction_count"]:
+        val = row.get(field)
+        if val is not None:
+            try:
+                txn[field] = int(float(val))
+            except (ValueError, TypeError):
+                pass
+
+    return txn
+
+
+_TEMPLATE_CSV = (
+    "transaction_id,customer_id,transaction_amount,transaction_date,transaction_time,"
+    "channel,merchant_category,merchant_name,customer_segment,debit_credit_flag,"
+    "device_id,ip_location,risk_score,historical_average_transaction_amount,"
+    "failed_attempt_count,login_attempts,account_balance_before,account_balance_after,"
+    "refund_flag,chargeback_flag\n"
+    "TXN-SAMPLE-001,CUST-0001,12500.00,2024-07-15,02:47:00,"
+    "API/Open Banking,Crypto Exchanges,CryptoFX Ltd,Mass Market,Debit,"
+    "DEV-X9921-UNKNOWN,203.0.113.45,72,450.0,4,6,13000.00,500.00,0,0\n"
+    "TXN-SAMPLE-002,CUST-0002,42.50,2024-07-15,14:30:00,"
+    "Mobile Banking,Groceries,Tesco,Premium,Debit,"
+    "DEV-IPHONE-001,192.168.1.1,12,55.0,0,1,3200.00,3157.50,0,0\n"
+)
+
+
+@router.get("/upload/template",
+            summary="Download CSV template for bulk upload")
+def download_upload_template():
+    """
+    Returns a ready-to-fill CSV template with all supported columns and two
+    example rows (one HIGH-risk, one LOW-risk). Fill it with your transactions
+    and POST to /score/upload.
+    """
+    return StreamingResponse(
+        io.StringIO(_TEMPLATE_CSV),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=bti_upload_template.csv"},
+    )
+
+
+@router.post("/upload",
+             summary="Batch score transactions from a CSV or Excel file")
+async def batch_score_upload(
+    file: UploadFile = File(..., description="CSV (.csv) or Excel (.xlsx / .xls) file"),
+    db: Session = Depends(get_db),
+):
+    """
+    Upload a CSV or Excel file of transactions. Every row is scored independently
+    through the full 19-rule fraud engine and ML ensemble (Isolation Forest +
+    Logistic Regression + Random Forest).
+
+    **Required columns:** transaction_id, customer_id, transaction_amount
+
+    All other columns are optional — the system applies sensible defaults for
+    anything missing. Download the template from **GET /score/upload/template**
+    to see the full column list with two example rows.
+
+    Returns a batch summary (tier breakdown) plus the full fraud risk assessment
+    for every row.
+    """
+    if not models_available():
+        raise HTTPException(
+            status_code=503,
+            detail="ML models not trained. Run POST /pipeline/run/sync first.",
+        )
+
+    filename = file.filename or "upload"
+    content  = await file.read()
+
+    try:
+        if filename.lower().endswith((".xlsx", ".xls")):
+            df = pd.read_excel(io.BytesIO(content))
+        else:
+            df = pd.read_csv(io.BytesIO(content))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not parse file: {exc}")
+
+    if df.empty:
+        raise HTTPException(status_code=400, detail="Uploaded file contains no rows.")
+
+    df = _normalise_df(df)
+
+    missing_required = [c for c in ("transaction_id", "customer_id", "transaction_amount")
+                        if c not in df.columns]
+    if missing_required:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Missing required columns: {missing_required}. "
+                "Download the template at GET /score/upload/template"
+            ),
+        )
+
+    results, errors, tier_counts = [], [], Counter()
+
+    for idx, row in df.iterrows():
+        row_num = int(idx) + 2  # 1-indexed, header = row 1
+        try:
+            txn = _row_to_txn(row.to_dict(), int(idx))
+            if txn["transaction_amount"] <= 0:
+                errors.append({"row": row_num, "error": "transaction_amount must be > 0"})
+                continue
+
+            result = _scorer.score(txn, db_session=db)
+            tier_counts[result.final_alert_tier] += 1
+
+            results.append({
+                "row":                 row_num,
+                "transaction_id":      result.transaction_id,
+                "customer_id":         txn.get("customer_id"),
+                "transaction_amount":  txn["transaction_amount"],
+                "final_risk_score":    round(result.final_risk_score, 2),
+                "final_alert_tier":    result.final_alert_tier,
+                "fraud_rule_score":    round(result.fraud_rule_score, 2),
+                "rules_triggered":     result.rules_triggered,
+                "rules_fired":         result.rules_fired,
+                "ml_lr_proba":         round(result.ml_lr_proba, 4),
+                "ml_rf_proba":         round(result.ml_rf_proba, 4),
+                "ml_anomaly_score":    round(result.ml_anomaly_score, 2),
+                "is_suspicious":       result.is_suspicious,
+                "recommendation":      _recommendation(result),
+                "processing_time_ms":  round(result.processing_time_ms, 1),
+            })
+        except Exception as exc:
+            errors.append({"row": row_num, "error": str(exc)})
+
+    log.info("Batch upload scored",
+             extra={"file": filename, "rows": len(df),
+                    "scored": len(results), "errors": len(errors)})
+
+    return {
+        "file_name":  filename,
+        "total_rows": len(df),
+        "scored":     len(results),
+        "failed":     len(errors),
+        "summary": {
+            "CRITICAL":  tier_counts.get("CRITICAL",  0),
+            "VERY HIGH": tier_counts.get("VERY HIGH", 0),
+            "HIGH":      tier_counts.get("HIGH",      0),
+            "MEDIUM":    tier_counts.get("MEDIUM",    0),
+            "LOW":       tier_counts.get("LOW",       0),
+        },
+        "results": results,
+        "errors":  errors or None,
+    }
