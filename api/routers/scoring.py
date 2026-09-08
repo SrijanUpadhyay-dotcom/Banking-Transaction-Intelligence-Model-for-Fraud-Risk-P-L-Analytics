@@ -19,8 +19,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from bti.database import get_db
-from bti.scoring.realtime import RealTimeScorer, ScoreResult
+from bti.scoring.realtime import RealTimeScorer, ScoreResult, _build_feature_vector
 from bti.scoring.model_loader import models_available
+from bti.scoring.explainer import explain as shap_explain
 from bti.logging_config import get_logger, AuditLogger
 from bti.config import get_settings
 
@@ -204,6 +205,90 @@ def score_transaction_endpoint(
         db_context_used=result.db_context_used,
         recommendation=_recommendation(result),
     )
+
+
+@router.post("/explain",
+             summary="Score + SHAP explanation — why was this transaction flagged?")
+def explain_transaction_endpoint(
+    body: TransactionScoreRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Score a transaction and return a full SHAP-based explanation alongside the
+    fraud risk assessment.
+
+    In addition to the standard score, the response includes:
+    - **top_drivers**: top-8 features ranked by their contribution to the fraud
+      probability, each with a human-readable label, the actual feature value,
+      the SHAP value (how much it pushed the score up or down), and the
+      percentage of total impact it represents.
+    - **narrative**: a plain-English paragraph summarising the key risk drivers
+      and a recommended investigator action — suitable for a fraud alert email
+      or a case management system.
+
+    This endpoint is the foundation of the BTI Fraud Intelligence Layer (v2),
+    designed to complement enterprise platforms such as SAS by providing
+    explainable, investigator-ready fraud intelligence.
+    """
+    if not models_available():
+        raise HTTPException(
+            status_code=503,
+            detail="ML models not trained. Run POST /pipeline/run/sync first.",
+        )
+
+    txn_dict = body.model_dump()
+    result   = _scorer.score(txn_dict, db_session=db)
+
+    # Build the same feature vector that was used for the RF model
+    bundle = _scorer.bundle
+    X = _build_feature_vector(txn_dict, bundle.feature_cols, bundle.label_encoders)
+    X = X.fillna(0).replace([float("inf"), float("-inf")], 0)
+
+    explanation = shap_explain(
+        rf_model       = bundle.rf_model,
+        feature_vector = X.values,
+        feature_cols   = bundle.feature_cols,
+        transaction_id = result.transaction_id,
+        fraud_prob     = result.ml_rf_proba,
+        risk_tier      = result.final_alert_tier,
+        top_n          = 8,
+    )
+
+    return {
+        # ── Standard score fields ──────────────────────────────────────────────
+        "transaction_id":    result.transaction_id,
+        "scored_at":         datetime.utcnow().isoformat() + "Z",
+        "final_risk_score":  result.final_risk_score,
+        "final_alert_tier":  result.final_alert_tier,
+        "fraud_rule_score":  result.fraud_rule_score,
+        "rules_triggered":   result.rules_triggered,
+        "rules_fired":       result.rules_fired,
+        "ml_rf_proba":       result.ml_rf_proba,
+        "ml_lr_proba":       result.ml_lr_proba,
+        "ml_iso_score":      result.ml_iso_score,
+        "ml_anomaly_score":  result.ml_anomaly_score,
+        "is_suspicious":     result.is_suspicious,
+        "recommendation":    _recommendation(result),
+        "processing_time_ms": result.processing_time_ms,
+        # ── SHAP explanation ───────────────────────────────────────────────────
+        "explanation": {
+            "fraud_probability": round(explanation.fraud_probability, 4),
+            "base_probability":  round(explanation.base_probability, 4),
+            "narrative":         explanation.narrative,
+            "top_drivers": [
+                {
+                    "rank":       i + 1,
+                    "feature":    d.feature,
+                    "label":      d.label,
+                    "value":      round(d.value, 4),
+                    "shap_value": round(d.shap_value, 6),
+                    "direction":  d.direction,
+                    "impact_pct": d.impact_pct,
+                }
+                for i, d in enumerate(explanation.top_drivers)
+            ],
+        },
+    }
 
 
 @router.get("/model-info", summary="Model version and performance metrics")
