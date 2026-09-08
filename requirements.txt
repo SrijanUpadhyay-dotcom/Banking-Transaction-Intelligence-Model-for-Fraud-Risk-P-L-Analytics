@@ -8,6 +8,7 @@ scikit-learn==1.9.0
 joblib==1.5.3
 shap>=0.46.0
 networkx>=3.0
+anthropic>=1.0.0
 
 # ── Visualization ────────────────────────────────────────────────────────────
 matplotlib==3.11.0

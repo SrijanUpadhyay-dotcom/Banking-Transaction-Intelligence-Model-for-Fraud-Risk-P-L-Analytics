@@ -34,7 +34,7 @@ from fastapi.responses import JSONResponse
 from bti.config import get_settings
 from bti.logging_config import setup_logging, get_logger
 from bti.database.init_db import create_tables
-from api.routers import transactions, alerts, analytics, pipeline, scoring, graph
+from api.routers import transactions, alerts, analytics, pipeline, scoring, graph, copilot
 
 settings = get_settings()
 log = setup_logging(log_level=settings.log_level, log_format="json")
@@ -126,6 +126,7 @@ app.include_router(analytics.router, prefix=API_PREFIX)
 app.include_router(pipeline.router, prefix=API_PREFIX)
 app.include_router(scoring.router, prefix=API_PREFIX)
 app.include_router(graph.router,   prefix=API_PREFIX)
+app.include_router(copilot.router, prefix=API_PREFIX)
 
 
 if __name__ == "__main__":
