@@ -1,9 +1,10 @@
 """
-/api/v1/analytics — P&L KPIs, monthly trends, customer risk profiles.
+/api/v1/analytics — P&L KPIs, monthly trends, customer risk profiles, model lift.
 """
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, text
 
@@ -149,3 +150,66 @@ def get_top_risk_customers(limit: int = Query(default=20, le=100), db: Session =
         LIMIT :lim
     """), {"lim": limit})
     return [CustomerRiskProfile(**dict(row._mapping)) for row in result]
+
+
+# ── Model Lift Analytics ───────────────────────────────────────────────────────
+
+class CompareRecord(BaseModel):
+    label: int = Field(..., ge=0, le=1, description="Ground-truth label: 1=fraud, 0=legitimate")
+    sas_score: float = Field(..., ge=0, le=1, description="Baseline (e.g. SAS) fraud probability 0–1")
+    bti_score: Optional[float] = Field(None, ge=0, le=1, description="BTI fraud probability 0–1 (scored live if omitted)")
+
+    model_config = {"extra": "allow"}
+
+
+@router.get("/model/lift", tags=["Analytics"])
+def get_model_lift():
+    """
+    Compute BTI model lift table, KS statistic, and Gini coefficient from the
+    held-out test split (25% of scored dataset, random_state=42).
+
+    Returns decile-level lift, cumulative fraud capture, and summary stats.
+    Note: AUC≈1.0 reflects perfectly separable synthetic fraud labels — this
+    is expected for rule-derived labels; real-world data typically yields 0.85–0.95.
+    """
+    from bti.analytics.lift import compute_lift
+    try:
+        report = compute_lift()
+        from dataclasses import asdict
+        return asdict(report)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/model/compare", tags=["Analytics"])
+def compare_model_lift(records: List[CompareRecord]):
+    """
+    Measure incremental lift of BTI over a baseline scorer (e.g. SAS) on the
+    same labeled transaction set.
+
+    Each record needs:
+      - label (0=legitimate, 1=fraud)
+      - sas_score (0–1 float, your baseline model's probability)
+      - bti_score (optional; if omitted BTI scores the record live — include
+        transaction fields such as TransactionAmt, merchant_name, etc.)
+
+    Returns AUC, KS, and top-decile lift for both models plus the delta.
+    Minimum 20 records; at least 2 must be fraud (label=1).
+    """
+    from bti.analytics.lift import compare_with_baseline
+    if len(records) < 20:
+        raise HTTPException(
+            status_code=422,
+            detail="Need at least 20 records for a meaningful lift comparison."
+        )
+    data = [r.model_dump() for r in records]
+    try:
+        report = compare_with_baseline(data)
+        from dataclasses import asdict
+        return asdict(report)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
