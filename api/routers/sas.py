@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from bti.database import get_db
-from bti.sas.enricher import enrich_single, enrich_batch, EnrichmentResult
+from bti.sas.enricher import enrich_single, enrich_batch, EnrichmentResult, _scorer
 from bti.logging_config import get_logger
 
 import io
