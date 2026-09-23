@@ -1,0 +1,36 @@
+{
+  "champion": null,
+  "challenger": "bti-v3-hgb-20260923160241",
+  "models": [
+    {
+      "model_id": "bti-v3-hgb-20260923160131",
+      "registered_at": "2026-09-23T16:01:31.100342+00:00",
+      "developer": "bti-model-dev",
+      "validation_status": "failed"
+    },
+    {
+      "model_id": "bti-v3-hgb-20260923160241",
+      "registered_at": "2026-09-23T16:02:41.193878+00:00",
+      "developer": "bti-model-dev",
+      "validation_status": "passed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-23T16:01:31.101572+00:00",
+      "role": "challenger",
+      "model_id": "bti-v3-hgb-20260923160131",
+      "previous": null,
+      "approver": "bti.modeling.train",
+      "rationale": "Newly trained model enters shadow (challenger) mode automatically"
+    },
+    {
+      "at": "2026-09-23T16:02:41.195129+00:00",
+      "role": "challenger",
+      "model_id": "bti-v3-hgb-20260923160241",
+      "previous": "bti-v3-hgb-20260923160131",
+      "approver": "bti.modeling.train",
+      "rationale": "Newly trained model enters shadow (challenger) mode automatically"
+    }
+  ]
+}
