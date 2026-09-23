@@ -19,7 +19,7 @@ only way to establish real lift over SAS.
 | # | Item | Status | Notes |
 |---|---|---|---|
 | 0.1 | Move `/score`, `/score/explain`, `/score/upload` and `/sas/enrich*` onto the v3 model | **Done** | One shared path (`bti/operations/scoring_service.py`): v3 score → expected-cost decision → shadow challenger → score log. Response shapes kept; `ml_lr_proba`, `ml_rf_proba`, `ml_iso_score` are now null; `risk_score` and post-event fields are accepted but ignored. |
-| 0.2 | Approve v3 as champion | **Pending** | Needs a named approver who is not the developer. Until then the model is provisional and cannot auto-decline on any endpoint. `python -m bti.modeling.promote --model bti-v3-hgb-20260923160241 --role champion --approver "<name, role>" --rationale "<validation reference>"` |
+| 0.2 | Approve v3 as champion | **Pending** | Needs a named approver who is not the developer. Until then the model is provisional and cannot auto-decline on any endpoint. `python -m bti.modeling.promote --model bti-v3-hgb-20260923175252 --role champion --approver "<name, role>" --rationale "<validation reference>"` |
 | 0.3 | Scheduled PSI / CSI drift job with alerting | **Done** | Weekly (Mon 06:00 UTC, `BTI_DRIFT_CHECK_CRON`), live and shadow traffic, alerts via webhook/email at investigate/escalate, history in the audit log. `POST /governance/drift/run`, `GET /governance/drift/history`, `GET /governance/monitoring/schedule`. Enable the scheduler on one worker only. |
 | 0.4 | Latency and uptime reporting | **Done** | `GET /operations/service-metrics`: uptime, requests, 5xx rate and p50/p95/p99 per endpoint group; model scoring latency against the SLA from the score log. |
 

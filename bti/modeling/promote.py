@@ -5,7 +5,7 @@ passed validation for champion, approver ≠ developer, written rationale.
 
 Usage:
   python -m bti.modeling.promote --list
-  python -m bti.modeling.promote --model bti-v3-hgb-20260923160241 --role champion \\
+  python -m bti.modeling.promote --model bti-v3-hgb-20260923175252 --role champion \\
       --approver "jane.smith (Model Risk)" --rationale "Independent validation completed, ref MRM-2026-014"
 """
 

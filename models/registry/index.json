@@ -1,6 +1,6 @@
 {
   "champion": null,
-  "challenger": "bti-v3-hgb-20260923160241",
+  "challenger": "bti-v3-hgb-20260923175252",
   "models": [
     {
       "model_id": "bti-v3-hgb-20260923160131",
@@ -12,6 +12,12 @@
       "model_id": "bti-v3-hgb-20260923160241",
       "registered_at": "2026-09-23T16:02:41.193878+00:00",
       "developer": "bti-model-dev",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-hgb-20260923175252",
+      "registered_at": "2026-09-23T17:52:52.709994+00:00",
+      "developer": "Srijan Upadhyay",
       "validation_status": "passed"
     }
   ],
@@ -31,6 +37,22 @@
       "previous": "bti-v3-hgb-20260923160131",
       "approver": "bti.modeling.train",
       "rationale": "Newly trained model enters shadow (challenger) mode automatically"
+    },
+    {
+      "at": "2026-09-23T17:52:52.711109+00:00",
+      "role": "challenger",
+      "model_id": "bti-v3-hgb-20260923175252",
+      "previous": "bti-v3-hgb-20260923160241",
+      "approver": "bti.modeling.train",
+      "rationale": "Newly trained model enters shadow (challenger) mode automatically"
+    },
+    {
+      "at": "2026-09-23T17:53:00.977768+00:00",
+      "role": "challenger",
+      "model_id": "bti-v3-hgb-20260923175252",
+      "previous": "bti-v3-hgb-20260923175252",
+      "approver": "Srijan Upadhyay",
+      "rationale": "Re-registered with the correct developer of record (Srijan Upadhyay). Supersedes bti-v3-hgb-20260923160241, whose developer field was a placeholder. Same data, code and seed; all metrics identical."
     }
   ]
 }

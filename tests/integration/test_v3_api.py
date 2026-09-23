@@ -78,9 +78,8 @@ def client(tmp_path_factory):
 
 
 def _passed_and_failed():
-    models = registry.read_index()["models"]
-    passed = next(m["model_id"] for m in models if m["validation_status"] == "passed")
-    failed = next(m["model_id"] for m in models if m["validation_status"] == "failed")
+    passed = registry.model_for_role("challenger") or registry.model_for_role("champion")
+    failed = next(m["model_id"] for m in registry.read_index()["models"] if m["validation_status"] == "failed")
     return passed, failed
 
 
@@ -145,8 +144,9 @@ class TestGovernance:
 
     def test_four_eyes_then_promotion_and_shadow(self, client):
         passed, failed = _passed_and_failed()
+        developer = registry.load_card(passed)["ownership"]["developer"]
         self_approved = client.post(f"/api/v1/governance/models/{passed}/promote", headers=KEY,
-                                    json={"role": "champion", "approver": "bti-model-dev",
+                                    json={"role": "champion", "approver": developer,
                                           "rationale": "Developer approving own model"})
         assert self_approved.status_code == 409
         ok = client.post(f"/api/v1/governance/models/{passed}/promote", headers=KEY,
