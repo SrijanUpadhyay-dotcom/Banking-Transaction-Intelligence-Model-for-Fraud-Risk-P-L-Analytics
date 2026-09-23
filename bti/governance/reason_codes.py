@@ -73,6 +73,18 @@ REASON_CODES: Dict[str, Dict[str, str]] = {
         "analyst": "Merchant category with elevated fraud rates",
         "customer": "The type of merchant",
     },
+    "MERCHANT_VELOCITY": {
+        "analyst": "Burst of activity at this merchant across customers (possible card testing or compromise)",
+        "customer": "Recent activity at this merchant",
+    },
+    "DEVICE_VELOCITY": {
+        "analyst": "High transaction rate on this device",
+        "customer": "The device used for this transaction",
+    },
+    "STRUCTURING": {
+        "analyst": "Amount just below a round threshold, repeated recently (possible limit testing)",
+        "customer": "The pattern of recent transaction amounts",
+    },
     "TXN_TYPE": {
         "analyst": "Transaction type with elevated fraud rates",
         "customer": "The type of transaction",

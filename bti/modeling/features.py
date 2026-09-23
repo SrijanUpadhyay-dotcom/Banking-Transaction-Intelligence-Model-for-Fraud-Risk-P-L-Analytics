@@ -114,7 +114,7 @@ _AMT = ("transaction_amount", "currency")
 _WHEN = ("transaction_date", "transaction_time")
 _CUST = ("customer_id",) + _WHEN
 
-MODEL_FEATURES: List[FeatureSpec] = [
+CORE_FEATURES: List[FeatureSpec] = [
     FeatureSpec("amount_usd", _N, _AMT, "AMT_HIGH", "Amount in USD equivalent"),
     FeatureSpec("log_amount_usd", _N, _AMT, "AMT_HIGH", "log1p of USD amount"),
     FeatureSpec("amount_vs_hist_avg", _N, ("transaction_amount", "historical_average_transaction_amount"),
@@ -152,10 +152,33 @@ MODEL_FEATURES: List[FeatureSpec] = [
     FeatureSpec("transaction_type", _C, ("transaction_type",), "TXN_TYPE", "Transaction type"),
 ]
 
-FEATURE_NAMES: List[str] = [f.name for f in MODEL_FEATURES]
-CATEGORICAL_FEATURES: List[str] = [f.name for f in MODEL_FEATURES if f.kind is Kind.CATEGORICAL]
-NUMERIC_FEATURES: List[str] = [f.name for f in MODEL_FEATURES if f.kind is Kind.NUMERIC]
-FEATURE_BY_NAME: Dict[str, FeatureSpec] = {f.name: f for f in MODEL_FEATURES}
+# Velocity round two (Phase 1). Kept as a separate set so their value is measured, not assumed.
+EXTENDED_FEATURES: List[FeatureSpec] = [
+    FeatureSpec("merchant_txn_count_1h", _N, ("merchant_name",) + _WHEN, "MERCHANT_VELOCITY",
+                "Transactions at this merchant (all customers) in prior 1h"),
+    FeatureSpec("merchant_txn_count_24h", _N, ("merchant_name",) + _WHEN, "MERCHANT_VELOCITY",
+                "Transactions at this merchant (all customers) in prior 24h"),
+    FeatureSpec("device_txn_count_24h", _N, ("device_id",) + _WHEN, "DEVICE_VELOCITY",
+                "Transactions on this device (all customers) in prior 24h"),
+    FeatureSpec("amount_zscore_customer", _N, _CUST + _AMT, "AMT_VS_HISTORY",
+                "Standard deviations from the customer's own amounts in the look-back"),
+    FeatureSpec("just_below_threshold", _N, _AMT, "STRUCTURING",
+                "USD amount within 10% below 1,000 / 3,000 / 5,000 / 10,000"),
+    FeatureSpec("cust_near_threshold_7d", _N, _CUST + _AMT, "STRUCTURING",
+                "Customer's just-below-threshold transactions in prior 7d"),
+    FeatureSpec("hour_deviation", _N, _CUST, "TIME_OF_DAY",
+                "Hours between this transaction and the customer's usual time of day"),
+]
+
+MODEL_FEATURES: List[FeatureSpec] = CORE_FEATURES
+ALL_FEATURES: List[FeatureSpec] = CORE_FEATURES + EXTENDED_FEATURES
+FEATURE_NAMES: List[str] = [f.name for f in CORE_FEATURES]
+ALL_FEATURE_NAMES: List[str] = [f.name for f in ALL_FEATURES]
+FEATURE_SETS: Dict[str, List[str]] = {"core": FEATURE_NAMES, "extended": ALL_FEATURE_NAMES}
+CATEGORICAL_FEATURES: List[str] = [f.name for f in ALL_FEATURES if f.kind is Kind.CATEGORICAL]
+NUMERIC_FEATURES: List[str] = [f.name for f in ALL_FEATURES if f.kind is Kind.NUMERIC]
+FEATURE_BY_NAME: Dict[str, FeatureSpec] = {f.name: f for f in ALL_FEATURES}
+STRUCTURING_THRESHOLDS_USD = (1_000, 3_000, 5_000, 10_000)
 PROTECTED_ATTRIBUTES: List[str] = [n for n, f in SOURCE_FIELDS.items() if f.availability is _A.PROTECTED]
 
 DEFAULT_LOOKBACK_DAYS = 365
@@ -166,7 +189,14 @@ class FeatureGovernanceError(RuntimeError):
     pass
 
 
-def assert_feature_lineage(features: Iterable[FeatureSpec] = MODEL_FEATURES) -> None:
+def feature_specs(feature_set: str) -> List[FeatureSpec]:
+    if feature_set not in FEATURE_SETS:
+        raise ValueError(f"feature_set must be one of {sorted(FEATURE_SETS)}")
+    names = set(FEATURE_SETS[feature_set])
+    return [f for f in ALL_FEATURES if f.name in names]
+
+
+def assert_feature_lineage(features: Iterable[FeatureSpec] = ALL_FEATURES) -> None:
     """Raise if any model feature is built from a field not known pre-authorisation."""
     problems = []
     for f in features:
@@ -289,10 +319,45 @@ def build_features(df: pd.DataFrame, lookback_days: int = DEFAULT_LOOKBACK_DAYS)
             entity_all, _ = _prior_window(_group_ids(df, [entity]), ts, lookback_s)
             out[shared_col] = np.where(present, (entity_all - cust_entity).astype(float), np.nan)
 
+    # ── Velocity round two ────────────────────────────────────────────────────
+    merchant_present = df["merchant_name"].notna() & (df["merchant_name"].astype(str) != "")
+    merch = _group_ids(df, ["merchant_name"])
+    m1h, _ = _prior_window(merch, ts, 3_600)
+    m24h, _ = _prior_window(merch, ts, 86_400)
+    out["merchant_txn_count_1h"] = np.where(merchant_present, m1h, np.nan)
+    out["merchant_txn_count_24h"] = np.where(merchant_present, m24h, np.nan)
+
+    device_present = df["device_id"].notna() & (df["device_id"].astype(str) != "")
+    d24h, _ = _prior_window(_group_ids(df, ["device_id"]), ts, 86_400)
+    out["device_txn_count_24h"] = np.where(device_present, d24h, np.nan)
+
+    usd_clean = np.nan_to_num(usd)
+    n_lb, s1 = _prior_window(cust, ts, lookback_s, usd_clean)
+    _, s2 = _prior_window(cust, ts, lookback_s, usd_clean ** 2)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mean = s1 / n_lb
+        std = np.sqrt(np.clip(s2 / n_lb - mean ** 2, 0, None))
+        z = (usd - mean) / std
+    out["amount_zscore_customer"] = np.where((n_lb >= 2) & (std > 0), np.clip(z, -50, 50), np.nan)
+
+    near = np.zeros(len(usd), dtype=bool)
+    for t in STRUCTURING_THRESHOLDS_USD:
+        near |= (usd >= 0.9 * t) & (usd < t)
+    out["just_below_threshold"] = near.astype(float)
+    _, near_7d = _prior_window(cust, ts, 7 * 86_400, near.astype(float))
+    out["cust_near_threshold_7d"] = near_7d
+
+    angle = 2 * np.pi * hour.to_numpy(float) / 24
+    n_h, s_sin = _prior_window(cust, ts, lookback_s, np.sin(angle))
+    _, s_cos = _prior_window(cust, ts, lookback_s, np.cos(angle))
+    usual = np.arctan2(s_sin, s_cos)
+    gap = np.abs(np.angle(np.exp(1j * (angle - usual)))) * 24 / (2 * np.pi)
+    out["hour_deviation"] = np.where(n_h >= 3, gap, np.nan)
+
     for col in CATEGORICAL_FEATURES:
         out[col] = df[col].astype("string")
 
-    return out[FEATURE_NAMES]
+    return out[ALL_FEATURE_NAMES]
 
 
 # Categorical fields enter the model as their smoothed historical fraud rate.
@@ -336,12 +401,16 @@ def _apply_encodings(features: pd.DataFrame, encodings: Dict[str, Dict]) -> pd.D
     return out
 
 
-def to_model_matrix(features: pd.DataFrame, encodings: Dict[str, Dict]) -> pd.DataFrame:
+def to_model_matrix(features: pd.DataFrame, encodings: Dict[str, Dict],
+                    feature_names: Optional[List[str]] = None) -> pd.DataFrame:
     """All-numeric model input: numeric features as-is, categoricals as learned fraud rates."""
-    X = features[FEATURE_NAMES].copy()
-    for col in NUMERIC_FEATURES:
-        X[col] = pd.to_numeric(X[col], errors="coerce").astype(float).replace([np.inf, -np.inf], np.nan)
-    X[CATEGORICAL_FEATURES] = _apply_encodings(features, encodings)
+    names = list(feature_names or FEATURE_NAMES)
+    X = features[names].copy()
+    for col in names:
+        if col not in CATEGORICAL_FEATURES:
+            X[col] = pd.to_numeric(X[col], errors="coerce").astype(float).replace([np.inf, -np.inf], np.nan)
+    cats = [c for c in CATEGORICAL_FEATURES if c in names]
+    X[cats] = _apply_encodings(features, encodings)[cats]
     return X.astype(float)
 
 

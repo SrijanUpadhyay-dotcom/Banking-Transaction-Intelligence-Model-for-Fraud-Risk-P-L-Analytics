@@ -21,7 +21,7 @@ from scipy.special import expit
 
 from bti.governance.reason_codes import principal_reasons
 from bti.logging_config import get_logger
-from bti.modeling import registry
+from bti.modeling import algorithms, registry
 from bti.modeling.features import FEATURE_NAMES, build_features, event_timestamps, to_model_matrix
 
 log = get_logger("modeling.scorer")
@@ -123,8 +123,9 @@ class V3Scorer:
         if history is None:
             history = fetch_history(db_session, txn, art["lookback_days"])
         frame = pd.concat([history, pd.DataFrame([txn])], ignore_index=True)
+        names = art.get("feature_names", FEATURE_NAMES)
         feats = build_features(frame, lookback_days=art["lookback_days"]).iloc[[-1]]
-        X = to_model_matrix(feats, art["encodings"])
+        X = to_model_matrix(feats, art["encodings"], names)
 
         raw = float(art["estimator"].predict_proba(X)[0, 1])
         p = float(art["calibrator"].predict(np.array([raw]))[0])
@@ -137,12 +138,10 @@ class V3Scorer:
         base_probability = None
         if explain:
             explainer = self._explainer(model_id, art["estimator"])
-            sv = np.asarray(explainer.shap_values(X))
-            if sv.ndim == 3:
-                sv = sv[..., 1]
-            contributions = {f: round(float(v), 6) for f, v in zip(FEATURE_NAMES, sv[0])}
+            sv = algorithms.shap_matrix(explainer, X)
+            contributions = {f: round(float(v), 6) for f, v in zip(names, sv[0])}
             reasons = principal_reasons(contributions, values)
-            base_raw = float(expit(np.ravel(explainer.expected_value)[-1]))
+            base_raw = float(expit(algorithms.shap_base(explainer)))
             base_probability = round(float(art["calibrator"].predict(np.array([base_raw]))[0]), 6)
 
         notes = []
@@ -173,7 +172,7 @@ class V3Scorer:
         model_id, used_role, _ = self.resolve(role)
         art = registry.load_artifact(model_id)
         feats = build_features(df, lookback_days=art["lookback_days"])
-        X = to_model_matrix(feats, art["encodings"])
+        X = to_model_matrix(feats, art["encodings"], art.get("feature_names", FEATURE_NAMES))
         p = art["calibrator"].predict(art["estimator"].predict_proba(X)[:, 1])
         out = feats.copy()
         out["fraud_probability"] = p

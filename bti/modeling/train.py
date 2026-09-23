@@ -10,13 +10,17 @@ Design choices a model validator will look for:
   * Categorical fields enter as out-of-fold fraud rates so SHAP reason codes
     are exact (verified by an additivity check)
   * Monotonic constraints so risk cannot fall as failed logins / velocity rise
+  * Any of three algorithms (histogram GBM, LightGBM, XGBoost) and two feature
+    sets (core, extended), all through identical gates; early stopping on the
+    most recent 15% of the training window
   * Operating threshold chosen on the calibration window, then applied to the
     test window (no peeking at test data)
   * Automated validation gates; the result is registered, never auto-promoted
     to champion (four-eyes approval happens through the registry)
 
 Usage:
-  python -m bti.modeling.train --developer "jane.doe"
+  python -m bti.modeling.train --developer "jane.doe" [--algorithm lightgbm] [--feature-set extended]
+  (compare several candidates with python -m bti.modeling.tournament)
 """
 
 from __future__ import annotations
@@ -26,7 +30,7 @@ import getpass
 import hashlib
 import platform
 import subprocess
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional
@@ -34,17 +38,16 @@ from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 import sklearn
-from sklearn.ensemble import HistGradientBoostingClassifier
 
 from bti.config import get_settings
 from bti.governance.fairness import fairness_report
 from bti.governance.monitoring import build_baseline
 from bti.logging_config import get_logger
-from bti.modeling import fx, registry
+from bti.modeling import algorithms, fx, registry
 from bti.modeling.calibration import PlattCalibrator
 from bti.modeling.features import (
-    CATEGORICAL_FEATURES, DEFAULT_LOOKBACK_DAYS, FEATURE_NAMES, MODEL_FEATURES, PROTECTED_ATTRIBUTES,
-    SOURCE_FIELDS, Availability, assert_feature_lineage, build_features, event_timestamps,
+    CATEGORICAL_FEATURES, DEFAULT_LOOKBACK_DAYS, FEATURE_SETS, PROTECTED_ATTRIBUTES, SOURCE_FIELDS,
+    Availability, assert_feature_lineage, build_features, event_timestamps, feature_specs,
     fit_category_encodings, leakage_audit, out_of_fold_category_encoding, to_model_matrix,
 )
 from bti.modeling.metrics import (
@@ -56,15 +59,12 @@ log = get_logger("modeling.train")
 
 LABEL = "fraud_flag"
 REFERENCE_ALERT_BUDGET = 0.02
-HYPERPARAMETERS = dict(
-    learning_rate=0.05, max_iter=500, max_leaf_nodes=31, min_samples_leaf=50, l2_regularization=1.0,
-    early_stopping=True, validation_fraction=0.15, n_iter_no_change=30, random_state=42,
-    categorical_features=None,
-)
+EARLY_STOP_SHARE = 0.15
 MONOTONE_INCREASING = [
     "failed_attempt_count", "login_attempts", "amount_vs_hist_avg", "device_new_for_customer",
     "ip_new_for_customer", "cust_txn_count_1h", "cust_txn_count_24h", "cust_txn_count_7d",
     "amount_usd", "log_amount_usd", "amount_to_balance",
+    "device_txn_count_24h", "amount_zscore_customer", "cust_near_threshold_7d", "hour_deviation",
 ]
 REMEDIATION_LOG = [
     {
@@ -128,14 +128,26 @@ def default_data_path() -> Path:
     return clean if clean.exists() else Path(settings.raw_data_path)
 
 
-def _fit_estimator(X: pd.DataFrame, y: np.ndarray) -> HistGradientBoostingClassifier:
-    monotone = {f: 1 for f in MONOTONE_INCREASING if f in X.columns}
-    model = HistGradientBoostingClassifier(**HYPERPARAMETERS, monotonic_cst=monotone)
-    return model.fit(X, y)
+@dataclass
+class TrainingData:
+    """Everything candidates share: data, features, labels and the out-of-time split."""
+    path: Path
+    sha256: str
+    df: pd.DataFrame
+    features: pd.DataFrame
+    y: np.ndarray
+    tr: np.ndarray
+    ca: np.ndarray
+    te: np.ndarray
+    es_fit: np.ndarray       # training rows used to fit
+    es_val: np.ndarray       # most recent training rows, used only for early stopping
+    cut_calib: pd.Timestamp
+    cut_test: pd.Timestamp
+    source_audit: list
+    lookback_days: int
 
 
-def train(data_path: Optional[Path] = None, developer: Optional[str] = None,
-          lookback_days: int = DEFAULT_LOOKBACK_DAYS, register: bool = True) -> Dict:
+def prepare(data_path: Optional[Path] = None, lookback_days: int = DEFAULT_LOOKBACK_DAYS) -> TrainingData:
     assert_feature_lineage()
     data_path = Path(data_path or default_data_path())
     log.info("Loading training data", extra={"path": str(data_path)})
@@ -143,24 +155,49 @@ def train(data_path: Optional[Path] = None, developer: Optional[str] = None,
     df[LABEL] = pd.to_numeric(df[LABEL], errors="coerce").fillna(0).astype(int)
     df["_ts"] = event_timestamps(df)
     df = df.dropna(subset=["_ts"]).sort_values("_ts", kind="stable").reset_index(drop=True)
-
-    source_audit = leakage_audit(df.drop(columns=["_ts"]), LABEL)
-    features = build_features(df, lookback_days=lookback_days)
-
     cut_calib, cut_test = df["_ts"].quantile(0.60), df["_ts"].quantile(0.75)
     tr = (df["_ts"] < cut_calib).to_numpy()
-    ca = ((df["_ts"] >= cut_calib) & (df["_ts"] < cut_test)).to_numpy()
-    te = (df["_ts"] >= cut_test).to_numpy()
-    y = df[LABEL].to_numpy()
+    tr_idx = np.flatnonzero(tr)
+    es_start = tr_idx[int(len(tr_idx) * (1 - EARLY_STOP_SHARE))]
+    es_val = tr & (np.arange(len(df)) >= es_start)
+    return TrainingData(
+        path=data_path, sha256=_sha256(data_path), df=df,
+        features=build_features(df, lookback_days=lookback_days), y=df[LABEL].to_numpy(), tr=tr,
+        ca=((df["_ts"] >= cut_calib) & (df["_ts"] < cut_test)).to_numpy(),
+        te=(df["_ts"] >= cut_test).to_numpy(), es_fit=tr & ~es_val, es_val=es_val,
+        cut_calib=cut_calib, cut_test=cut_test,
+        source_audit=leakage_audit(df.drop(columns=["_ts"]), LABEL), lookback_days=lookback_days,
+    )
+
+
+def _model_id(algorithm: str, feature_set: str) -> str:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    base = f"bti-v3-{algorithms.SHORT[algorithm]}{'-x' if feature_set == 'extended' else ''}-{stamp}"
+    model_id, n = base, 1
+    while (registry.registry_dir() / model_id).exists():
+        n += 1
+        model_id = f"{base}-{n}"
+    return model_id
+
+
+def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str = "core",
+                    params: Optional[Dict] = None, developer: Optional[str] = None, register: bool = True,
+                    tuning: Optional[Dict] = None, auto_challenger: bool = True) -> Dict:
+    names = FEATURE_SETS[feature_set]
+    specs = feature_specs(feature_set)
+    params = dict(params or algorithms.DEFAULT_PARAMS[algorithm])
+    df, features, y, tr, ca, te = data.df, data.features, data.y, data.tr, data.ca, data.te
 
     encodings = fit_category_encodings(features[tr], y[tr])
-    X = to_model_matrix(features, encodings)
+    X = to_model_matrix(features, encodings, names)
     X.loc[tr, CATEGORICAL_FEATURES] = out_of_fold_category_encoding(features[tr], y[tr]).to_numpy()
 
     engineered_audit = leakage_audit(pd.concat([X.loc[tr], df.loc[tr, [LABEL]]], axis=1), LABEL,
                                      threshold=GATES["max_feature_single_auc"])
 
-    estimator = _fit_estimator(X[tr], y[tr])
+    monotone = [1 if n in MONOTONE_INCREASING else 0 for n in names]
+    estimator = algorithms.fit(algorithm, params, monotone, X[data.es_fit], y[data.es_fit],
+                               X[data.es_val], y[data.es_val])
     raw = estimator.predict_proba(X)[:, 1]
     calibrator = PlattCalibrator().fit(raw[ca], y[ca])
     p = calibrator.predict(raw)
@@ -169,7 +206,6 @@ def train(data_path: Optional[Path] = None, developer: Optional[str] = None,
     accounts = df.get("account_id", df["customer_id"]).to_numpy()
     threshold = threshold_for_alert_rate(p[ca], REFERENCE_ALERT_BUDGET)
     flagged_te = p[te] >= threshold
-
     metrics = {
         "train": classification_metrics(y[tr], p[tr]),
         "calibration": classification_metrics(y[ca], p[ca]),
@@ -211,6 +247,8 @@ def train(data_path: Optional[Path] = None, developer: Optional[str] = None,
                   **classification_metrics(y[te], legacy_scores / 100.0)}
 
     importance = _global_importance(estimator, X[te])
+    if not importance:
+        raise RuntimeError("SHAP explanations failed the additivity check — the model cannot be registered")
 
     leaking_features = [r["column"] for r in engineered_audit if r["suspected_leak"]]
     gates = [
@@ -227,7 +265,7 @@ def train(data_path: Optional[Path] = None, developer: Optional[str] = None,
     status = "passed" if all(g["passed"] for g in gates) else "failed"
 
     created = datetime.now(timezone.utc)
-    model_id = f"bti-v3-hgb-{created.strftime('%Y%m%d%H%M%S')}"
+    model_id = _model_id(algorithm, feature_set)
     card = {
         "model_id": model_id,
         "model_family": "BTI v3 transaction fraud model",
@@ -244,40 +282,46 @@ def train(data_path: Optional[Path] = None, developer: Optional[str] = None,
         },
         "regulatory_mapping": REGULATORY_MAPPING,
         "data": {
-            "path": str(data_path),
-            "sha256": _sha256(data_path),
+            "path": str(data.path),
+            "sha256": data.sha256,
             "rows": int(len(df)),
             "fraud_rate": round(float(y.mean()), 5),
             "window": [str(df["_ts"].min()), str(df["_ts"].max())],
             "split": {"method": "out_of_time",
-                      "train": {"to": str(cut_calib), "rows": int(tr.sum()), "fraud": int(y[tr].sum())},
-                      "calibration": {"from": str(cut_calib), "to": str(cut_test),
+                      "train": {"to": str(data.cut_calib), "rows": int(tr.sum()), "fraud": int(y[tr].sum()),
+                                "early_stopping_rows": int(data.es_val.sum())},
+                      "calibration": {"from": str(data.cut_calib), "to": str(data.cut_test),
                                       "rows": int(ca.sum()), "fraud": int(y[ca].sum())},
-                      "out_of_time_test": {"from": str(cut_test), "rows": int(te.sum()),
+                      "out_of_time_test": {"from": str(data.cut_test), "rows": int(te.sum()),
                                            "fraud": int(y[te].sum())}},
             "fx": {"reporting_currency": "USD", "rates_as_of": fx.RATES_AS_OF, "rates": fx.RATES_TO_USD},
         },
         "features": {
-            "lookback_days": lookback_days,
-            "model_features": [{**asdict(f), "kind": f.kind.value} for f in MODEL_FEATURES],
-            "monotone_increasing": MONOTONE_INCREASING,
+            "lookback_days": data.lookback_days,
+            "feature_set": feature_set,
+            "model_features": [{**asdict(f), "kind": f.kind.value} for f in specs],
+            "monotone_increasing": [n for n in MONOTONE_INCREASING if n in names],
             "excluded_source_fields": [
                 {"field": f.name, "classification": f.availability.value, "reason": f.note}
                 for f in SOURCE_FIELDS.values()
                 if f.availability not in (Availability.PRE_AUTH, Availability.IDENTIFIER)
             ],
-            "source_leakage_audit": [r for r in source_audit if r["single_feature_auc"] >= 0.6],
+            "source_leakage_audit": [r for r in data.source_audit if r["single_feature_auc"] >= 0.6],
             "engineered_leakage_audit": engineered_audit,
             "global_importance": importance,
             "category_encodings": encodings,
         },
         "methodology": {
-            "algorithm": "sklearn HistGradientBoostingClassifier (histogram gradient boosting)",
+            "algorithm": algorithms.DESCRIPTION[algorithm],
+            "algorithm_key": algorithm,
             "calibration": {**calibrator.describe(), "fitted_on": "calibration window"},
             "categorical_encoding": "Smoothed fraud rate per category (m=50), out-of-fold on the training "
                                     "window; applied as a fitted parameter at inference",
-            "hyperparameters": {k: v for k, v in HYPERPARAMETERS.items()},
-            "iterations_used": int(estimator.n_iter_),
+            "hyperparameters": params,
+            "early_stopping": f"{algorithms.EARLY_STOPPING_ROUNDS} rounds on the most recent "
+                              f"{EARLY_STOP_SHARE:.0%} of the training window",
+            "iterations_used": algorithms.iterations_used(estimator),
+            "tuning": tuning,
             "threshold_policy": f"Reference threshold = {REFERENCE_ALERT_BUDGET:.0%} alert budget on the "
                                 "calibration window",
             "reference_threshold": threshold,
@@ -286,7 +330,7 @@ def train(data_path: Optional[Path] = None, developer: Optional[str] = None,
         "fairness": fairness,
         "monitoring": {
             "baseline_window": "calibration",
-            "baseline": build_baseline(features.loc[ca, FEATURE_NAMES], p[ca], CATEGORICAL_FEATURES),
+            "baseline": build_baseline(features.loc[ca, names], p[ca], CATEGORICAL_FEATURES),
             "plan": {
                 "population_stability": "Score PSI and per-feature CSI weekly; investigate >= 0.10, "
                                         "escalate >= 0.25",
@@ -300,20 +344,37 @@ def train(data_path: Optional[Path] = None, developer: Optional[str] = None,
                        "remediation_log": REMEDIATION_LOG},
         "limitations": LIMITATIONS,
         "provenance": {"git_sha": _git_sha(), "python": platform.python_version(),
-                       "sklearn": sklearn.__version__, "pandas": pd.__version__, "numpy": np.__version__},
+                       "sklearn": sklearn.__version__, "pandas": pd.__version__, "numpy": np.__version__,
+                       **_library_versions(algorithm)},
     }
     artifact = {"estimator": estimator, "calibrator": calibrator, "encodings": encodings,
-                "feature_names": FEATURE_NAMES, "lookback_days": lookback_days,
+                "feature_names": names, "lookback_days": data.lookback_days, "algorithm": algorithm,
                 "reference_threshold": threshold, "model_id": model_id}
 
     if register:
         registry.save_model(model_id, artifact, card)
-        if registry.model_for_role("challenger") is None or status == "passed":
+        if auto_challenger and (registry.model_for_role("challenger") is None or status == "passed"):
             registry.assign_role(model_id, "challenger", approver="bti.modeling.train",
                                  rationale="Newly trained model enters shadow (challenger) mode automatically")
         log.info("Model registered", extra={"model_id": model_id, "validation": status,
                                              "oot_auc": metrics["out_of_time"].get("roc_auc")})
     return card
+
+
+def train(data_path: Optional[Path] = None, developer: Optional[str] = None,
+          lookback_days: int = DEFAULT_LOOKBACK_DAYS, register: bool = True, algorithm: str = "hgb",
+          feature_set: str = "core", params: Optional[Dict] = None) -> Dict:
+    return train_candidate(prepare(data_path, lookback_days), algorithm, feature_set, params, developer, register)
+
+
+def _library_versions(algorithm: str) -> Dict[str, str]:
+    if algorithm == "lightgbm":
+        import lightgbm
+        return {"lightgbm": lightgbm.__version__}
+    if algorithm == "xgboost":
+        import xgboost
+        return {"xgboost": xgboost.__version__}
+    return {}
 
 
 def _legacy_scores(test_rows: pd.DataFrame) -> Optional[np.ndarray]:
@@ -332,11 +393,8 @@ def _global_importance(estimator, X: pd.DataFrame, sample: int = 2000) -> list:
         import shap
         Xs = X.sample(min(sample, len(X)), random_state=0)
         explainer = shap.TreeExplainer(estimator)
-        values = np.asarray(explainer.shap_values(Xs))
-        if values.ndim == 3:
-            values = values[..., 1]
-        additivity = float(np.abs(values.sum(1) + np.ravel(explainer.expected_value)[-1]
-                                  - estimator.decision_function(Xs)).max())
+        values = algorithms.shap_matrix(explainer, Xs)
+        additivity = algorithms.shap_additivity_error(estimator, explainer, Xs)
         if additivity > 1e-3:
             raise RuntimeError(f"SHAP additivity error {additivity:.4g} — explanations would be unreliable")
         mean_abs = np.abs(values).mean(axis=0)
@@ -353,8 +411,11 @@ def main() -> None:
     parser.add_argument("--data", type=Path, default=None)
     parser.add_argument("--developer", default=None)
     parser.add_argument("--lookback-days", type=int, default=DEFAULT_LOOKBACK_DAYS)
+    parser.add_argument("--algorithm", choices=algorithms.ALGORITHMS, default="hgb")
+    parser.add_argument("--feature-set", choices=sorted(FEATURE_SETS), default="core")
     args = parser.parse_args()
-    card = train(args.data, args.developer, args.lookback_days)
+    card = train(args.data, args.developer, args.lookback_days, algorithm=args.algorithm,
+                 feature_set=args.feature_set)
     m = card["performance"]["metrics"]["out_of_time"]
     op = card["performance"]["reference_operating_point"]
     print(f"Registered {card['model_id']}  validation={card['validation']['status']}")

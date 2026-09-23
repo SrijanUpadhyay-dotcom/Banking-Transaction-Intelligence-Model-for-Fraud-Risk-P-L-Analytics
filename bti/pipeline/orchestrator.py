@@ -15,7 +15,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-import pandas as pd
 
 from bti.config import get_settings
 from bti.logging_config import get_logger, AuditLogger
@@ -62,8 +61,9 @@ class PipelineOrchestrator:
     """
     Manages a full pipeline run end-to-end:
       1. Data generation  →  2. Cleaning  →  3. Fraud rules
-      →  4. ML detection  →  5. P&L analytics
-      →  6. Database persistence  →  7. Alert dispatch
+      →  4. Legacy ML detection (kept for comparison only)  →  5. P&L analytics
+      →  6. Database persistence  →  7. v3 challenger tournament (when the data changed)
+      →  8. Rescore stored history with the scoring v3 model  →  9. Alert dispatch on v3 tiers
     """
 
     def __init__(self, run_id: Optional[str] = None, force: bool = False):
@@ -85,6 +85,7 @@ class PipelineOrchestrator:
                 self._run_stage(stage, results)
 
             self._persist_to_db(results)
+            self._run_v3(results)
             self._dispatch_alerts()
 
         except Exception as exc:
@@ -148,16 +149,46 @@ class PipelineOrchestrator:
             results["db_rows_inserted"] = 0
             results["db_error"] = str(exc)
 
-    def _dispatch_alerts(self) -> None:
-        ml_csv = os.path.join(settings.processed_data_dir, "banking_transactions_ml_scored.csv")
-        if not Path(ml_csv).exists():
+    def _run_v3(self, results: dict) -> None:
+        """Train v3 candidates when the training data changed, then rescore stored history."""
+        import getpass
+        from bti.modeling import registry
+        from bti.modeling.rescore import rescore_history
+        from bti.modeling.tournament import run_tournament
+        from bti.modeling.train import _sha256, default_data_path
+
+        data_path = Path(default_data_path())
+        if not data_path.exists():
+            results["stages"]["v3_model"] = "SKIPPED (no training data)"
             return
+        sha = _sha256(data_path)
+        trained_on_this_data = any(
+            registry.load_card(m["model_id"]).get("data", {}).get("sha256") == sha
+            for m in registry.read_index()["models"])
+        if trained_on_this_data and not self.force:
+            results["stages"]["v3_model"] = "SKIPPED — a registered model was trained on this data"
+        else:
+            t0 = time.time()
+            report = run_tournament(settings.model_developer or getpass.getuser(), settings.pipeline_algorithms,
+                                    settings.pipeline_feature_sets, tune=False, data_path=data_path)
+            results["stages"]["v3_model"] = (f"OK ({round(time.time() - t0, 1)}s) — "
+                                             f"{report['decision']['outcome']}: {report['decision']['challenger']}")
+        summary = rescore_history(data_path)
+        results["stages"]["v3_rescore"] = f"OK — {summary['updated_in_db']} rows with {summary['model_id']}"
+
+    def _dispatch_alerts(self) -> None:
+        """Alerts on the v3 tiers written by the rescore step, never on the legacy composite."""
         try:
-            df = pd.read_csv(ml_csv, usecols=["transaction_id", "customer_id", "transaction_amount",
-                                                "channel", "final_risk_score", "final_alert_tier"],
-                             low_memory=False)
-            alerts = df[df["final_alert_tier"].isin(["CRITICAL", "VERY HIGH"])].to_dict(orient="records")
-            self.dispatcher.dispatch(alerts)
+            from bti.database.connection import SessionLocal
+            from bti.database.models import Transaction
+            db = SessionLocal()
+            try:
+                rows = (db.query(Transaction.transaction_id, Transaction.customer_id, Transaction.transaction_amount,
+                                 Transaction.channel, Transaction.final_risk_score, Transaction.final_alert_tier)
+                        .filter(Transaction.final_alert_tier.in_(["CRITICAL", "VERY HIGH"])).all())
+            finally:
+                db.close()
+            self.dispatcher.dispatch([dict(r._mapping) for r in rows])
         except Exception:
             log.exception("Alert dispatch failed")
 

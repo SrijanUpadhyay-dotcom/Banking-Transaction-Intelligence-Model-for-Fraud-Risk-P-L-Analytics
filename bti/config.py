@@ -88,6 +88,11 @@ class Settings(BaseSettings):
     api_port: int = _yaml.get("api", {}).get("port", 8000)
     cors_origins: list = _yaml.get("api", {}).get("cors_origins", ["http://localhost:8501"])
 
+    # v3 model training inside the pipeline
+    model_developer: str = Field(default=_yaml.get("modeling", {}).get("developer", ""), alias="BTI_MODEL_DEVELOPER")
+    pipeline_algorithms: list = _yaml.get("modeling", {}).get("algorithms", ["hgb", "lightgbm", "xgboost"])
+    pipeline_feature_sets: list = _yaml.get("modeling", {}).get("feature_sets", ["core", "extended"])
+
     # Model monitoring — run the scheduler on exactly one worker per deployment
     monitoring_scheduler_enabled: bool = Field(
         default=_yaml.get("monitoring", {}).get("scheduler_enabled", True),

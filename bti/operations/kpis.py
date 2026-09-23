@@ -16,7 +16,6 @@ from sqlalchemy.orm import Session
 from bti.database.models import ScoreLog
 from bti.governance.monitoring import drift_report
 from bti.modeling import registry
-from bti.modeling.features import FEATURE_NAMES
 from bti.operations.feedback import DEFAULT_MATURITY_DAYS, labelled_scores
 
 INTERVENTIONS = ("STEP_UP", "REVIEW", "DECLINE")
@@ -124,7 +123,7 @@ def live_drift(db: Session, start: Optional[datetime] = None, end: Optional[date
     if end:
         q = q.filter(ScoreLog.scored_at < end)
     rows = q.order_by(ScoreLog.scored_at.desc()).limit(limit).all()
-    feats = pd.DataFrame([r[0] or {} for r in rows], columns=FEATURE_NAMES)
+    feats = pd.DataFrame([r[0] or {} for r in rows])
     scores = np.array([r[1] for r in rows], dtype=float)
     return {"model_id": model_id, **drift_report(card["monitoring"]["baseline"], feats, scores)}
 
