@@ -1,9 +1,10 @@
 """
 BTI Model Lift Analytics
 
-Computes lift table, KS statistic, Gini coefficient, and incremental lift
-from the saved scored dataset. Reconstructs the held-out test split using
-the same parameters as the training script (test_size=0.25, random_state=42).
+Serves the lift table, KS statistic and Gini of the scoring v3 model from its
+registry card (out-of-time test window). The legacy computation over
+rf_fraud_proba is kept only as a fallback when no v3 model is registered; it is
+flagged because the legacy model's inputs include label-derived fields.
 """
 
 from __future__ import annotations
@@ -55,6 +56,40 @@ class LiftReport:
     ks_decile: int
     deciles: List[DecileBucket]
     computed_at: str
+    source: str = "legacy_rf_random_split"
+    model_id: Optional[str] = None
+    warning: Optional[str] = None
+
+
+LEGACY_WARNING = ("Legacy model inputs include label-derived fields (risk_score, fraud_loss); these figures are "
+                  "not valid evidence of performance. Train and register a v3 model: python -m bti.modeling.train")
+
+
+def _v3_lift() -> Optional[LiftReport]:
+    from bti.modeling import registry
+    model_id = registry.model_for_role("champion") or registry.model_for_role("challenger")
+    if not model_id:
+        return None
+    card = registry.load_card(model_id)
+    m = card["performance"]["metrics"]["out_of_time"]
+    rows = card["performance"]["lift_table"]
+    n_fraud, n = m["n_fraud"], m["n"]
+    cum_f = cum_n = 0
+    best_ks, ks_decile = -1.0, 1
+    deciles = []
+    for r in rows:
+        cum_f += r["n_fraud"]
+        cum_n += r["n"]
+        ks = cum_f / max(n_fraud, 1) - (cum_n - cum_f) / max(n - n_fraud, 1)
+        if ks > best_ks:
+            best_ks, ks_decile = ks, r["decile"]
+        deciles.append(DecileBucket(decile=r["decile"], score_min=r["score_min"], score_max=r["score_max"],
+                                    n_transactions=r["n"], n_fraud=r["n_fraud"], fraud_rate=r["fraud_rate"],
+                                    cum_fraud_captured=r["cum_fraud_captured"], lift=r["cum_lift"],
+                                    precision=r["fraud_rate"]))
+    return LiftReport(n_test=n, n_fraud_test=n_fraud, fraud_rate_baseline=m["base_rate"], roc_auc=m["roc_auc"],
+                      gini=m["gini"], ks_stat=m["ks"], ks_decile=ks_decile, deciles=deciles,
+                      computed_at=card["created_at"], source="v3_out_of_time", model_id=model_id)
 
 
 @dataclass
@@ -112,6 +147,15 @@ def _ks_stat(y_score: np.ndarray, y_true: np.ndarray) -> tuple[float, int]:
 
 
 def compute_lift() -> LiftReport:
+    v3 = _v3_lift()
+    if v3 is not None:
+        return v3
+    report = _legacy_lift()
+    report.warning = LEGACY_WARNING
+    return report
+
+
+def _legacy_lift() -> LiftReport:
     t0 = time.time()
     y_score, y_true = _load_test_set()
 
@@ -184,8 +228,7 @@ def compare_with_baseline(
     Each record must have: {label: 0|1, sas_score: 0-1, bti_score?: 0-1}
     If bti_score is absent, the record is scored live via RealTimeScorer.
     """
-    from bti.scoring.realtime import RealTimeScorer
-    scorer = RealTimeScorer()
+    from bti.modeling.scorer import scorer
 
     y_true_list, bti_list, base_list = [], [], []
     for rec in records:
@@ -194,8 +237,7 @@ def compare_with_baseline(
         bti   = float(rec.get("bti_score", -1))
         if bti < 0:
             try:
-                result = scorer.score(rec)
-                bti = result.final_risk_score / 100.0
+                bti = scorer.score(rec, explain=False).fraud_probability
             except Exception:
                 bti = base  # graceful fallback
         y_true_list.append(label)
