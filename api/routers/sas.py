@@ -28,7 +28,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from bti.database import get_db
-from bti.sas.enricher import enrich_single, enrich_batch, EnrichmentResult, _scorer
+from bti.modeling.scorer import scorer as v3_scorer
+from bti.operations.scoring_service import model_available
+from bti.sas.enricher import enrich_single, enrich_batch, EnrichmentResult
 from bti.logging_config import get_logger
 
 import io
@@ -65,7 +67,17 @@ class TransactionInput(BaseModel):
     transaction_id:      Optional[str]   = None
     customer_id:         Optional[str]   = None
     transaction_amount:  Optional[float] = Field(default=0.0, ge=0)
+    currency:            Optional[str]   = Field(default="USD", description="ISO currency; converted to USD")
+    country:             Optional[str]   = Field(default=None, description="Account country or ISO-2 code")
+    transaction_date:    Optional[str]   = Field(default=None, description="YYYY-MM-DD; defaults to today (UTC)")
     transaction_time:    Optional[str]   = None
+    channel:             Optional[str]   = None
+    transaction_type:    Optional[str]   = None
+    authorization_method: Optional[str]  = None
+    historical_average_transaction_amount: Optional[float] = None
+    account_balance_before: Optional[float] = None
+    failed_attempt_count: Optional[int]  = None
+    login_attempts:      Optional[int]   = None
     merchant_category:   Optional[str]   = None
     merchant_name:       Optional[str]   = None
     device_id:           Optional[str]   = None
@@ -101,7 +113,7 @@ class RingInfoOut(BaseModel):
 class EnrichmentOut(BaseModel):
     enrichment_id:          str
     transaction_id:         str
-    bti_risk_score:         float = Field(description="BTI composite fraud score 0–100")
+    bti_risk_score:         float = Field(description="BTI calibrated fraud probability × 100")
     bti_alert_tier:         str   = Field(description="LOW | MEDIUM | HIGH | VERY HIGH | CRITICAL")
     bti_recommended_action: str   = Field(description="BLOCK | HOLD | MONITOR | ALLOW")
     top_drivers:            List[ShapDriverOut]
@@ -111,6 +123,10 @@ class EnrichmentOut(BaseModel):
     rules_fired:            List[str]
     processing_time_ms:     float
     enriched_at:            str
+    bti_fraud_probability:  Optional[float] = Field(None, description="Calibrated probability of fraud, 0–1")
+    bti_decision:           Optional[str]   = Field(None, description="APPROVE | STEP_UP | REVIEW | DECLINE")
+    bti_model_provisional:  bool = Field(False, description="True until a champion model is approved")
+    reason_codes:           List[dict] = Field(default_factory=list)
 
 
 class EnrichRequest(BaseModel):
@@ -120,6 +136,8 @@ class EnrichRequest(BaseModel):
             "transaction_id": "TXN-20260909-001",
             "customer_id":    "CUST-7823",
             "transaction_amount": 4750.00,
+            "currency": "USD",
+            "country": "US",
             "merchant_category":  "Crypto Exchanges",
             "device_id":  "DEV-X99",
             "ip_location": "198.51.100.1",
@@ -177,6 +195,10 @@ def _to_out(r: EnrichmentResult) -> EnrichmentOut:
         rules_fired        = r.rules_fired,
         processing_time_ms = r.processing_time_ms,
         enriched_at        = r.enriched_at,
+        bti_fraud_probability = r.bti_fraud_probability,
+        bti_decision          = r.bti_decision,
+        bti_model_provisional = r.bti_model_provisional,
+        reason_codes          = r.reason_codes,
     )
 
 
@@ -194,10 +216,11 @@ def enrich_transaction(
     Submit a single transaction and receive BTI's full intelligence enrichment.
 
     **What BTI adds on top of SAS:**
-    - A second-opinion ML risk score from a Random Forest trained on 590K
-      real IEEE-CIS fraud transactions (ROC-AUC 0.908)
-    - Top SHAP feature contributions — *why* BTI scored it that way, in
-      investigator-readable language
+    - A second-opinion calibrated fraud probability from the governed v3 model
+      (out-of-time validation on synthetic data — see /governance/models for
+      the model card; re-validate on the bank's own history before relying on it)
+    - An expected-cost decision (APPROVE / STEP_UP / REVIEW / DECLINE)
+    - Exact SHAP contributions and reason codes — *why* BTI scored it that way
     - Ring membership: is this transaction part of a coordinated fraud network?
       (for network analysis across a batch, use `/sas/enrich/batch`)
     - Plain-English `notes_for_sas` ready for the analyst exception queue
@@ -338,13 +361,21 @@ def enrichment_schema():
     - `notes_for_sas` → BTI_NOTES (text, max ~500 chars)
     """
     return {
-        "version": "4.0.0",
+        "version": "4.1.0",
+        "scoring_model": "BTI v3 (see /api/v1/v3/model)",
         "endpoint": "POST /api/v1/sas/enrich",
         "auth_header": "X-BTI-Api-Key",
         "fields": {
             "enrichment_id":          {"type": "string",  "example": "ENR-A1B2C3D4", "desc": "Unique enrichment call ID for audit trail"},
             "transaction_id":         {"type": "string",  "desc": "Echo of transaction_id from the request"},
-            "bti_risk_score":         {"type": "float",   "range": "0–100", "desc": "BTI composite fraud risk score"},
+            "bti_risk_score":         {"type": "float",   "range": "0–100", "desc": "BTI calibrated fraud probability × 100"},
+            "bti_fraud_probability":  {"type": "float",   "range": "0–1",   "desc": "Calibrated probability of fraud"},
+            "bti_decision":           {"type": "string",  "values": ["APPROVE","STEP_UP","REVIEW","DECLINE"],
+                                       "desc": "Expected-cost decision under the jurisdiction policy"},
+            "bti_model_provisional":  {"type": "boolean", "desc": "True until a champion model is approved; "
+                                                                  "provisional models never auto-decline"},
+            "reason_codes":           {"type": "array",   "desc": "Up to four principal reasons with analyst "
+                                                                  "and customer wording"},
             "bti_alert_tier":         {"type": "string",  "values": ["LOW","MEDIUM","HIGH","VERY HIGH","CRITICAL"]},
             "bti_recommended_action": {"type": "string",  "values": ["ALLOW","MONITOR","HOLD","BLOCK"]},
             "top_drivers": {
@@ -365,7 +396,7 @@ def enrichment_schema():
             "ring.ring_total_exposure":  {"type": "float",   "desc": "Total USD at risk across the ring"},
             "ring.ring_shared_entities": {"type": "array",   "desc": "Entity nodes (device/IP/card/address) linking the ring"},
             "notes_for_sas":             {"type": "string",  "desc": "Plain-English investigator note, ~100–300 chars"},
-            "model_version":             {"type": "string",  "desc": "BTI model version string"},
+            "model_version":             {"type": "string",  "desc": "Registered BTI v3 model id"},
             "rules_fired":               {"type": "array",   "desc": "List of fraud rule IDs that triggered"},
             "processing_time_ms":        {"type": "float",   "desc": "BTI enrichment latency for this transaction (ms)"},
             "enriched_at":               {"type": "string",  "format": "ISO-8601 UTC"},
@@ -385,19 +416,21 @@ def enrichment_schema():
 def sas_health():
     """Confirms the SAS Integration module is loaded and ready."""
     api_key_enforced = bool(os.environ.get("BTI_SAS_API_KEY"))
-    scorer_ready = _scorer.bundle is not None
+    scorer_ready = model_available()
+    model = dict(zip(("model_id", "role", "provisional"), v3_scorer.resolve("champion"))) if scorer_ready else None
     return {
         "status":           "ok" if scorer_ready else "degraded",
         "module":           "BTI SAS Integration Enrichment API",
-        "version":          "4.0.0",
+        "version":          "4.1.0",
         "scorer_ready":     scorer_ready,
+        "model":            model,
         "api_key_enforced": api_key_enforced,
         "capabilities": [
             "single-transaction enrichment (< 200ms)",
             "batch enrichment with fraud ring detection (1–500 transactions)",
             "CSV/Excel file upload enrichment",
-            "SHAP feature contribution explanations",
-            "independent second-opinion risk scoring",
+            "exact SHAP contributions and reason codes",
+            "independent second-opinion probability and expected-cost decision",
             "SAS field mapping schema (/sas/schema)",
         ],
         "note": (

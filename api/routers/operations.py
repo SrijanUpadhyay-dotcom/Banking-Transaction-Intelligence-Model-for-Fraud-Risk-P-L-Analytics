@@ -24,7 +24,9 @@ from bti.operations.decisioning import backtest_policy, cost_model_for, decide, 
 from bti.operations.feedback import (
     DEFAULT_MATURITY_DAYS, LABEL_SOURCES, LabelError, label_status, record_labels,
 )
-from bti.operations.kpis import champion_challenger, kpi_report
+from bti.operations.kpis import champion_challenger, kpi_report, scoring_latency
+from bti.config import get_settings
+from api import metrics
 
 router = APIRouter(prefix="/operations", tags=["Fraud Operations"])
 
@@ -95,6 +97,17 @@ def champ_chall(date_from: Optional[datetime] = Query(None, alias="from"),
                 maturity_days: int = Query(DEFAULT_MATURITY_DAYS, ge=1, le=365), db: Session = Depends(get_db)):
     """Live champion vs shadow challenger on the same transactions."""
     return champion_challenger(db, date_from, date_to, maturity_days)
+
+
+@router.get("/service-metrics")
+def service_metrics(hours: int = Query(24, ge=1, le=24 * 90), db: Session = Depends(get_db)):
+    """
+    Uptime, request volume, 5xx error rate and end-to-end latency per endpoint
+    group for this worker, plus model scoring latency from the score log
+    against the configured SLA.
+    """
+    sla = get_settings().scoring_latency_sla_ms
+    return {**metrics.snapshot(), "scoring": scoring_latency(db, hours, sla)}
 
 
 @router.post("/decide")

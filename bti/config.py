@@ -88,6 +88,15 @@ class Settings(BaseSettings):
     api_port: int = _yaml.get("api", {}).get("port", 8000)
     cors_origins: list = _yaml.get("api", {}).get("cors_origins", ["http://localhost:8501"])
 
+    # Model monitoring — run the scheduler on exactly one worker per deployment
+    monitoring_scheduler_enabled: bool = Field(
+        default=_yaml.get("monitoring", {}).get("scheduler_enabled", True),
+        alias="BTI_MONITORING_SCHEDULER_ENABLED")
+    drift_check_cron: str = Field(default=_yaml.get("monitoring", {}).get("drift_check_cron", "0 6 * * mon"),
+                                  alias="BTI_DRIFT_CHECK_CRON")
+    drift_window_days: int = _yaml.get("monitoring", {}).get("drift_window_days", 7)
+    scoring_latency_sla_ms: float = _yaml.get("monitoring", {}).get("scoring_latency_sla_ms", 100.0)
+
     # Audit
     audit_enabled: bool = Field(default=True, alias="BTI_AUDIT_ENABLED")
     audit_log_path: str = str(BASE_DIR / "logs" / "audit.jsonl")

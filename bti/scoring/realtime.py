@@ -1,15 +1,14 @@
 """
 Real-time transaction fraud scoring engine.
 
-Accepts a single transaction dict and returns a complete fraud risk assessment
-in <100ms by:
-  1. Applying all 19 rule-based checks (standalone + DB-context-aware)
-  2. Running the ML ensemble (Isolation Forest + LR + RF)
-  3. Computing the composite final_risk_score (0–100)
-  4. Assigning the final_alert_tier
+`RealTimeScorer.score` — used by /score, /score/explain, /score/upload and the
+SAS enrichment API — is served by the governed v3 model through
+bti.scoring.v3_adapter.
 
-DB context (customer history) is queried when a session is provided, enabling
-velocity checks that a standalone transaction cannot resolve.
+`score_transaction` below is the legacy engine (rules + Isolation Forest / LR /
+RF composite). It is retained for the rule-engine tests and for comparison
+only: its ML inputs and its composite weight include the label-derived
+risk_score field, so it must not be used for decisions.
 """
 
 import time
@@ -68,17 +67,27 @@ class ScoreResult:
     fraud_rule_score:    float        # 0–100 weighted rule score
     rules_triggered:     int
     rules_fired:         List[str]    # names of rules that fired
-    ml_iso_score:        float        # raw isolation forest anomaly score
-    ml_lr_proba:         float        # logistic regression fraud probability
-    ml_rf_proba:         float        # random forest fraud probability
-    ml_anomaly_score:    float        # normalised 0–100
+    ml_iso_score:        Optional[float]   # legacy only; None when scored by v3
+    ml_lr_proba:         Optional[float]   # legacy only; None when scored by v3
+    ml_rf_proba:         Optional[float]   # legacy only; None when scored by v3
+    ml_anomaly_score:    float             # 0–100
     final_risk_score:    float        # composite 0–100
     final_alert_tier:    str          # LOW / MEDIUM / HIGH / VERY HIGH / CRITICAL
     is_suspicious:       bool
     processing_time_ms:  float
-    risk_score_input:    float        # pass-through of input risk_score field
+    risk_score_input:    Optional[float]   # pass-through of input risk_score field (ignored by v3)
     model_version:       str = "unknown"
     db_context_used:     bool = False  # whether customer history was queried
+    fraud_probability:   Optional[float] = None
+    decision:            Optional[str] = None           # APPROVE / STEP_UP / REVIEW / DECLINE
+    guardrails:          List[str] = field(default_factory=list)
+    reason_codes:        List[dict] = field(default_factory=list)
+    contributions:       Dict[str, float] = field(default_factory=dict)
+    feature_values:      Dict[str, Any] = field(default_factory=dict)
+    base_probability:    Optional[float] = None
+    provisional:         bool = False
+    jurisdiction:        Optional[str] = None
+    notes:               List[str] = field(default_factory=list)
 
 
 def _apply_standalone_rules(txn: dict) -> Dict[str, int]:
@@ -392,7 +401,10 @@ def score_transaction(
 
 
 class RealTimeScorer:
-    """Stateful scorer — holds the loaded bundle in memory. Use as a singleton."""
+    """
+    Scores through the v3 model (see bti.scoring.v3_adapter). `bundle` still
+    exposes the legacy artifacts for the model-info comparison only.
+    """
 
     def __init__(self):
         self._bundle: Optional[ModelBundle] = None
@@ -404,11 +416,11 @@ class RealTimeScorer:
             self._bundle = load_models()
         return self._bundle
 
-    def score(self, txn: dict, db_session=None) -> ScoreResult:
-        return score_transaction(txn, self.bundle, db_session=db_session)
+    def score(self, txn: dict, db_session=None, log_scores: bool = True) -> ScoreResult:
+        from bti.scoring.v3_adapter import score_legacy_contract
+        return score_legacy_contract(txn, db_session=db_session, log_scores=log_scores)
 
     def reload(self):
-        from bti.scoring.model_loader import load_models, invalidate_cache
-        invalidate_cache()
-        self._bundle = load_models(force_reload=True)
-        log.info("RealTimeScorer reloaded models from disk")
+        from bti.modeling import registry
+        registry.clear_cache()
+        log.info("RealTimeScorer cleared the v3 model cache; the next call reloads the registered model")

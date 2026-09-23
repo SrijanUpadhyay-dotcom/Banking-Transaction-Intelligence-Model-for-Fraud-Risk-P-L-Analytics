@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session
 
 from api.security import require_api_key
 from bti.database import get_db
+from bti.governance import scheduler as monitoring_scheduler
+from bti.governance.drift_job import drift_history, run_drift_check
 from bti.governance.model_card import render_model_card
 from bti.jurisdiction.policies import DISCLAIMER, POLICIES, policy_dict, policy_for, tra_eligibility
 from bti.modeling import registry
@@ -86,6 +88,24 @@ def drift(date_from: Optional[datetime] = Query(None, alias="from"),
           shadow: bool = False, model_id: Optional[str] = None, db: Session = Depends(get_db)):
     """Score PSI and per-feature CSI for logged traffic against the model's training baseline."""
     return live_drift(db, date_from, date_to, model_id=model_id, shadow=shadow)
+
+
+@router.post("/drift/run", dependencies=[Depends(require_api_key)])
+def drift_run(window_days: Optional[int] = Query(None, ge=1, le=365), notify: bool = True,
+              db: Session = Depends(get_db)):
+    """Run the population-stability check now (the scheduler runs it weekly); alerts if drift is found."""
+    return run_drift_check(db, window_days=window_days, notify=notify)
+
+
+@router.get("/drift/history")
+def drift_runs(limit: int = Query(20, ge=1, le=200), db: Session = Depends(get_db)):
+    """Previous drift checks, newest first, from the audit log."""
+    return {"runs": drift_history(db, limit)}
+
+
+@router.get("/monitoring/schedule")
+def monitoring_schedule():
+    return monitoring_scheduler.status()
 
 
 @router.get("/leakage-audit")

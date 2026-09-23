@@ -60,10 +60,6 @@ class AlertDispatcher:
             self._send_email(critical, high)
 
     def _send_webhook(self, alerts: list[dict], retries: int = 3) -> None:
-        if not _httpx_available:
-            log.warning("httpx not installed — webhook skipped")
-            return
-
         payload = {
             "source": "BTI-FraudEngine",
             "alert_count": len(alerts),
@@ -79,7 +75,13 @@ class AlertDispatcher:
                 for a in alerts[:50]  # cap payload size
             ],
         }
-        payload_bytes = json.dumps(payload).encode()
+        self._post_webhook(payload, retries)
+
+    def _post_webhook(self, payload: dict, retries: int = 3) -> bool:
+        if not _httpx_available:
+            log.warning("httpx not installed — webhook skipped")
+            return False
+        payload_bytes = json.dumps(payload, default=str).encode()
         headers = {"Content-Type": "application/json"}
         if self.settings.webhook_secret:
             headers["X-BTI-Signature"] = _sign_payload(payload_bytes, self.settings.webhook_secret)
@@ -89,14 +91,39 @@ class AlertDispatcher:
                 with httpx.Client(timeout=10) as client:
                     r = client.post(self.settings.webhook_url, content=payload_bytes, headers=headers)
                     r.raise_for_status()
-                log.info("Webhook sent", extra={"status": r.status_code, "alerts": len(alerts)})
-                return
+                log.info("Webhook sent", extra={"status": r.status_code, "source": payload.get("source")})
+                return True
             except Exception as exc:
                 wait = 2 ** attempt
                 log.warning(f"Webhook attempt {attempt + 1} failed: {exc}. Retrying in {wait}s")
                 if attempt < retries - 1:
                     time.sleep(wait)
         log.error("All webhook attempts failed", extra={"url": self.settings.webhook_url})
+        return False
+
+    def dispatch_event(self, event: str, severity: str, summary: dict) -> dict:
+        """Operational event (e.g. model drift) to the same webhook / email channels as fraud alerts."""
+        channels = []
+        if not self.settings.alerts_enabled:
+            return {"sent": False, "channels": channels, "reason": "alerts disabled"}
+        log.warning("Dispatching operational event", extra={"event": event, "severity": severity})
+        if self.settings.webhook_url and self._post_webhook(
+                {"source": "BTI-ModelMonitoring", "event": event, "severity": severity, "summary": summary}):
+            channels.append("webhook")
+        if self.settings.smtp_user and self.settings.smtp_host:
+            msg = MIMEText(json.dumps(summary, indent=2, default=str), "plain")
+            msg["Subject"] = f"[BTI {severity}] {event}"
+            msg["From"] = self.settings.smtp_user
+            msg["To"] = "model-risk@bank.internal"
+            try:
+                with smtplib.SMTP(self.settings.smtp_host, self.settings.smtp_port) as srv:
+                    srv.starttls()
+                    srv.login(self.settings.smtp_user, self.settings.smtp_password)
+                    srv.send_message(msg)
+                channels.append("email")
+            except Exception:
+                log.exception("Failed to send operational event email")
+        return {"sent": bool(channels), "channels": channels}
 
     def _send_email(self, critical: list[dict], high: list[dict]) -> None:
         body_lines = [

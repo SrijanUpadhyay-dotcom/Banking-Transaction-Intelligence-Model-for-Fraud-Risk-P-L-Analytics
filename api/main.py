@@ -37,6 +37,8 @@ from fastapi.responses import JSONResponse
 from bti.config import get_settings
 from bti.logging_config import setup_logging, get_logger
 from bti.database.init_db import create_tables
+from bti.governance import scheduler as monitoring_scheduler
+from api import metrics
 from api.routers import (
     transactions, alerts, analytics, pipeline, scoring, graph, copilot, sas, v3, governance, operations,
 )
@@ -52,7 +54,9 @@ async def lifespan(app: FastAPI):
     log.info("BTI API starting up", extra={"version": settings.app_version,
                                             "env": settings.environment})
     create_tables()
+    monitoring_scheduler.start()
     yield
+    monitoring_scheduler.stop()
     log.info("BTI API shutting down")
 
 
@@ -82,8 +86,13 @@ app.add_middleware(
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     t0 = time.time()
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        metrics.record(request.url.path, 500, round((time.time() - t0) * 1000, 1))
+        raise
     elapsed_ms = round((time.time() - t0) * 1000, 1)
+    metrics.record(request.url.path, response.status_code, elapsed_ms)
     log.info("HTTP request", extra={
         "method": request.method,
         "path": request.url.path,

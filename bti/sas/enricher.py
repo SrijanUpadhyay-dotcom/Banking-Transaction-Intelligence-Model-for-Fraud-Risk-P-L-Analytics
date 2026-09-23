@@ -1,14 +1,14 @@
 """
 BTI → SAS Enrichment Engine
-Phase 4 of BTI v2 (Fraud Intelligence Layer)
 
-Orchestrates BTI's full intelligence stack — ML scoring, SHAP explanations,
-and graph ring detection — into a single enrichment result that SAS (or any
-external fraud platform) can consume as a REST enrichment call.
+Orchestrates BTI's intelligence stack — the governed v3 model, expected-cost
+decisioning, exact SHAP explanations and graph ring detection — into a single
+enrichment result that SAS (or any external fraud platform) can consume as a
+REST enrichment call.
 
 SAS calls /api/v1/sas/enrich with a transaction; BTI returns:
-  - Second opinion risk score (ML ensemble, 0–100)
-  - Top SHAP drivers (why BTI flagged it)
+  - Second-opinion calibrated fraud probability (reported 0–100)
+  - Top SHAP drivers and reason codes (why BTI scored it that way)
   - Ring membership (is this transaction part of a coordinated fraud ring?)
   - Plain-English investigator note
   - Recommended action (BLOCK / HOLD / MONITOR / ALLOW)
@@ -25,12 +25,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-import numpy as np
-
 from bti.graph.ring_detector import detect_fraud_rings
 from bti.logging_config import get_logger
-from bti.scoring.explainer import explain as shap_explain
-from bti.scoring.realtime import RealTimeScorer, ScoreResult, _build_feature_vector
+from bti.scoring.realtime import RealTimeScorer, ScoreResult
+from bti.scoring.v3_adapter import legacy_action, top_drivers
 
 log = get_logger("sas.enricher")
 
@@ -72,18 +70,27 @@ class EnrichmentResult:
     rules_fired:         List[str]
     processing_time_ms:  float
     enriched_at:         str
+    bti_fraud_probability: Optional[float] = None
+    bti_decision:          Optional[str] = None     # APPROVE / STEP_UP / REVIEW / DECLINE
+    bti_model_provisional: bool = False
+    reason_codes:          List[dict] = field(default_factory=list)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _recommended_action(tier: str) -> str:
-    return {
-        "CRITICAL": "BLOCK",
-        "VERY HIGH": "BLOCK",
-        "HIGH":      "HOLD",
-        "MEDIUM":    "MONITOR",
-        "LOW":       "ALLOW",
-    }.get(tier, "MONITOR")
+def _recommended_action(sr: ScoreResult) -> str:
+    return legacy_action(sr.decision, sr.fraud_probability)
+
+
+def _normalise(txn: dict) -> dict:
+    """Accept IEEE-CIS style keys (TransactionID, TransactionAmt) alongside BTI keys."""
+    out = dict(txn)
+    if not out.get("transaction_id") and out.get("TransactionID") is not None:
+        out["transaction_id"] = str(out["TransactionID"])
+    if not out.get("transaction_amount") and out.get("TransactionAmt") is not None:
+        out["transaction_amount"] = float(out["TransactionAmt"])
+    out["transaction_id"] = str(out.get("transaction_id") or "UNKNOWN")
+    return out
 
 
 def _generate_note(score_result: ScoreResult, ring: RingInfo) -> str:
@@ -92,13 +99,15 @@ def _generate_note(score_result: ScoreResult, ring: RingInfo) -> str:
     no LLM call, so latency stays low. For deeper analysis use /copilot/ask.
     """
     tier = score_result.final_alert_tier
-    action = _recommended_action(tier)
+    action = _recommended_action(score_result)
+    reasons = ", ".join(r["analyst_text"].lower() for r in score_result.reason_codes[:2])
     note = (
-        f"BTI rates this transaction {tier} ({score_result.final_risk_score:.0f}/100). "
-        f"Recommended action: {action}. "
-        f"{score_result.rules_triggered} fraud rule(s) fired"
-        f"{': ' + ', '.join(score_result.rules_fired[:3]) if score_result.rules_fired else ''}."
+        f"BTI rates this transaction {tier} ({score_result.fraud_probability:.1%} fraud probability). "
+        f"Recommended action: {action}."
+        f"{' Main drivers: ' + reasons + '.' if reasons else ''}"
     )
+    if score_result.provisional:
+        note += " BTI model is provisional pending champion approval."
     if ring.in_ring:
         note += (
             f" RING ALERT: transaction is part of fraud ring {ring.ring_id} "
@@ -109,38 +118,32 @@ def _generate_note(score_result: ScoreResult, ring: RingInfo) -> str:
     return note
 
 
-def _extract_top_drivers(
-    score_result: ScoreResult,
-    txn: dict,
-) -> List[ShapDriver]:
-    """Run SHAP and return top 5 drivers. Falls back to empty list on error."""
-    try:
-        bundle = _scorer.bundle
-        if bundle is None:
-            return []
-        X = _build_feature_vector(txn, bundle.feature_cols, bundle.label_encoders)
-        X = X.fillna(0).replace([float("inf"), float("-inf")], 0)
-        explanation = shap_explain(
-            rf_model=bundle.rf_model,
-            feature_vector=X.values,
-            feature_cols=bundle.feature_cols,
-            transaction_id=score_result.transaction_id,
-            fraud_prob=score_result.ml_rf_proba,
-            risk_tier=score_result.final_alert_tier,
-            top_n=5,
-        )
-        return [
-            ShapDriver(
-                feature=d.feature,
-                label=d.label,
-                direction=d.direction,
-                impact_pct=round(abs(d.impact_pct), 1),
-            )
-            for d in explanation.top_drivers
-        ]
-    except Exception as e:
-        log.warning("SHAP extraction failed, returning empty drivers", extra={"error": str(e)})
-        return []
+def _extract_top_drivers(score_result: ScoreResult) -> List[ShapDriver]:
+    """Top five exact SHAP drivers from the v3 score."""
+    return [ShapDriver(feature=d["feature"], label=d["label"], direction=d["direction"],
+                       impact_pct=d["impact_pct"])
+            for d in top_drivers(score_result.contributions, score_result.feature_values, n=5)]
+
+
+def _result(sr: ScoreResult, ring: RingInfo, elapsed_ms: float) -> EnrichmentResult:
+    return EnrichmentResult(
+        enrichment_id          = f"ENR-{uuid.uuid4().hex[:8].upper()}",
+        transaction_id         = sr.transaction_id,
+        bti_risk_score         = sr.final_risk_score,
+        bti_alert_tier         = sr.final_alert_tier,
+        bti_recommended_action = _recommended_action(sr),
+        top_drivers            = _extract_top_drivers(sr),
+        ring                   = ring,
+        notes_for_sas          = _generate_note(sr, ring),
+        model_version          = sr.model_version,
+        rules_fired            = sr.rules_fired,
+        processing_time_ms     = elapsed_ms,
+        enriched_at            = datetime.now(timezone.utc).isoformat(),
+        bti_fraud_probability  = sr.fraud_probability,
+        bti_decision           = sr.decision,
+        bti_model_provisional  = sr.provisional,
+        reason_codes           = sr.reason_codes,
+    )
 
 
 # ── Main enrichment functions ─────────────────────────────────────────────────
@@ -152,27 +155,8 @@ def enrich_single(txn: dict, db_session=None) -> EnrichmentResult:
     For ring intelligence, use enrich_batch or the /graph/analyze endpoint.
     """
     t0 = time.time()
-
-    score_result = _scorer.score(txn, db_session=db_session)
-    top_drivers = _extract_top_drivers(score_result, txn)
-    ring = RingInfo(in_ring=False)
-
-    elapsed_ms = round((time.time() - t0) * 1000, 1)
-
-    return EnrichmentResult(
-        enrichment_id      = f"ENR-{uuid.uuid4().hex[:8].upper()}",
-        transaction_id     = score_result.transaction_id,
-        bti_risk_score     = score_result.final_risk_score,
-        bti_alert_tier     = score_result.final_alert_tier,
-        bti_recommended_action = _recommended_action(score_result.final_alert_tier),
-        top_drivers        = top_drivers,
-        ring               = ring,
-        notes_for_sas      = _generate_note(score_result, ring),
-        model_version      = score_result.model_version,
-        rules_fired        = score_result.rules_fired,
-        processing_time_ms = elapsed_ms,
-        enriched_at        = datetime.now(timezone.utc).isoformat(),
-    )
+    score_result = _scorer.score(_normalise(txn), db_session=db_session)
+    return _result(score_result, RingInfo(in_ring=False), round((time.time() - t0) * 1000, 1))
 
 
 def enrich_batch(
@@ -186,6 +170,7 @@ def enrich_batch(
     device, IP, card token, or address are flagged as ring members.
     """
     t_batch_start = time.time()
+    transactions = [_normalise(t) for t in transactions]
 
     # Score all transactions
     scored: Dict[str, ScoreResult] = {}
@@ -196,8 +181,7 @@ def enrich_batch(
     # Add BTI scores back to transaction dicts so ring scorer can read them
     enriched_txns = []
     for txn in transactions:
-        tid = str(txn.get("transaction_id") or txn.get("TransactionID") or "UNKNOWN")
-        sr = scored.get(tid)
+        sr = scored.get(txn["transaction_id"])
         if sr:
             txn_copy = dict(txn)
             txn_copy["final_risk_score"] = sr.final_risk_score
@@ -219,13 +203,11 @@ def enrich_batch(
     results: List[EnrichmentResult] = []
     for txn in transactions:
         t0 = time.time()
-        tid = str(txn.get("transaction_id") or txn.get("TransactionID") or "UNKNOWN")
+        tid = txn["transaction_id"]
         sr = scored.get(tid)
 
         if sr is None:
             continue
-
-        top_drivers = _extract_top_drivers(sr, txn)
 
         detected_ring = txn_to_ring.get(tid)
         if detected_ring:
@@ -241,22 +223,7 @@ def enrich_batch(
         else:
             ring_info = RingInfo(in_ring=False)
 
-        elapsed_ms = round((time.time() - t0) * 1000, 1)
-
-        results.append(EnrichmentResult(
-            enrichment_id          = f"ENR-{uuid.uuid4().hex[:8].upper()}",
-            transaction_id         = sr.transaction_id,
-            bti_risk_score         = sr.final_risk_score,
-            bti_alert_tier         = sr.final_alert_tier,
-            bti_recommended_action = _recommended_action(sr.final_alert_tier),
-            top_drivers            = top_drivers,
-            ring                   = ring_info,
-            notes_for_sas          = _generate_note(sr, ring_info),
-            model_version          = sr.model_version,
-            rules_fired            = sr.rules_fired,
-            processing_time_ms     = elapsed_ms,
-            enriched_at            = datetime.now(timezone.utc).isoformat(),
-        ))
+        results.append(_result(sr, ring_info, round((time.time() - t0) * 1000, 1)))
 
     log.info(
         "Batch enrichment complete",

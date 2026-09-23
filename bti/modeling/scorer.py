@@ -17,6 +17,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
+from scipy.special import expit
 
 from bti.governance.reason_codes import principal_reasons
 from bti.logging_config import get_logger
@@ -48,6 +49,8 @@ class V3Score:
     history_rows_used: int
     latency_ms: float
     notes: List[str] = field(default_factory=list)
+    contributions: Dict[str, float] = field(default_factory=dict)   # SHAP, log-odds, every feature
+    base_probability: Optional[float] = None                         # calibrated probability at the SHAP baseline
 
 
 def risk_band(p: float) -> str:
@@ -130,11 +133,17 @@ class V3Scorer:
                                                 else str(v)))
                   for c, v in feats.iloc[0].items()}
         reasons: List[dict] = []
+        contributions: Dict[str, float] = {}
+        base_probability = None
         if explain:
-            sv = np.asarray(self._explainer(model_id, art["estimator"]).shap_values(X))
+            explainer = self._explainer(model_id, art["estimator"])
+            sv = np.asarray(explainer.shap_values(X))
             if sv.ndim == 3:
                 sv = sv[..., 1]
-            reasons = principal_reasons(dict(zip(FEATURE_NAMES, sv[0])), values)
+            contributions = {f: round(float(v), 6) for f, v in zip(FEATURE_NAMES, sv[0])}
+            reasons = principal_reasons(contributions, values)
+            base_raw = float(expit(np.ravel(explainer.expected_value)[-1]))
+            base_probability = round(float(art["calibrator"].predict(np.array([base_raw]))[0]), 6)
 
         notes = []
         if provisional:
@@ -155,6 +164,8 @@ class V3Scorer:
             history_rows_used=int(len(history)),
             latency_ms=round((time.perf_counter() - t0) * 1000, 2),
             notes=notes,
+            contributions=contributions,
+            base_probability=base_probability,
         )
 
     def score_frame(self, df: pd.DataFrame, role: str = "champion") -> pd.DataFrame:

@@ -1,10 +1,10 @@
 """
 /api/v1/score — real-time single-transaction fraud scoring.
 
-This is the core production endpoint: submit one transaction, get a full
-fraud risk assessment back in <100ms.
-
-No pipeline needed — uses pre-trained models loaded into memory at startup.
+Scored by the governed v3 model and the expected-cost decision engine (the
+same path as /api/v1/v3/score), returned in the original response shape.
+The legacy ML fields ml_lr_proba, ml_rf_proba and ml_iso_score are null
+since the migration: the legacy ensemble read label-derived inputs.
 """
 
 import io
@@ -19,9 +19,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from bti.database import get_db
-from bti.scoring.realtime import RealTimeScorer, ScoreResult, _build_feature_vector
-from bti.scoring.model_loader import models_available
-from bti.scoring.explainer import explain as shap_explain
+from bti.modeling import registry
+from bti.modeling.scorer import scorer as _v3_scorer
+from bti.operations.scoring_service import model_available
+from bti.scoring.realtime import RealTimeScorer, ScoreResult
+from bti.scoring.v3_adapter import recommendation, top_drivers
 from bti.logging_config import get_logger, AuditLogger
 from bti.config import get_settings
 
@@ -50,9 +52,13 @@ class TransactionScoreRequest(BaseModel):
     merchant_category:  Optional[str] = None
     merchant_name:      Optional[str] = None
     customer_segment:   Optional[str] = None
+    country:            Optional[str] = Field(default=None, description="Account country or ISO-2 code; selects "
+                                                                        "the jurisdiction policy")
     account_balance_before: Optional[float] = None
     account_balance_after:  Optional[float] = None
-    risk_score:             Optional[float] = Field(default=50, ge=0, le=100)
+    risk_score:             Optional[float] = Field(default=None, ge=0, le=100,
+                                                    description="Ignored — label-derived in the training data; "
+                                                                "accepted for backward compatibility")
     historical_average_transaction_amount: Optional[float] = Field(default=500.0, gt=0)
     failed_attempt_count:  Optional[int] = Field(default=0, ge=0)
     login_attempts:        Optional[int] = Field(default=1, ge=0)
@@ -64,7 +70,7 @@ class TransactionScoreRequest(BaseModel):
     ip_location:           Optional[str] = None
     currency:              Optional[str] = Field(default="USD")
 
-    # ML feature extras (optional — fall back to 0 if not provided)
+    # Accepted for backward compatibility and ignored: known only after settlement or dispute
     monthly_customer_transaction_count: Optional[int] = None
     fee_income:        Optional[float] = None
     interchange_income: Optional[float] = None
@@ -86,7 +92,8 @@ class TransactionScoreRequest(BaseModel):
             "merchant_category": "Crypto Exchanges",
             "merchant_name": "CryptoFX Ltd",
             "customer_segment": "Mass Market",
-            "risk_score": 72,
+            "country": "GB",
+            "currency": "GBP",
             "historical_average_transaction_amount": 450.0,
             "failed_attempt_count": 4,
             "login_attempts": 6,
@@ -113,31 +120,34 @@ class TransactionScoreResponse(BaseModel):
     fraud_rule_score:   float = Field(..., description="Rule-based score 0–100")
     rules_triggered:    int
     rules_fired:        List[str]
-    ml_lr_proba:        float = Field(..., description="Logistic regression fraud probability 0–1")
-    ml_rf_proba:        float = Field(..., description="Random forest fraud probability 0–1")
-    ml_iso_score:       float = Field(..., description="Isolation forest anomaly score")
-    ml_anomaly_score:   float = Field(..., description="Combined ML score 0–100")
-    final_risk_score:   float = Field(..., description="Composite risk score 0–100")
+    ml_lr_proba:        Optional[float] = Field(None, description="Deprecated — always null since the v3 migration")
+    ml_rf_proba:        Optional[float] = Field(None, description="Deprecated — always null since the v3 migration")
+    ml_iso_score:       Optional[float] = Field(None, description="Deprecated — always null since the v3 migration")
+    ml_anomaly_score:   float = Field(..., description="v3 fraud probability × 100")
+    final_risk_score:   float = Field(..., description="v3 calibrated fraud probability × 100")
     final_alert_tier:   str   = Field(..., description="LOW / MEDIUM / HIGH / VERY HIGH / CRITICAL")
-    is_suspicious:      bool
+    is_suspicious:      bool  = Field(..., description="True when the decision is anything other than APPROVE")
     processing_time_ms: float
-    model_version:      str
+    model_version:      str   = Field(..., description="Registered v3 model id")
     db_context_used:    bool
     recommendation:     str
+    fraud_probability:  float = Field(..., description="Calibrated probability of fraud, 0–1")
+    decision:           str   = Field(..., description="APPROVE / STEP_UP / REVIEW / DECLINE")
+    guardrails:         List[str]
+    reason_codes:       List[dict]
+    model_provisional:  bool  = Field(..., description="True until a champion is approved; blocks auto-decline")
+    jurisdiction:       Optional[str] = None
+    notes:              List[str]
 
 
 def _recommendation(result: ScoreResult) -> str:
-    tier = result.final_alert_tier
-    if tier == "CRITICAL":
-        return "BLOCK — Immediately decline and escalate to Fraud Operations"
-    elif tier == "VERY HIGH":
-        return "HOLD — Step-up authentication required before processing"
-    elif tier == "HIGH":
-        return "REVIEW — Flag for analyst review within 1 business hour"
-    elif tier == "MEDIUM":
-        return "MONITOR — Log for batch review; allow with enhanced monitoring"
-    else:
-        return "ALLOW — Transaction within normal risk parameters"
+    return recommendation(result.decision, result.fraud_probability)
+
+
+def _require_model() -> None:
+    if not model_available():
+        raise HTTPException(status_code=503,
+                            detail="No v3 model is registered. Run: python -m bti.modeling.train")
 
 
 @router.post("/", response_model=TransactionScoreResponse,
@@ -147,20 +157,16 @@ def score_transaction_endpoint(
     db: Session = Depends(get_db),
 ):
     """
-    Submit a transaction and receive a full fraud risk assessment in <100ms.
+    Submit a transaction and receive a fraud risk assessment.
 
     The response includes:
-    - Rule-based fraud score (19 rules, 0–100)
-    - ML ensemble score (Isolation Forest + Logistic Regression + Random Forest)
-    - Composite final risk score (0–100)
-    - Alert tier (LOW → CRITICAL)
-    - Actionable recommendation (ALLOW / MONITOR / REVIEW / HOLD / BLOCK)
+    - Calibrated fraud probability from the governed v3 model
+    - Expected-cost decision (APPROVE / STEP_UP / REVIEW / DECLINE) and guardrails
+    - Reason codes with analyst and customer wording
+    - Alert tier (LOW → CRITICAL) and recommendation, as before
+    - The 19-rule engine output, reported for analysts (not part of the score)
     """
-    if not models_available():
-        raise HTTPException(
-            status_code=503,
-            detail="ML models not yet trained. Run: python main.py pipeline --force"
-        )
+    _require_model()
 
     txn_dict = body.model_dump()
     result = _scorer.score(txn_dict, db_session=db)
@@ -204,6 +210,13 @@ def score_transaction_endpoint(
         model_version=result.model_version,
         db_context_used=result.db_context_used,
         recommendation=_recommendation(result),
+        fraud_probability=result.fraud_probability,
+        decision=result.decision,
+        guardrails=result.guardrails,
+        reason_codes=result.reason_codes,
+        model_provisional=result.provisional,
+        jurisdiction=result.jurisdiction,
+        notes=result.notes,
     )
 
 
@@ -214,103 +227,72 @@ def explain_transaction_endpoint(
     db: Session = Depends(get_db),
 ):
     """
-    Score a transaction and return a full SHAP-based explanation alongside the
-    fraud risk assessment.
+    Score a transaction and explain it with exact SHAP contributions from the
+    v3 model.
 
-    In addition to the standard score, the response includes:
-    - **top_drivers**: top-8 features ranked by their contribution to the fraud
-      probability, each with a human-readable label, the actual feature value,
-      the SHAP value (how much it pushed the score up or down), and the
-      percentage of total impact it represents.
-    - **narrative**: a plain-English paragraph summarising the key risk drivers
-      and a recommended investigator action — suitable for a fraud alert email
-      or a case management system.
-
-    This endpoint is the foundation of the BTI Fraud Intelligence Layer (v2),
-    designed to complement enterprise platforms such as SAS by providing
-    explainable, investigator-ready fraud intelligence.
+    - **top_drivers**: the eight features that moved the probability most, up
+      or down, with the feature value, SHAP value (log-odds) and share of impact.
+    - **reason_codes**: up to four principal reasons with analyst and
+      customer-facing wording.
+    - **narrative**: a plain-English summary for a case note.
     """
-    if not models_available():
-        raise HTTPException(
-            status_code=503,
-            detail="ML models not trained. Run POST /pipeline/run/sync first.",
-        )
-
-    txn_dict = body.model_dump()
-    result   = _scorer.score(txn_dict, db_session=db)
-
-    # Build the same feature vector that was used for the RF model
-    bundle = _scorer.bundle
-    X = _build_feature_vector(txn_dict, bundle.feature_cols, bundle.label_encoders)
-    X = X.fillna(0).replace([float("inf"), float("-inf")], 0)
-
-    explanation = shap_explain(
-        rf_model       = bundle.rf_model,
-        feature_vector = X.values,
-        feature_cols   = bundle.feature_cols,
-        transaction_id = result.transaction_id,
-        fraud_prob     = result.ml_rf_proba,
-        risk_tier      = result.final_alert_tier,
-        top_n          = 8,
-    )
-
+    _require_model()
+    result = _scorer.score(body.model_dump(), db_session=db)
+    drivers = top_drivers(result.contributions, result.feature_values)
+    reasons = "; ".join(r["analyst_text"].lower() for r in result.reason_codes[:3]) or "no risk-raising factors"
+    narrative = (f"BTI rates this transaction {result.final_alert_tier} with a {result.fraud_probability:.1%} "
+                 f"probability of fraud. Main drivers: {reasons}. Decision: {result.decision}."
+                 + (" The model is provisional until a champion is approved." if result.provisional else ""))
     return {
-        # ── Standard score fields ──────────────────────────────────────────────
         "transaction_id":    result.transaction_id,
         "scored_at":         datetime.utcnow().isoformat() + "Z",
         "final_risk_score":  result.final_risk_score,
         "final_alert_tier":  result.final_alert_tier,
+        "fraud_probability": result.fraud_probability,
+        "decision":          result.decision,
+        "guardrails":        result.guardrails,
         "fraud_rule_score":  result.fraud_rule_score,
         "rules_triggered":   result.rules_triggered,
         "rules_fired":       result.rules_fired,
-        "ml_rf_proba":       result.ml_rf_proba,
-        "ml_lr_proba":       result.ml_lr_proba,
-        "ml_iso_score":      result.ml_iso_score,
-        "ml_anomaly_score":  result.ml_anomaly_score,
         "is_suspicious":     result.is_suspicious,
         "recommendation":    _recommendation(result),
+        "model_version":     result.model_version,
+        "model_provisional": result.provisional,
         "processing_time_ms": result.processing_time_ms,
-        # ── SHAP explanation ───────────────────────────────────────────────────
         "explanation": {
-            "fraud_probability": round(explanation.fraud_probability, 4),
-            "base_probability":  round(explanation.base_probability, 4),
-            "narrative":         explanation.narrative,
-            "top_drivers": [
-                {
-                    "rank":       i + 1,
-                    "feature":    d.feature,
-                    "label":      d.label,
-                    "value":      round(d.value, 4),
-                    "shap_value": round(d.shap_value, 6),
-                    "direction":  d.direction,
-                    "impact_pct": d.impact_pct,
-                }
-                for i, d in enumerate(explanation.top_drivers)
-            ],
+            "fraud_probability": result.fraud_probability,
+            "base_probability":  result.base_probability,
+            "narrative":         narrative,
+            "reason_codes":      result.reason_codes,
+            "top_drivers":       drivers,
         },
     }
 
 
 @router.get("/model-info", summary="Model version and performance metrics")
 def get_model_info():
-    """Returns current model version, training date, and validation metrics."""
-    if not models_available():
-        raise HTTPException(status_code=503, detail="Models not trained yet")
-    bundle = _scorer.bundle
+    """The model answering /score, with its out-of-time validation figures."""
+    _require_model()
+    model_id, role, provisional = _v3_scorer.resolve("champion")
+    card = registry.load_card(model_id)
     return {
-        "trained_at": bundle.trained_at,
-        "feature_count": len(bundle.feature_cols),
-        "logistic_regression": {"roc_auc": bundle.lr_roc_auc},
-        "random_forest": {"roc_auc": bundle.rf_roc_auc, "f1": bundle.rf_f1},
+        "model_id": model_id,
+        "role": role,
+        "provisional": provisional,
+        "trained_at": card["created_at"],
+        "validation_status": card["validation"]["status"],
+        "feature_count": len(card["features"]["model_features"]),
+        "out_of_time": card["performance"]["metrics"]["out_of_time"],
+        "documentation": f"/api/v1/governance/models/{model_id}/documentation",
     }
 
 
 @router.post("/reload-models",
-             summary="Reload ML models from disk (call after retraining)")
+             summary="Reload the registered model (call after a promotion or retrain)")
 def reload_models():
-    """Forces the scorer to reload all model artifacts from disk."""
     _scorer.reload()
-    return {"status": "reloaded", "trained_at": _scorer.bundle.trained_at}
+    model_id, role, provisional = _v3_scorer.resolve("champion")
+    return {"status": "reloaded", "model_id": model_id, "role": role, "provisional": provisional}
 
 
 # ── Bulk CSV / Excel Upload ────────────────────────────────────────────────────
@@ -340,7 +322,7 @@ def _row_to_txn(row: dict, idx: int) -> dict:
     txn["transaction_time"]   = str(row.get("transaction_time") or "12:00:00")
 
     for field in ["channel", "merchant_category", "merchant_name", "customer_segment",
-                  "debit_credit_flag", "device_id", "ip_location", "currency",
+                  "debit_credit_flag", "device_id", "ip_location", "currency", "country",
                   "authorization_method", "transaction_type", "account_id"]:
         val = row.get(field)
         if val is not None and str(val) not in ("", "nan", "NaN", "None"):
@@ -370,15 +352,14 @@ def _row_to_txn(row: dict, idx: int) -> dict:
 _TEMPLATE_CSV = (
     "transaction_id,customer_id,transaction_amount,transaction_date,transaction_time,"
     "channel,merchant_category,merchant_name,customer_segment,debit_credit_flag,"
-    "device_id,ip_location,risk_score,historical_average_transaction_amount,"
-    "failed_attempt_count,login_attempts,account_balance_before,account_balance_after,"
-    "refund_flag,chargeback_flag\n"
+    "device_id,ip_location,currency,country,historical_average_transaction_amount,"
+    "failed_attempt_count,login_attempts,account_balance_before,account_balance_after\n"
     "TXN-SAMPLE-001,CUST-0001,12500.00,2024-07-15,02:47:00,"
     "API/Open Banking,Crypto Exchanges,CryptoFX Ltd,Mass Market,Debit,"
-    "DEV-X9921-UNKNOWN,203.0.113.45,72,450.0,4,6,13000.00,500.00,0,0\n"
+    "DEV-X9921-UNKNOWN,203.0.113.45,GBP,GB,450.0,4,6,13000.00,500.00\n"
     "TXN-SAMPLE-002,CUST-0002,42.50,2024-07-15,14:30:00,"
     "Mobile Banking,Groceries,Tesco,Premium,Debit,"
-    "DEV-IPHONE-001,192.168.1.1,12,55.0,0,1,3200.00,3157.50,0,0\n"
+    "DEV-IPHONE-001,192.168.1.1,USD,US,55.0,0,1,3200.00,3157.50\n"
 )
 
 
@@ -404,9 +385,8 @@ async def batch_score_upload(
     db: Session = Depends(get_db),
 ):
     """
-    Upload a CSV or Excel file of transactions. Every row is scored independently
-    through the full 19-rule fraud engine and ML ensemble (Isolation Forest +
-    Logistic Regression + Random Forest).
+    Upload a CSV or Excel file of transactions. Every row is scored by the v3
+    model and decision engine against its own database history.
 
     **Required columns:** transaction_id, customer_id, transaction_amount
 
@@ -417,11 +397,7 @@ async def batch_score_upload(
     Returns a batch summary (tier breakdown) plus the full fraud risk assessment
     for every row.
     """
-    if not models_available():
-        raise HTTPException(
-            status_code=503,
-            detail="ML models not trained. Run POST /pipeline/run/sync first.",
-        )
+    _require_model()
 
     filename = file.filename or "upload"
     content  = await file.read()
@@ -473,8 +449,9 @@ async def batch_score_upload(
                 "fraud_rule_score":    round(result.fraud_rule_score, 2),
                 "rules_triggered":     result.rules_triggered,
                 "rules_fired":         result.rules_fired,
-                "ml_lr_proba":         round(result.ml_lr_proba, 4),
-                "ml_rf_proba":         round(result.ml_rf_proba, 4),
+                "fraud_probability":   result.fraud_probability,
+                "decision":            result.decision,
+                "reason_codes":        [r["code"] for r in result.reason_codes],
                 "ml_anomaly_score":    round(result.ml_anomaly_score, 2),
                 "is_suspicious":       result.is_suspicious,
                 "recommendation":      _recommendation(result),

@@ -5,7 +5,7 @@ all computed from the score log and confirmed labels.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Optional
 
 import numpy as np
@@ -127,3 +127,22 @@ def live_drift(db: Session, start: Optional[datetime] = None, end: Optional[date
     feats = pd.DataFrame([r[0] or {} for r in rows], columns=FEATURE_NAMES)
     scores = np.array([r[1] for r in rows], dtype=float)
     return {"model_id": model_id, **drift_report(card["monitoring"]["baseline"], feats, scores)}
+
+
+def scoring_latency(db: Session, hours: int, sla_ms: float) -> Dict:
+    """Model scoring latency percentiles by model over the last `hours`, from the score log."""
+    since = datetime.utcnow() - timedelta(hours=hours)
+    rows = (db.query(ScoreLog.model_id, ScoreLog.is_shadow, ScoreLog.latency_ms)
+            .filter(ScoreLog.scored_at >= since).all())
+    frame = pd.DataFrame(rows, columns=["model_id", "is_shadow", "latency_ms"])
+    out = {"window_hours": hours, "sla_ms": sla_ms, "models": []}
+    for (model_id, shadow), g in frame.groupby(["model_id", "is_shadow"]):
+        lat = g["latency_ms"].astype(float).to_numpy()
+        out["models"].append({
+            "model_id": model_id, "shadow": bool(shadow), "scored": int(len(lat)),
+            "p50_ms": round(float(np.percentile(lat, 50)), 1),
+            "p95_ms": round(float(np.percentile(lat, 95)), 1),
+            "p99_ms": round(float(np.percentile(lat, 99)), 1),
+            "share_over_sla": round(float((lat > sla_ms).mean()), 4),
+        })
+    return out

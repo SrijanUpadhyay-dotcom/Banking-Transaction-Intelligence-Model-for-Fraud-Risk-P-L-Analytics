@@ -8,7 +8,6 @@ score log for audit, monitoring and champion/challenger comparison.
 """
 
 from dataclasses import asdict
-from datetime import datetime
 from typing import List, Optional
 
 import pandas as pd
@@ -16,13 +15,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from bti.database import ScoreLog, get_db
-from bti.jurisdiction.policies import policy_for
+from bti.database import get_db
 from bti.logging_config import get_logger
 from bti.modeling import registry
-from bti.modeling.fx import supported_currencies, to_usd
-from bti.modeling.scorer import V3Score, scorer
-from bti.operations.decisioning import decide
+from bti.modeling.fx import supported_currencies
+from bti.modeling.scorer import scorer
+from bti.operations.scoring_service import score_and_decide
 
 router = APIRouter(prefix="/v3", tags=["BTI v3 Scoring"])
 log = get_logger("api.v3")
@@ -60,61 +58,27 @@ def _validate_currency(txn: V3Transaction) -> None:
                                                     f"{supported_currencies()}. Add a rate under fx.rates_to_usd.")
 
 
-def _log(db: Session, s: V3Score, txn: dict, decision, jurisdiction: Optional[str], amount_usd: float,
-         shadow: bool) -> None:
-    db.add(ScoreLog(
-        transaction_id=s.transaction_id, customer_id=txn.get("customer_id"), model_id=s.model_id,
-        model_role=s.model_role, is_shadow=shadow, fraud_probability=s.fraud_probability, score=s.score,
-        decision=decision.action, jurisdiction=jurisdiction, amount_usd=amount_usd,
-        reason_codes=[{k: r[k] for k in ("code", "rank", "share_of_risk")} for r in s.reason_codes],
-        features=s.features, guardrails=decision.guardrails_applied, latency_ms=s.latency_ms,
-        scored_at=datetime.utcnow(),
-    ))
-
-
 def _score_one(txn_model: V3Transaction, db: Session, explain: bool = True) -> dict:
     _validate_currency(txn_model)
-    txn = txn_model.model_dump()
-    policy = policy_for(txn.get("country"))
-    amount_usd = to_usd(txn["transaction_amount"], txn["currency"])
     try:
-        live = scorer.score(txn, db_session=db, explain=explain)
+        sd = score_and_decide(txn_model.model_dump(), db, explain=explain)
     except registry.RegistryError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
-    decision = decide(live.fraud_probability, amount_usd, policy, txn.get("channel"), txn.get("transaction_type"),
-                      provisional_model=live.provisional)
-    iso = policy.iso2 if policy else None
-
-    shadow = None
-    challenger_id = registry.model_for_role("challenger")
-    if challenger_id and challenger_id != live.model_id:
-        sh = scorer.score(txn, db_session=db, role="challenger", explain=False)
-        sh_decision = decide(sh.fraud_probability, amount_usd, policy, txn.get("channel"),
-                             txn.get("transaction_type"), provisional_model=True)
-        shadow = {"model_id": sh.model_id, "fraud_probability": sh.fraud_probability, "decision": sh_decision.action}
-        _log(db, sh, txn, sh_decision, iso, amount_usd, shadow=True)
-
-    try:
-        _log(db, live, txn, decision, iso, amount_usd, shadow=False)
-        db.commit()
-    except Exception as exc:
-        db.rollback()
-        log.error("Score log write failed", extra={"transaction_id": live.transaction_id, "error": str(exc)})
-
+    live, decision, policy = sd.live, sd.decision, sd.policy
     return {
         "transaction_id": live.transaction_id,
         "model": {"model_id": live.model_id, "role": live.model_role, "provisional": live.provisional},
         "fraud_probability": live.fraud_probability,
         "score": live.score,
         "risk_band": live.risk_band,
-        "amount_usd": round(amount_usd, 2),
+        "amount_usd": round(sd.amount_usd, 2),
         "decision": asdict(decision),
         "reason_codes": live.reason_codes,
-        "jurisdiction": {"iso2": iso, "country": policy.country if policy else None,
+        "jurisdiction": {"iso2": policy.iso2 if policy else None, "country": policy.country if policy else None,
                          "loss_given_fraud": decision.cost_model["loss_given_fraud"],
                          "decline_requires_human_review_route": bool(policy and
                                                                      policy.decline_requires_human_review_route)},
-        "shadow": shadow,
+        "shadow": sd.shadow,
         "history_rows_used": live.history_rows_used,
         "latency_ms": live.latency_ms,
         "notes": live.notes + ([] if policy else ["Unknown or missing country — default cost model applied."]),
