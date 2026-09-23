@@ -156,3 +156,18 @@ def test_rescore_replaces_legacy_scores_in_stored_history(tmp_path, monkeypatch)
     assert {r.final_alert_tier for r in rows} <= {"LOW", "MEDIUM", "HIGH", "VERY HIGH", "CRITICAL"}
     assert db.query(AuditLog).filter(AuditLog.event_type == "HISTORY_RESCORED").count() == 1
     db.close()
+
+
+def test_remediation_mode_excludes_incumbent_and_uses_non_inferiority(small_data):
+    from bti.modeling.tournament import run_tournament
+    run_tournament("dev.one", ["hgb"], ["core"], data_path=small_data)
+    incumbent = registry.read_index()["models"][0]["model_id"]
+    registry.assign_role(incumbent, "challenger", "dev.one", "Set incumbent for the remediation test")
+    r = run_tournament("dev.one", ["lightgbm", "xgboost"], ["core"], data_path=small_data, min_gain=1.0,
+                       remediation="Test finding")
+    assert r["decision"]["outcome"] in ("remediation_replacement", "no_eligible_candidate")
+    assert r["decision"].get("challenger") != incumbent or r["decision"]["outcome"] == "no_eligible_candidate"
+    if r["decision"]["outcome"] == "remediation_replacement":
+        assert registry.model_for_role("challenger") == r["decision"]["challenger"] != incumbent
+        assert "Test finding" in registry.read_index()["history"][-1]["rationale"]
+    assert r["remediation_finding"] == "Test finding"

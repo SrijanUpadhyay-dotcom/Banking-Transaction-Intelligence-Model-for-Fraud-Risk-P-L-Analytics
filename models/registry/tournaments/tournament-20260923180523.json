@@ -1,0 +1,132 @@
+{
+  "run_at": "2026-09-23T18:05:23.856627+00:00",
+  "developer": "Srijan Upadhyay",
+  "selection_rule": "Passed all validation gates; highest calibration-window PR-AUC; must beat the incumbent by 0.005. Out-of-time window reported, never used to select.",
+  "tuned": true,
+  "entrants": [
+    {
+      "model_id": "bti-v3-lgbm-20260923180324",
+      "incumbent": false,
+      "algorithm": "lightgbm",
+      "feature_set": "core",
+      "validation": "failed",
+      "failed_gates": [
+        "fairness"
+      ],
+      "calibration_pr_auc": 0.8508,
+      "calibration_roc_auc": 0.9399,
+      "oot_pr_auc": 0.886,
+      "oot_roc_auc": 0.9554,
+      "oot_ks": 0.8482,
+      "oot_ece": 0.00307,
+      "tuned": true
+    },
+    {
+      "model_id": "bti-v3-hgb-20260923175252",
+      "incumbent": true,
+      "algorithm": "hgb",
+      "feature_set": "core",
+      "validation": "passed",
+      "failed_gates": [],
+      "calibration_pr_auc": 0.8507,
+      "calibration_roc_auc": 0.9432,
+      "oot_pr_auc": 0.8866,
+      "oot_roc_auc": 0.9581,
+      "oot_ks": 0.8473,
+      "oot_ece": 0.00279,
+      "tuned": false
+    },
+    {
+      "model_id": "bti-v3-lgbm-x-20260923180404",
+      "incumbent": false,
+      "algorithm": "lightgbm",
+      "feature_set": "extended",
+      "validation": "passed",
+      "failed_gates": [],
+      "calibration_pr_auc": 0.8497,
+      "calibration_roc_auc": 0.9396,
+      "oot_pr_auc": 0.8867,
+      "oot_roc_auc": 0.9562,
+      "oot_ks": 0.8462,
+      "oot_ece": 0.00293,
+      "tuned": true
+    },
+    {
+      "model_id": "bti-v3-xgb-20260923180442",
+      "incumbent": false,
+      "algorithm": "xgboost",
+      "feature_set": "core",
+      "validation": "failed",
+      "failed_gates": [
+        "fairness"
+      ],
+      "calibration_pr_auc": 0.8496,
+      "calibration_roc_auc": 0.9411,
+      "oot_pr_auc": 0.8852,
+      "oot_roc_auc": 0.9553,
+      "oot_ks": 0.8465,
+      "oot_ece": 0.00346,
+      "tuned": true
+    },
+    {
+      "model_id": "bti-v3-xgb-x-20260923180523",
+      "incumbent": false,
+      "algorithm": "xgboost",
+      "feature_set": "extended",
+      "validation": "failed",
+      "failed_gates": [
+        "fairness"
+      ],
+      "calibration_pr_auc": 0.8492,
+      "calibration_roc_auc": 0.9392,
+      "oot_pr_auc": 0.8874,
+      "oot_roc_auc": 0.9559,
+      "oot_ks": 0.8438,
+      "oot_ece": 0.00319,
+      "tuned": true
+    },
+    {
+      "model_id": "bti-v3-hgb-x-20260923180244",
+      "incumbent": false,
+      "algorithm": "hgb",
+      "feature_set": "extended",
+      "validation": "passed",
+      "failed_gates": [],
+      "calibration_pr_auc": 0.8479,
+      "calibration_roc_auc": 0.9402,
+      "oot_pr_auc": 0.8851,
+      "oot_roc_auc": 0.9563,
+      "oot_ks": 0.8425,
+      "oot_ece": 0.00259,
+      "tuned": true
+    },
+    {
+      "model_id": "bti-v3-hgb-20260923180154",
+      "incumbent": false,
+      "algorithm": "hgb",
+      "feature_set": "core",
+      "validation": "failed",
+      "failed_gates": [
+        "fairness"
+      ],
+      "calibration_pr_auc": 0.8478,
+      "calibration_roc_auc": 0.9404,
+      "oot_pr_auc": 0.8833,
+      "oot_roc_auc": 0.9559,
+      "oot_ks": 0.8403,
+      "oot_ece": 0.00256,
+      "tuned": true
+    }
+  ],
+  "decision": {
+    "outcome": "incumbent_retained",
+    "challenger": "bti-v3-hgb-20260923175252",
+    "reason": "No candidate beat the incumbent's calibration PR-AUC (0.8507) by 0.005"
+  },
+  "rank_agreement": {
+    "calibration_winner": "bti-v3-hgb-20260923175252",
+    "out_of_time_winner": "bti-v3-lgbm-x-20260923180404",
+    "agree": false
+  },
+  "seconds": 249.6
+}

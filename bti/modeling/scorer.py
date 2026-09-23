@@ -124,7 +124,8 @@ class V3Scorer:
             history = fetch_history(db_session, txn, art["lookback_days"])
         frame = pd.concat([history, pd.DataFrame([txn])], ignore_index=True)
         names = art.get("feature_names", FEATURE_NAMES)
-        feats = build_features(frame, lookback_days=art["lookback_days"]).iloc[[-1]]
+        feats = build_features(frame, lookback_days=art["lookback_days"],
+                               feature_version=art.get("feature_version", 1)).iloc[[-1]]
         X = to_model_matrix(feats, art["encodings"], names)
 
         raw = float(art["estimator"].predict_proba(X)[0, 1])
@@ -171,7 +172,7 @@ class V3Scorer:
         """Batch scoring where the frame itself is the history (backtests, file uploads)."""
         model_id, used_role, _ = self.resolve(role)
         art = registry.load_artifact(model_id)
-        feats = build_features(df, lookback_days=art["lookback_days"])
+        feats = build_features(df, lookback_days=art["lookback_days"], feature_version=art.get("feature_version", 1))
         X = to_model_matrix(feats, art["encodings"], art.get("feature_names", FEATURE_NAMES))
         p = art["calibrator"].predict(art["estimator"].predict_proba(X)[:, 1])
         out = feats.copy()

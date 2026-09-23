@@ -95,8 +95,22 @@ def test_device_novelty_and_sharing():
          "transaction_amount": 1, "device_id": "D1"},
     ])
     f = build_features(df)
-    assert f["device_new_for_customer"].tolist() == [1.0, 1.0, 0.0]
+    # v2: novelty is unknown for a customer's first transaction, not "new"
+    assert np.isnan(f["device_new_for_customer"].iloc[0]) and np.isnan(f["device_new_for_customer"].iloc[1])
+    assert f["device_new_for_customer"].iloc[2] == 0.0
     assert f["device_other_customer_txns"].tolist() == [0.0, 1.0, 1.0]
+    v1 = build_features(df, feature_version=1)
+    assert v1["device_new_for_customer"].tolist() == [1.0, 1.0, 0.0]
+
+
+def test_novelty_flags_new_device_once_history_exists():
+    df = _txns([
+        {"transaction_id": "a", "customer_id": "C1", "transaction_date": "2024-01-01", "transaction_time": "10:00:00",
+         "transaction_amount": 1, "device_id": "D1"},
+        {"transaction_id": "b", "customer_id": "C1", "transaction_date": "2024-01-02", "transaction_time": "10:00:00",
+         "transaction_amount": 1, "device_id": "D2"},
+    ])
+    assert build_features(df)["device_new_for_customer"].iloc[1] == 1.0
 
 
 def test_fx_normalisation_and_unknown_currency():

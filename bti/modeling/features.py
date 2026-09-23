@@ -137,11 +137,11 @@ CORE_FEATURES: List[FeatureSpec] = [
     FeatureSpec("cust_amount_usd_7d", _N, _CUST + _AMT, "VELOCITY", "Customer USD spend in prior 7d"),
     FeatureSpec("secs_since_last_txn", _N, _CUST, "VELOCITY", "Seconds since customer's previous transaction"),
     FeatureSpec("device_new_for_customer", _N, _CUST + ("device_id",), "NEW_DEVICE",
-                "Device not used by this customer within the look-back"),
+                "Device not used by this customer within the look-back (unknown without prior history)"),
     FeatureSpec("ip_new_for_customer", _N, _CUST + ("ip_location",), "NEW_IP",
-                "IP not used by this customer within the look-back"),
+                "IP not used by this customer within the look-back (unknown without prior history)"),
     FeatureSpec("merchant_new_for_customer", _N, _CUST + ("merchant_name",), "NEW_MERCHANT",
-                "First payment to this merchant within the look-back"),
+                "First payment to this merchant within the look-back (unknown without prior history)"),
     FeatureSpec("device_other_customer_txns", _N, _CUST + ("device_id",), "SHARED_DEVICE",
                 "Prior transactions on this device by other customers"),
     FeatureSpec("ip_other_customer_txns", _N, _CUST + ("ip_location",), "SHARED_DEVICE",
@@ -182,6 +182,15 @@ STRUCTURING_THRESHOLDS_USD = (1_000, 3_000, 5_000, 10_000)
 PROTECTED_ATTRIBUTES: List[str] = [n for n, f in SOURCE_FIELDS.items() if f.availability is _A.PROTECTED]
 
 DEFAULT_LOOKBACK_DAYS = 365
+
+# Feature-definition versions. Every model records the version it was trained on
+# and is always scored with that version, so a definition change never silently
+# alters what a registered model sees.
+#   1 — novelty flags are 1 when the customer has no prior transactions
+#   2 — novelty flags are unknown (NaN) when the customer has no prior
+#       transactions; v1 conflated "never seen this customer" with "new device",
+#       penalising thin-history and new-to-bank customers
+FEATURE_VERSION = 2
 _ALLOWED = {_A.PRE_AUTH, _A.IDENTIFIER}
 
 
@@ -263,11 +272,14 @@ def event_timestamps(df: pd.DataFrame) -> pd.Series:
     return pd.to_datetime(date + " " + time.str.slice(0, 8), errors="coerce")
 
 
-def build_features(df: pd.DataFrame, lookback_days: int = DEFAULT_LOOKBACK_DAYS) -> pd.DataFrame:
+def build_features(df: pd.DataFrame, lookback_days: int = DEFAULT_LOOKBACK_DAYS,
+                   feature_version: int = FEATURE_VERSION) -> pd.DataFrame:
     """
     Compute model features for every row of `df` using only information that
     precedes each row's timestamp. Returns a frame indexed like `df`.
     """
+    if feature_version not in (1, 2):
+        raise ValueError(f"Unknown feature_version {feature_version}")
     df = df.copy()
     for col in ("device_id", "ip_location", "merchant_name", "customer_id", "currency",
                 "historical_average_transaction_amount", "account_balance_before",
@@ -306,6 +318,8 @@ def build_features(df: pd.DataFrame, lookback_days: int = DEFAULT_LOOKBACK_DAYS)
     out["cust_txn_count_24h"], out["cust_amount_usd_24h"] = _prior_window(cust, ts, 86_400, usd)
     out["cust_txn_count_7d"], out["cust_amount_usd_7d"] = _prior_window(cust, ts, 7 * 86_400, usd)
     out["secs_since_last_txn"] = _seconds_since_prior(cust, ts, lookback_s)
+    cust_prior, _ = _prior_window(cust, ts, lookback_s)
+    knowable = (cust_prior > 0) if feature_version >= 2 else np.ones(len(ts), dtype=bool)
 
     for entity, new_col, shared_col in (
         ("device_id", "device_new_for_customer", "device_other_customer_txns"),
@@ -314,7 +328,7 @@ def build_features(df: pd.DataFrame, lookback_days: int = DEFAULT_LOOKBACK_DAYS)
     ):
         present = df[entity].notna() & (df[entity].astype(str) != "")
         cust_entity, _ = _prior_window(_group_ids(df, ["customer_id", entity]), ts, lookback_s)
-        out[new_col] = np.where(present, (cust_entity == 0).astype(float), np.nan)
+        out[new_col] = np.where(present & knowable, (cust_entity == 0).astype(float), np.nan)
         if shared_col:
             entity_all, _ = _prior_window(_group_ids(df, [entity]), ts, lookback_s)
             out[shared_col] = np.where(present, (entity_all - cust_entity).astype(float), np.nan)

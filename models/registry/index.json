@@ -1,6 +1,6 @@
 {
   "champion": null,
-  "challenger": "bti-v3-hgb-20260923175252",
+  "challenger": "bti-v3-lgbm-20260923180905",
   "models": [
     {
       "model_id": "bti-v3-hgb-20260923160131",
@@ -17,6 +17,78 @@
     {
       "model_id": "bti-v3-hgb-20260923175252",
       "registered_at": "2026-09-23T17:52:52.709994+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-hgb-20260923180154",
+      "registered_at": "2026-09-23T18:01:54.824306+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "failed"
+    },
+    {
+      "model_id": "bti-v3-hgb-x-20260923180244",
+      "registered_at": "2026-09-23T18:02:44.922917+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-lgbm-20260923180324",
+      "registered_at": "2026-09-23T18:03:24.804394+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "failed"
+    },
+    {
+      "model_id": "bti-v3-lgbm-x-20260923180404",
+      "registered_at": "2026-09-23T18:04:05.017677+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-xgb-20260923180442",
+      "registered_at": "2026-09-23T18:04:42.815128+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "failed"
+    },
+    {
+      "model_id": "bti-v3-xgb-x-20260923180523",
+      "registered_at": "2026-09-23T18:05:23.855667+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "failed"
+    },
+    {
+      "model_id": "bti-v3-hgb-20260923180856",
+      "registered_at": "2026-09-23T18:08:56.352562+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-hgb-x-20260923180902",
+      "registered_at": "2026-09-23T18:09:02.618897+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-lgbm-20260923180905",
+      "registered_at": "2026-09-23T18:09:05.557668+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-lgbm-x-20260923180908",
+      "registered_at": "2026-09-23T18:09:08.936841+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-xgb-20260923180911",
+      "registered_at": "2026-09-23T18:09:11.449584+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-xgb-x-20260923180914",
+      "registered_at": "2026-09-23T18:09:14.126588+00:00",
       "developer": "Srijan Upadhyay",
       "validation_status": "passed"
     }
@@ -53,6 +125,14 @@
       "previous": "bti-v3-hgb-20260923175252",
       "approver": "Srijan Upadhyay",
       "rationale": "Re-registered with the correct developer of record (Srijan Upadhyay). Supersedes bti-v3-hgb-20260923160241, whose developer field was a placeholder. Same data, code and seed; all metrics identical."
+    },
+    {
+      "at": "2026-09-23T18:09:14.128604+00:00",
+      "role": "challenger",
+      "model_id": "bti-v3-lgbm-20260923180905",
+      "previous": "bti-v3-hgb-20260923175252",
+      "approver": "bti.modeling.tournament",
+      "rationale": "Remediation of finding: Feature v1 treated customers with no prior history as using a new device, raising false positives for thin-history and new-to-bank customers; legitimate German customers flagged 1.18-1.25x the norm at the 10% stress budget across all seven models (incumbent 1.229x, p=0.037). bti-v3-lgbm-20260923180905 is non-inferior (calibration PR-AUC 0.8524 vs incumbent 0.8507, floor 0.8457) and passes every gate. Selected on the calibration window."
     }
   ]
 }

@@ -19,7 +19,7 @@ only way to establish real lift over SAS.
 | # | Item | Status | Notes |
 |---|---|---|---|
 | 0.1 | Move `/score`, `/score/explain`, `/score/upload` and `/sas/enrich*` onto the v3 model | **Done** | One shared path (`bti/operations/scoring_service.py`): v3 score → expected-cost decision → shadow challenger → score log. Response shapes kept; `ml_lr_proba`, `ml_rf_proba`, `ml_iso_score` are now null; `risk_score` and post-event fields are accepted but ignored. |
-| 0.2 | Approve v3 as champion | **Pending** | Needs a named approver who is not the developer. Until then the model is provisional and cannot auto-decline on any endpoint. `python -m bti.modeling.promote --model bti-v3-hgb-20260923175252 --role champion --approver "<name, role>" --rationale "<validation reference>"` |
+| 0.2 | Approve v3 as champion | **Pending** | Needs a named approver who is not the developer. Until then the model is provisional and cannot auto-decline on any endpoint. `python -m bti.modeling.promote --model bti-v3-lgbm-20260923180905 --role champion --approver "<name, role>" --rationale "<validation reference>"` |
 | 0.3 | Scheduled PSI / CSI drift job with alerting | **Done** | Weekly (Mon 06:00 UTC, `BTI_DRIFT_CHECK_CRON`), live and shadow traffic, alerts via webhook/email at investigate/escalate, history in the audit log. `POST /governance/drift/run`, `GET /governance/drift/history`, `GET /governance/monitoring/schedule`. Enable the scheduler on one worker only. |
 | 0.4 | Latency and uptime reporting | **Done** | `GET /operations/service-metrics`: uptime, requests, 5xx rate and p50/p95/p99 per endpoint group; model scoring latency against the SLA from the score log. |
 
@@ -29,13 +29,37 @@ transactions (ROC-AUC 0.908)" — untrue, now corrected; IEEE-CIS style batches 
 
 ## Phase 1 — Model strength
 
-| Item | Status | Scope |
+| Item | Status | Notes |
 |---|---|---|
-| LightGBM and XGBoost challengers | New | Same monotonic constraints and SHAP additivity check; promoted only if they win out-of-time. Both install in this environment. |
-| Velocity features, round two | Extend | Built: 1h/24h/7d velocity, device/IP/merchant novelty, shared devices. Add merchant/terminal and payee velocity, structuring just under limits, time since password reset / SIM swap / new payee. |
-| Impossible travel / geo-velocity | New | Needs a licensed IP-geolocation feed. |
-| Time-series hyperparameter search | New | Rolling out-of-time folds. |
-| v3 training in the pipeline orchestrator | New | `python main.py pipeline` still retrains only the legacy models. |
+| LightGBM and XGBoost challengers | **Done** | `bti/modeling/algorithms.py`: histogram GBM, LightGBM, XGBoost behind one interface — same monotonic constraints, early stopping on the most recent 15% of the training window, refit to the best tree count so SHAP explains exactly what scores (additivity-checked). Pinned in `requirements.txt`. |
+| Velocity features, round two | **Done** | Extended feature set: merchant velocity 1h/24h, device velocity 24h, amount z-score vs the customer's own look-back history, just-below-threshold amounts and their 7-day repeats, hour-of-day deviation from the customer's usual time. Point-in-time and lineage-checked. Payee velocity and time since profile change need payee / security-event feeds the dataset does not have. |
+| Impossible travel / geo-velocity | **Pending** | Needs a licensed IP-geolocation feed. |
+| Time-series hyperparameter search | **Done** | `bti/modeling/tuning.py`: grid search on three rolling out-of-time folds inside the training window. |
+| Challenger tournament | **Done** | `python -m bti.modeling.tournament`: trains candidates on identical data, registers all of them, selects on the calibration window (never the out-of-time test), requires beating the incumbent by 0.005 PR-AUC. |
+| v3 training in the pipeline orchestrator | **Done** | The pipeline runs a tournament when the training data changes, rescores stored history, and dispatches alerts on v3 tiers. |
+| Rescore stored history | **Done** | The exception queue, transaction filters and customer-risk analytics read stored scores that were still the legacy composite. `python -m bti.modeling.rescore` rewrites them with the scoring v3 model; legacy values remain in the ML-scored CSV. |
+
+| Feature definitions versioned; novelty fix (v2) | **Done** | v1 treated "no prior history" as "new device", raising false positives for thin-history and new-to-bank customers. v2 marks novelty unknown without history. Every model records its feature version and is always scored with it (incumbent scores verified bit-identical). |
+
+**Tournament results (synthetic data):**
+
+1. *Tuned tournament, v1 features* — six candidates (histogram GBM, LightGBM, XGBoost × core, extended). None beat the
+   incumbent by the 0.005 PR-AUC margin; four of six failed the fairness gate at the 10% stress budget. Tuning moved
+   PR-AUC by ~0.002 while fold-to-fold variation was ±0.022 — gains within noise on this data.
+2. *Remediation tournament, v2 features* — all six candidates passed every gate. **`bti-v3-lgbm-20260923180905`
+   (LightGBM, core, v2) replaced the incumbent as challenger** under non-inferiority (calibration PR-AUC 0.8524 vs
+   0.8507). Out-of-time: ROC-AUC 0.9551, PR-AUC 0.8856 — level with the incumbent (0.9581 / 0.8866) within noise.
+   This was a fairness remediation, not an accuracy gain.
+
+Neither the algorithm swap nor the extended features materially improved accuracy on the synthetic data, whose fraud
+is generated from a few simple signals. Both are in place to be re-tested on bank data, where they are more likely
+to matter.
+
+**Open finding — Germany:** legitimate German customers are flagged ~1.23× the overall rate at the 10% stress budget
+in every model trained (current challenger 1.228×, p=0.035) — statistically significant but below the 1.25
+materiality threshold, so the gate passes. The v2 fix removed the larger disparities (Singapore 1.58–1.62×, Germany
+1.54×, Private Banking 1.28×) but not this residual. Monitor quarterly; re-test on real German data before any
+German deployment.
 
 ## Phase 2 — Run alongside SAS
 
@@ -52,7 +76,7 @@ transactions (ROC-AUC 0.908)" — untrue, now corrected; IEEE-CIS style batches 
 |---|---|---|
 | Documentation pack | Done | `GET /governance/models/{id}/documentation`. |
 | Benchmarking and sensitivity analysis | New | Challenger comparison, perturbation and stress tests in the pack. |
-| Outcomes analysis on matured labels | Extend | Add live calibration and fairness, quarterly. |
+| Outcomes analysis on matured labels | Extend | Add live calibration and fairness, quarterly. Track the open Germany finding (Phase 1). |
 | Validation workflow | New | Findings tracker, sign-off records, annual review schedule, model inventory in the database. |
 | Immutable audit storage | Extend | Append-only (WORM) storage and retention policy. |
 

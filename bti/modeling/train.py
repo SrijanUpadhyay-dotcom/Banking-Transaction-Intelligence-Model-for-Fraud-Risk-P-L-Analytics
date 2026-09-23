@@ -46,7 +46,7 @@ from bti.logging_config import get_logger
 from bti.modeling import algorithms, fx, registry
 from bti.modeling.calibration import PlattCalibrator
 from bti.modeling.features import (
-    CATEGORICAL_FEATURES, DEFAULT_LOOKBACK_DAYS, FEATURE_SETS, PROTECTED_ATTRIBUTES, SOURCE_FIELDS,
+    CATEGORICAL_FEATURES, DEFAULT_LOOKBACK_DAYS, FEATURE_SETS, FEATURE_VERSION, PROTECTED_ATTRIBUTES, SOURCE_FIELDS,
     Availability, assert_feature_lineage, build_features, event_timestamps, feature_specs,
     fit_category_encodings, leakage_audit, out_of_fold_category_encoding, to_model_matrix,
 )
@@ -145,9 +145,11 @@ class TrainingData:
     cut_test: pd.Timestamp
     source_audit: list
     lookback_days: int
+    feature_version: int = FEATURE_VERSION
 
 
-def prepare(data_path: Optional[Path] = None, lookback_days: int = DEFAULT_LOOKBACK_DAYS) -> TrainingData:
+def prepare(data_path: Optional[Path] = None, lookback_days: int = DEFAULT_LOOKBACK_DAYS,
+            feature_version: int = FEATURE_VERSION) -> TrainingData:
     assert_feature_lineage()
     data_path = Path(data_path or default_data_path())
     log.info("Loading training data", extra={"path": str(data_path)})
@@ -162,11 +164,13 @@ def prepare(data_path: Optional[Path] = None, lookback_days: int = DEFAULT_LOOKB
     es_val = tr & (np.arange(len(df)) >= es_start)
     return TrainingData(
         path=data_path, sha256=_sha256(data_path), df=df,
-        features=build_features(df, lookback_days=lookback_days), y=df[LABEL].to_numpy(), tr=tr,
+        features=build_features(df, lookback_days=lookback_days, feature_version=feature_version),
+        y=df[LABEL].to_numpy(), tr=tr,
         ca=((df["_ts"] >= cut_calib) & (df["_ts"] < cut_test)).to_numpy(),
         te=(df["_ts"] >= cut_test).to_numpy(), es_fit=tr & ~es_val, es_val=es_val,
         cut_calib=cut_calib, cut_test=cut_test,
         source_audit=leakage_audit(df.drop(columns=["_ts"]), LABEL), lookback_days=lookback_days,
+        feature_version=feature_version,
     )
 
 
@@ -299,6 +303,7 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
         "features": {
             "lookback_days": data.lookback_days,
             "feature_set": feature_set,
+            "feature_version": data.feature_version,
             "model_features": [{**asdict(f), "kind": f.kind.value} for f in specs],
             "monotone_increasing": [n for n in MONOTONE_INCREASING if n in names],
             "excluded_source_fields": [
@@ -349,6 +354,7 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
     }
     artifact = {"estimator": estimator, "calibrator": calibrator, "encodings": encodings,
                 "feature_names": names, "lookback_days": data.lookback_days, "algorithm": algorithm,
+                "feature_version": data.feature_version,
                 "reference_threshold": threshold, "model_id": model_id}
 
     if register:

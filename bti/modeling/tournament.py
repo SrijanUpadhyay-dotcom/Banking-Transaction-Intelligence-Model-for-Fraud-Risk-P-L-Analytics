@@ -10,6 +10,12 @@ must pass every validation gate and beat the incumbent's calibration-window
 PR-AUC by `min_gain` to take the challenger slot. Champion promotion remains a
 separate, human, four-eyes decision.
 
+Remediation mode (`--remediation "<finding>"`) is for replacing an incumbent
+with a known defect: the incumbent cannot win, and the best new candidate that
+passes every gate replaces it if it is non-inferior (calibration PR-AUC no more
+than `min_gain` below the incumbent's). The finding is recorded with the role
+change.
+
 Usage:
   python -m bti.modeling.tournament --developer "Srijan Upadhyay" \\
       --algorithms hgb lightgbm xgboost --feature-sets core extended --tune
@@ -53,7 +59,8 @@ def _summary(card: Dict, incumbent: bool = False) -> Dict:
 
 
 def run_tournament(developer: str, algorithm_names: List[str], feature_sets: List[str], tune: bool = False,
-                   data_path=None, min_gain: float = DEFAULT_MIN_GAIN, assign: bool = True) -> Dict:
+                   data_path=None, min_gain: float = DEFAULT_MIN_GAIN, assign: bool = True,
+                   remediation: str = "") -> Dict:
     t0 = time.time()
     data = prepare(data_path)
     incumbent_id = registry.model_for_role("challenger") or registry.model_for_role("champion")
@@ -73,11 +80,27 @@ def run_tournament(developer: str, algorithm_names: List[str], feature_sets: Lis
             log.info("Candidate registered", extra={"model_id": card["model_id"],
                                                      "validation": card["validation"]["status"]})
 
-    eligible = [e for e in entrants if e["validation"] == "passed"]
+    eligible = [e for e in entrants if e["validation"] == "passed" and not (remediation and e["incumbent"])]
     best = max(eligible, key=lambda e: e["calibration_pr_auc"], default=None)
     incumbent = next((e for e in entrants if e["incumbent"]), None)
 
-    if best is None:
+    if remediation and best is not None and incumbent is not None:
+        floor = incumbent["calibration_pr_auc"] - min_gain
+        if best["calibration_pr_auc"] >= floor:
+            decision = {"outcome": "remediation_replacement", "challenger": best["model_id"],
+                        "previous": incumbent_id, "finding": remediation,
+                        "reason": f"{best['model_id']} is non-inferior (calibration PR-AUC {best['calibration_pr_auc']}"
+                                  f" vs incumbent {incumbent['calibration_pr_auc']}, floor {round(floor, 4)}) and "
+                                  f"passes every gate"}
+            if assign:
+                registry.assign_role(best["model_id"], "challenger", approver="bti.modeling.tournament",
+                                     rationale=f"Remediation of finding: {remediation}. {decision['reason']}. "
+                                               f"Selected on the calibration window.")
+        else:
+            decision = {"outcome": "remediation_blocked", "challenger": incumbent_id, "finding": remediation,
+                        "reason": f"Best fix {best['model_id']} ({best['calibration_pr_auc']}) is below the "
+                                  f"non-inferiority floor {round(floor, 4)}; escalate for a risk decision"}
+    elif best is None:
         decision = {"outcome": "no_eligible_candidate", "challenger": incumbent_id}
     elif best["incumbent"]:
         decision = {"outcome": "incumbent_retained", "challenger": incumbent_id,
@@ -101,8 +124,11 @@ def run_tournament(developer: str, algorithm_names: List[str], feature_sets: Lis
     report = {
         "run_at": datetime.now(timezone.utc).isoformat(),
         "developer": developer,
-        "selection_rule": f"Passed all validation gates; highest calibration-window PR-AUC; must beat the "
-                          f"incumbent by {min_gain}. Out-of-time window reported, never used to select.",
+        "selection_rule": (f"Remediation: incumbent excluded; best passing candidate replaces it if non-inferior "
+                           f"(within {min_gain} calibration PR-AUC)." if remediation else
+                           f"Passed all validation gates; highest calibration-window PR-AUC; must beat the "
+                           f"incumbent by {min_gain}.") + " Out-of-time window reported, never used to select.",
+        "remediation_finding": remediation or None,
         "tuned": tune,
         "entrants": sorted(entrants, key=lambda e: -(e["calibration_pr_auc"] or 0)),
         "decision": decision,
@@ -126,8 +152,10 @@ def main() -> None:
     parser.add_argument("--feature-sets", nargs="+", choices=["core", "extended"], default=["core", "extended"])
     parser.add_argument("--tune", action="store_true")
     parser.add_argument("--min-gain", type=float, default=DEFAULT_MIN_GAIN)
+    parser.add_argument("--remediation", default="", help="Finding being remediated; switches to non-inferiority")
     args = parser.parse_args()
-    r = run_tournament(args.developer, args.algorithms, args.feature_sets, args.tune, min_gain=args.min_gain)
+    r = run_tournament(args.developer, args.algorithms, args.feature_sets, args.tune, min_gain=args.min_gain,
+                       remediation=args.remediation)
     print(f"{'model':32s} {'algo/features':20s} {'gates':10s} {'cal PR':>7s} {'OOT PR':>7s} {'OOT ROC':>8s} {'ECE':>7s}")
     for e in r["entrants"]:
         tag = " (incumbent)" if e["incumbent"] else ""
