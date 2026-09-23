@@ -181,6 +181,55 @@ class AuditLog(Base):
     user_agent     = Column(String(200))
 
 
+class ScoreLog(Base):
+    """
+    Every v3 score, champion and shadow challenger alike. The source for live
+    drift monitoring, champion/challenger comparison, operational KPIs and the
+    decision audit trail.
+    """
+    __tablename__ = "score_log"
+
+    id                = Column(Integer, primary_key=True, autoincrement=True)
+    transaction_id    = Column(String(50), nullable=False, index=True)
+    customer_id       = Column(String(50), index=True)
+    model_id          = Column(String(64), nullable=False, index=True)
+    model_role        = Column(String(20), nullable=False)
+    is_shadow         = Column(Boolean, default=False, index=True)
+    fraud_probability = Column(Float, nullable=False)
+    score             = Column(Integer)
+    decision          = Column(String(20), index=True)
+    jurisdiction      = Column(String(2), index=True)
+    amount_usd        = Column(Float)
+    reason_codes      = Column(JSON)
+    features          = Column(JSON)
+    guardrails        = Column(JSON)
+    latency_ms        = Column(Float)
+    scored_at         = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (Index("ix_score_log_model_time", "model_id", "scored_at"),)
+
+
+class FraudLabel(Base):
+    """
+    Confirmed outcomes fed back from disputes, chargebacks and investigations.
+    Append-only: the latest label per transaction wins, earlier ones stay for audit.
+    """
+    __tablename__ = "fraud_labels"
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    transaction_id   = Column(String(50), nullable=False, index=True)
+    label            = Column(Integer, nullable=False)
+    label_source     = Column(String(40), nullable=False)
+    fraud_type       = Column(String(100))
+    event_at         = Column(DateTime, nullable=False, index=True)
+    loss_amount      = Column(Float)
+    recovered_amount = Column(Float)
+    currency         = Column(String(5))
+    reported_by      = Column(String(100))
+    notes            = Column(Text)
+    created_at       = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class ModelRegistry(Base):
     """Versioned ML model metadata — tracks which model version scored a transaction."""
     __tablename__ = "model_registry"

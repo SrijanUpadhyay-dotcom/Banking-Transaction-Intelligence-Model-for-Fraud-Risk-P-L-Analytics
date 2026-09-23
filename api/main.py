@@ -18,6 +18,9 @@ Endpoints:
   GET  /api/v1/pipeline/status
   POST /api/v1/score/              — real-time single-transaction scoring (<100ms)
   GET  /api/v1/score/model-info    — current model version and metrics
+  POST /api/v1/v3/score            — leak-free v3 score + expected-cost decision + reason codes
+  GET  /api/v1/governance/models   — model inventory, cards, documentation, promotion
+  GET  /api/v1/operations/kpis     — fraud-ops KPIs, labels feedback, champion/challenger
   POST /api/v1/score/reload-models — reload models after retraining
 
 Swagger UI: http://localhost:8000/docs
@@ -34,7 +37,9 @@ from fastapi.responses import JSONResponse
 from bti.config import get_settings
 from bti.logging_config import setup_logging, get_logger
 from bti.database.init_db import create_tables
-from api.routers import transactions, alerts, analytics, pipeline, scoring, graph, copilot, sas
+from api.routers import (
+    transactions, alerts, analytics, pipeline, scoring, graph, copilot, sas, v3, governance, operations,
+)
 
 settings = get_settings()
 log = setup_logging(log_level=settings.log_level, log_format="json")
@@ -128,6 +133,9 @@ app.include_router(scoring.router, prefix=API_PREFIX)
 app.include_router(graph.router,   prefix=API_PREFIX)
 app.include_router(copilot.router, prefix=API_PREFIX)
 app.include_router(sas.router,    prefix=API_PREFIX)
+app.include_router(v3.router,     prefix=API_PREFIX)
+app.include_router(governance.router, prefix=API_PREFIX)
+app.include_router(operations.router, prefix=API_PREFIX)
 
 
 if __name__ == "__main__":
