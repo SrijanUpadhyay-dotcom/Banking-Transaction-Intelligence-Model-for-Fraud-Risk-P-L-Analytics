@@ -89,6 +89,22 @@ REASON_CODES: Dict[str, Dict[str, str]] = {
         "analyst": "Transaction type with elevated fraud rates",
         "customer": "The type of transaction",
     },
+    "GEO_VELOCITY": {
+        "analyst": "Location implausibly far from the customer's previous transaction (impossible travel)",
+        "customer": "The location of this transaction",
+    },
+    "NEW_PAYEE": {
+        "analyst": "Payment to a payee new for this customer, or several new payees in a short time",
+        "customer": "This is a new payee for you",
+    },
+    "PAYEE_VELOCITY": {
+        "analyst": "Payee recently paid by many other customers (possible mule account)",
+        "customer": "The account you are paying",
+    },
+    "SECURITY_EVENT": {
+        "analyst": "Recent password reset, SIM swap, contact-detail change or new device enrolment",
+        "customer": "Recent changes to your account security settings",
+    },
 }
 
 

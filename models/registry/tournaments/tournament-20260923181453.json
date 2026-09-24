@@ -1,0 +1,133 @@
+{
+  "run_at": "2026-09-23T18:14:53.673553+00:00",
+  "developer": "Srijan Upadhyay",
+  "selection_rule": "Remediation: incumbent excluded; best passing candidate replaces it if non-inferior (within 0.005 calibration PR-AUC). Out-of-time window reported, never used to select.",
+  "remediation_finding": "Absolute amount features act as a wealth and country proxy: legitimate German customers (median transaction 3x the book, equal fraud rate) flagged ~1.23x the norm at the 10% stress budget in every model (challenger bti-v3-lgbm-20260923180905: 1.228x, p=0.035)",
+  "tuned": false,
+  "entrants": [
+    {
+      "model_id": "bti-v3-lgbm-20260923180905",
+      "incumbent": true,
+      "algorithm": "lightgbm",
+      "feature_set": "core",
+      "validation": "passed",
+      "failed_gates": [],
+      "calibration_pr_auc": 0.8524,
+      "calibration_roc_auc": 0.9413,
+      "oot_pr_auc": 0.8856,
+      "oot_roc_auc": 0.9551,
+      "oot_ks": 0.8476,
+      "oot_ece": 0.00301,
+      "tuned": false
+    },
+    {
+      "model_id": "bti-v3-xgb-r-20260923181450",
+      "incumbent": false,
+      "algorithm": "xgboost",
+      "feature_set": "core-relative",
+      "validation": "passed",
+      "failed_gates": [],
+      "calibration_pr_auc": 0.8519,
+      "calibration_roc_auc": 0.9419,
+      "oot_pr_auc": 0.8857,
+      "oot_roc_auc": 0.9556,
+      "oot_ks": 0.8449,
+      "oot_ece": 0.00305,
+      "tuned": false
+    },
+    {
+      "model_id": "bti-v3-lgbm-r-20260923181444",
+      "incumbent": false,
+      "algorithm": "lightgbm",
+      "feature_set": "core-relative",
+      "validation": "passed",
+      "failed_gates": [],
+      "calibration_pr_auc": 0.8514,
+      "calibration_roc_auc": 0.9415,
+      "oot_pr_auc": 0.8847,
+      "oot_roc_auc": 0.9552,
+      "oot_ks": 0.8459,
+      "oot_ece": 0.00313,
+      "tuned": false
+    },
+    {
+      "model_id": "bti-v3-lgbm-xr-20260923181447",
+      "incumbent": false,
+      "algorithm": "lightgbm",
+      "feature_set": "extended-relative",
+      "validation": "passed",
+      "failed_gates": [],
+      "calibration_pr_auc": 0.8509,
+      "calibration_roc_auc": 0.9409,
+      "oot_pr_auc": 0.8865,
+      "oot_roc_auc": 0.9562,
+      "oot_ks": 0.8469,
+      "oot_ece": 0.00273,
+      "tuned": false
+    },
+    {
+      "model_id": "bti-v3-xgb-xr-20260923181453",
+      "incumbent": false,
+      "algorithm": "xgboost",
+      "feature_set": "extended-relative",
+      "validation": "failed",
+      "failed_gates": [
+        "fairness"
+      ],
+      "calibration_pr_auc": 0.8502,
+      "calibration_roc_auc": 0.9412,
+      "oot_pr_auc": 0.8865,
+      "oot_roc_auc": 0.9554,
+      "oot_ks": 0.8464,
+      "oot_ece": 0.0029,
+      "tuned": false
+    },
+    {
+      "model_id": "bti-v3-hgb-xr-20260923181441",
+      "incumbent": false,
+      "algorithm": "hgb",
+      "feature_set": "extended-relative",
+      "validation": "failed",
+      "failed_gates": [
+        "fairness"
+      ],
+      "calibration_pr_auc": 0.85,
+      "calibration_roc_auc": 0.941,
+      "oot_pr_auc": 0.8825,
+      "oot_roc_auc": 0.9552,
+      "oot_ks": 0.8443,
+      "oot_ece": 0.0028,
+      "tuned": false
+    },
+    {
+      "model_id": "bti-v3-hgb-r-20260923181435",
+      "incumbent": false,
+      "algorithm": "hgb",
+      "feature_set": "core-relative",
+      "validation": "failed",
+      "failed_gates": [
+        "fairness"
+      ],
+      "calibration_pr_auc": 0.8485,
+      "calibration_roc_auc": 0.9392,
+      "oot_pr_auc": 0.8827,
+      "oot_roc_auc": 0.9558,
+      "oot_ks": 0.844,
+      "oot_ece": 0.0026,
+      "tuned": false
+    }
+  ],
+  "decision": {
+    "outcome": "remediation_replacement",
+    "challenger": "bti-v3-xgb-r-20260923181450",
+    "previous": "bti-v3-lgbm-20260923180905",
+    "finding": "Absolute amount features act as a wealth and country proxy: legitimate German customers (median transaction 3x the book, equal fraud rate) flagged ~1.23x the norm at the 10% stress budget in every model (challenger bti-v3-lgbm-20260923180905: 1.228x, p=0.035)",
+    "reason": "bti-v3-xgb-r-20260923181450 is non-inferior (calibration PR-AUC 0.8519 vs incumbent 0.8524, floor 0.8474) and passes every gate"
+  },
+  "rank_agreement": {
+    "calibration_winner": "bti-v3-xgb-r-20260923181450",
+    "out_of_time_winner": "bti-v3-lgbm-xr-20260923181447",
+    "agree": false
+  },
+  "seconds": 26.6
+}

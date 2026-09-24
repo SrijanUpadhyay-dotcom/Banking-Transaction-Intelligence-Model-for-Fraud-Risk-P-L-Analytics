@@ -1,6 +1,6 @@
 {
   "champion": null,
-  "challenger": "bti-v3-lgbm-20260923180905",
+  "challenger": "bti-v3-xgb-r-20260923181450",
   "models": [
     {
       "model_id": "bti-v3-hgb-20260923160131",
@@ -91,6 +91,42 @@
       "registered_at": "2026-09-23T18:09:14.126588+00:00",
       "developer": "Srijan Upadhyay",
       "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-hgb-r-20260923181435",
+      "registered_at": "2026-09-23T18:14:35.246738+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "failed"
+    },
+    {
+      "model_id": "bti-v3-hgb-xr-20260923181441",
+      "registered_at": "2026-09-23T18:14:41.847009+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "failed"
+    },
+    {
+      "model_id": "bti-v3-lgbm-r-20260923181444",
+      "registered_at": "2026-09-23T18:14:44.773534+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-lgbm-xr-20260923181447",
+      "registered_at": "2026-09-23T18:14:48.037866+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-xgb-r-20260923181450",
+      "registered_at": "2026-09-23T18:14:50.748605+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-xgb-xr-20260923181453",
+      "registered_at": "2026-09-23T18:14:53.670004+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "failed"
     }
   ],
   "history": [
@@ -133,6 +169,1241 @@
       "previous": "bti-v3-hgb-20260923175252",
       "approver": "bti.modeling.tournament",
       "rationale": "Remediation of finding: Feature v1 treated customers with no prior history as using a new device, raising false positives for thin-history and new-to-bank customers; legitimate German customers flagged 1.18-1.25x the norm at the 10% stress budget across all seven models (incumbent 1.229x, p=0.037). bti-v3-lgbm-20260923180905 is non-inferior (calibration PR-AUC 0.8524 vs incumbent 0.8507, floor 0.8457) and passes every gate. Selected on the calibration window."
+    },
+    {
+      "at": "2026-09-23T18:14:53.673089+00:00",
+      "role": "challenger",
+      "model_id": "bti-v3-xgb-r-20260923181450",
+      "previous": "bti-v3-lgbm-20260923180905",
+      "approver": "bti.modeling.tournament",
+      "rationale": "Remediation of finding: Absolute amount features act as a wealth and country proxy: legitimate German customers (median transaction 3x the book, equal fraud rate) flagged ~1.23x the norm at the 10% stress budget in every model (challenger bti-v3-lgbm-20260923180905: 1.228x, p=0.035). bti-v3-xgb-r-20260923181450 is non-inferior (calibration PR-AUC 0.8519 vs incumbent 0.8524, floor 0.8474) and passes every gate. Selected on the calibration window."
+    }
+  ],
+  "notes": [
+    {
+      "at": "2026-09-24T13:06:37.929867+00:00",
+      "model_id": "bti-v3-hgb-20260923160131",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. This differs from the registered verdict (review_required). Findings: none. Watchlist: country=Nigeria pooled 1.21x (q 0.4384); customer_segment=Student pooled 1.201x (q 0.4384).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Student",
+            "window": "out_of_time",
+            "fpr_ratio": 1.336,
+            "fpr_p_value": 0.0064,
+            "pooled_fpr_ratio": 1.201,
+            "pooled_q_value": 0.4384,
+            "window_ratios": {
+              "out_of_time": 1.336,
+              "calibration": 0.965
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Nigeria",
+            "window": "calibration",
+            "fpr_ratio": 1.68,
+            "fpr_p_value": 0.0012,
+            "pooled_fpr_ratio": 1.21,
+            "pooled_q_value": 0.4384,
+            "window_ratios": {
+              "out_of_time": 0.97,
+              "calibration": 1.68
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.930871+00:00",
+      "model_id": "bti-v3-hgb-20260923160241",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. Findings: none. Watchlist: country=Nigeria pooled 1.079x (q 0.7068); customer_segment=Corporate pooled 1.199x (q 0.3418); customer_segment=Premium pooled 1.217x (q 0.6304); customer_segment=Private Banking pooled 1.218x (q 0.3418).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_5pct_budget",
+            "attribute": "customer_segment",
+            "group": "Premium",
+            "window": "calibration",
+            "fpr_ratio": 1.463,
+            "fpr_p_value": 0.0355,
+            "pooled_fpr_ratio": 1.217,
+            "pooled_q_value": 0.6304,
+            "window_ratios": {
+              "out_of_time": 1.083,
+              "calibration": 1.463
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "window": "calibration",
+            "fpr_ratio": 1.338,
+            "fpr_p_value": 0.031,
+            "pooled_fpr_ratio": 1.199,
+            "pooled_q_value": 0.3418,
+            "window_ratios": {
+              "out_of_time": 1.122,
+              "calibration": 1.338
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "window": "calibration",
+            "fpr_ratio": 1.427,
+            "fpr_p_value": 0.0294,
+            "pooled_fpr_ratio": 1.218,
+            "pooled_q_value": 0.3418,
+            "window_ratios": {
+              "out_of_time": 1.109,
+              "calibration": 1.427
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Nigeria",
+            "window": "calibration",
+            "fpr_ratio": 1.525,
+            "fpr_p_value": 0.0123,
+            "pooled_fpr_ratio": 1.079,
+            "pooled_q_value": 0.7068,
+            "window_ratios": {
+              "out_of_time": 0.85,
+              "calibration": 1.525
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.931747+00:00",
+      "model_id": "bti-v3-hgb-20260923175252",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. Findings: none. Watchlist: country=Nigeria pooled 1.079x (q 0.7068); customer_segment=Corporate pooled 1.199x (q 0.3418); customer_segment=Premium pooled 1.217x (q 0.6304); customer_segment=Private Banking pooled 1.218x (q 0.3418).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_5pct_budget",
+            "attribute": "customer_segment",
+            "group": "Premium",
+            "window": "calibration",
+            "fpr_ratio": 1.463,
+            "fpr_p_value": 0.0355,
+            "pooled_fpr_ratio": 1.217,
+            "pooled_q_value": 0.6304,
+            "window_ratios": {
+              "out_of_time": 1.083,
+              "calibration": 1.463
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "window": "calibration",
+            "fpr_ratio": 1.338,
+            "fpr_p_value": 0.031,
+            "pooled_fpr_ratio": 1.199,
+            "pooled_q_value": 0.3418,
+            "window_ratios": {
+              "out_of_time": 1.122,
+              "calibration": 1.338
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "window": "calibration",
+            "fpr_ratio": 1.427,
+            "fpr_p_value": 0.0294,
+            "pooled_fpr_ratio": 1.218,
+            "pooled_q_value": 0.3418,
+            "window_ratios": {
+              "out_of_time": 1.109,
+              "calibration": 1.427
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Nigeria",
+            "window": "calibration",
+            "fpr_ratio": 1.525,
+            "fpr_p_value": 0.0123,
+            "pooled_fpr_ratio": 1.079,
+            "pooled_q_value": 0.7068,
+            "window_ratios": {
+              "out_of_time": 0.85,
+              "calibration": 1.525
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.932508+00:00",
+      "model_id": "bti-v3-hgb-20260923180154",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. This differs from the registered verdict (review_required). Findings: none. Watchlist: country=Nigeria pooled 1.155x (q 0.6237); country=Singapore pooled 1.295x (q 0.9744); customer_segment=Corporate pooled 1.143x (q 0.6237).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_5pct_budget",
+            "attribute": "country",
+            "group": "Singapore",
+            "window": "out_of_time",
+            "fpr_ratio": 1.621,
+            "fpr_p_value": 0.0345,
+            "pooled_fpr_ratio": 1.295,
+            "pooled_q_value": 0.9744,
+            "window_ratios": {
+              "out_of_time": 1.621,
+              "calibration": 0.864
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "window": "calibration",
+            "fpr_ratio": 1.313,
+            "fpr_p_value": 0.0464,
+            "pooled_fpr_ratio": 1.143,
+            "pooled_q_value": 0.6237,
+            "window_ratios": {
+              "out_of_time": 1.045,
+              "calibration": 1.313
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Nigeria",
+            "window": "calibration",
+            "fpr_ratio": 1.43,
+            "fpr_p_value": 0.0407,
+            "pooled_fpr_ratio": 1.155,
+            "pooled_q_value": 0.6237,
+            "window_ratios": {
+              "out_of_time": 1.009,
+              "calibration": 1.43
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.933296+00:00",
+      "model_id": "bti-v3-hgb-x-20260923180244",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. Findings: none. Watchlist: country=Nigeria pooled 1.191x (q 0.651).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Nigeria",
+            "window": "calibration",
+            "fpr_ratio": 1.417,
+            "fpr_p_value": 0.046,
+            "pooled_fpr_ratio": 1.191,
+            "pooled_q_value": 0.651,
+            "window_ratios": {
+              "out_of_time": 1.072,
+              "calibration": 1.417
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.934192+00:00",
+      "model_id": "bti-v3-lgbm-20260923180324",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: review_required. Findings: customer_segment=Private Banking pooled 1.334x (q 0.0325). Watchlist: country=Singapore pooled 1.353x (q 0.8043); customer_segment=Corporate pooled 1.205x (q 0.1774).",
+      "data": {
+        "status": "review_required",
+        "findings": [
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "pooled_fpr_ratio": 1.334,
+            "pooled_q_value": 0.0325,
+            "legit_flagged": 92,
+            "window_ratios": {
+              "out_of_time": 1.261,
+              "calibration": 1.474
+            }
+          }
+        ],
+        "watchlist": [
+          {
+            "operating_point": "stress_5pct_budget",
+            "attribute": "country",
+            "group": "Singapore",
+            "window": "out_of_time",
+            "fpr_ratio": 1.579,
+            "fpr_p_value": 0.0346,
+            "pooled_fpr_ratio": 1.353,
+            "pooled_q_value": 0.8043,
+            "window_ratios": {
+              "out_of_time": 1.579,
+              "calibration": 1.01
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "window": "calibration",
+            "fpr_ratio": 1.398,
+            "fpr_p_value": 0.0112,
+            "pooled_fpr_ratio": 1.205,
+            "pooled_q_value": 0.1774,
+            "window_ratios": {
+              "out_of_time": 1.1,
+              "calibration": 1.398
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.935285+00:00",
+      "model_id": "bti-v3-lgbm-x-20260923180404",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. Findings: none. Watchlist: country=Nigeria pooled 1.053x (q 0.7761); customer_age_band=46\u201355 pooled 1.185x (q 0.7652); customer_segment=Private Banking pooled 1.511x (q 0.7652).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_5pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "window": "calibration",
+            "fpr_ratio": 2.207,
+            "fpr_p_value": 0.0079,
+            "pooled_fpr_ratio": 1.511,
+            "pooled_q_value": 0.7652,
+            "window_ratios": {
+              "out_of_time": 1.086,
+              "calibration": 2.207
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_5pct_budget",
+            "attribute": "customer_age_band",
+            "group": "46\u201355",
+            "window": "calibration",
+            "fpr_ratio": 1.493,
+            "fpr_p_value": 0.0319,
+            "pooled_fpr_ratio": 1.185,
+            "pooled_q_value": 0.7652,
+            "window_ratios": {
+              "out_of_time": 0.973,
+              "calibration": 1.493
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Nigeria",
+            "window": "calibration",
+            "fpr_ratio": 1.469,
+            "fpr_p_value": 0.025,
+            "pooled_fpr_ratio": 1.053,
+            "pooled_q_value": 0.7761,
+            "window_ratios": {
+              "out_of_time": 0.835,
+              "calibration": 1.469
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.936354+00:00",
+      "model_id": "bti-v3-xgb-20260923180442",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: review_required. Findings: customer_segment=Private Banking pooled 1.377x (q 0.0116). Watchlist: country=Germany pooled 1.115x (q 0.3826); customer_segment=Corporate pooled 1.207x (q 0.0966).",
+      "data": {
+        "status": "review_required",
+        "findings": [
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "pooled_fpr_ratio": 1.377,
+            "pooled_q_value": 0.0116,
+            "legit_flagged": 94,
+            "window_ratios": {
+              "out_of_time": 1.281,
+              "calibration": 1.557
+            }
+          }
+        ],
+        "watchlist": [
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Germany",
+            "window": "out_of_time",
+            "fpr_ratio": 1.252,
+            "fpr_p_value": 0.0211,
+            "pooled_fpr_ratio": 1.115,
+            "pooled_q_value": 0.3826,
+            "window_ratios": {
+              "out_of_time": 1.252,
+              "calibration": 0.892
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "window": "calibration",
+            "fpr_ratio": 1.367,
+            "fpr_p_value": 0.0193,
+            "pooled_fpr_ratio": 1.207,
+            "pooled_q_value": 0.0966,
+            "window_ratios": {
+              "out_of_time": 1.118,
+              "calibration": 1.367
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.937663+00:00",
+      "model_id": "bti-v3-xgb-x-20260923180523",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. This differs from the registered verdict (review_required). Findings: none. Watchlist: country=Germany pooled 1.262x (q 0.7135); country=Nigeria pooled 1.167x (q 0.4625); customer_segment=Corporate pooled 1.145x (q 0.4512); customer_segment=Private Banking pooled 1.244x (q 0.4512).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_5pct_budget",
+            "attribute": "country",
+            "group": "Germany",
+            "window": "out_of_time",
+            "fpr_ratio": 1.538,
+            "fpr_p_value": 0.0466,
+            "pooled_fpr_ratio": 1.262,
+            "pooled_q_value": 0.7135,
+            "window_ratios": {
+              "out_of_time": 1.538,
+              "calibration": 0.849
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "window": "calibration",
+            "fpr_ratio": 1.361,
+            "fpr_p_value": 0.0212,
+            "pooled_fpr_ratio": 1.145,
+            "pooled_q_value": 0.4512,
+            "window_ratios": {
+              "out_of_time": 1.016,
+              "calibration": 1.361
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "window": "calibration",
+            "fpr_ratio": 1.464,
+            "fpr_p_value": 0.0177,
+            "pooled_fpr_ratio": 1.244,
+            "pooled_q_value": 0.4512,
+            "window_ratios": {
+              "out_of_time": 1.124,
+              "calibration": 1.464
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Nigeria",
+            "window": "calibration",
+            "fpr_ratio": 1.469,
+            "fpr_p_value": 0.025,
+            "pooled_fpr_ratio": 1.167,
+            "pooled_q_value": 0.4625,
+            "window_ratios": {
+              "out_of_time": 1.003,
+              "calibration": 1.469
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.939039+00:00",
+      "model_id": "bti-v3-hgb-20260923180856",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. Findings: none. Watchlist: country=Nigeria pooled 1.189x (q 0.3838); customer_segment=Private Banking pooled 1.296x (q 0.1806).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "window": "calibration",
+            "fpr_ratio": 1.636,
+            "fpr_p_value": 0.0011,
+            "pooled_fpr_ratio": 1.296,
+            "pooled_q_value": 0.1806,
+            "window_ratios": {
+              "out_of_time": 1.122,
+              "calibration": 1.636
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Nigeria",
+            "window": "calibration",
+            "fpr_ratio": 1.567,
+            "fpr_p_value": 0.0067,
+            "pooled_fpr_ratio": 1.189,
+            "pooled_q_value": 0.3838,
+            "window_ratios": {
+              "out_of_time": 0.998,
+              "calibration": 1.567
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.940322+00:00",
+      "model_id": "bti-v3-hgb-x-20260923180902",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. Findings: none. Watchlist: country=Nigeria pooled 1.186x (q 0.393); customer_segment=Corporate pooled 1.149x (q 0.393); customer_segment=Private Banking pooled 1.238x (q 0.393).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "window": "calibration",
+            "fpr_ratio": 1.326,
+            "fpr_p_value": 0.0365,
+            "pooled_fpr_ratio": 1.149,
+            "pooled_q_value": 0.393,
+            "window_ratios": {
+              "out_of_time": 1.05,
+              "calibration": 1.326
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "window": "calibration",
+            "fpr_ratio": 1.543,
+            "fpr_p_value": 0.0054,
+            "pooled_fpr_ratio": 1.238,
+            "pooled_q_value": 0.393,
+            "window_ratios": {
+              "out_of_time": 1.078,
+              "calibration": 1.543
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Nigeria",
+            "window": "calibration",
+            "fpr_ratio": 1.512,
+            "fpr_p_value": 0.0143,
+            "pooled_fpr_ratio": 1.186,
+            "pooled_q_value": 0.393,
+            "window_ratios": {
+              "out_of_time": 1.017,
+              "calibration": 1.512
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.941635+00:00",
+      "model_id": "bti-v3-lgbm-20260923180905",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: review_required. This differs from the registered verdict (pass). Findings: customer_segment=Corporate pooled 1.273x (q 0.0325); customer_segment=Private Banking pooled 1.317x (q 0.0325). Watchlist: none.",
+      "data": {
+        "status": "review_required",
+        "findings": [
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "pooled_fpr_ratio": 1.273,
+            "pooled_q_value": 0.0325,
+            "legit_flagged": 126,
+            "window_ratios": {
+              "out_of_time": 1.175,
+              "calibration": 1.455
+            }
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "pooled_fpr_ratio": 1.317,
+            "pooled_q_value": 0.0325,
+            "legit_flagged": 91,
+            "window_ratios": {
+              "out_of_time": 1.191,
+              "calibration": 1.56
+            }
+          }
+        ],
+        "watchlist": [],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.943210+00:00",
+      "model_id": "bti-v3-lgbm-x-20260923180908",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. Findings: none. Watchlist: country=Nigeria pooled 1.077x (q 0.7751); customer_age_band=46\u201355 pooled 1.096x (q 0.8159); customer_segment=Corporate pooled 1.166x (q 0.3977); customer_segment=Private Banking pooled 1.289x (q 0.1166); customer_segment=Private Banking pooled 1.443x (q 0.6405).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_5pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "window": "calibration",
+            "fpr_ratio": 2.033,
+            "fpr_p_value": 0.0247,
+            "pooled_fpr_ratio": 1.443,
+            "pooled_q_value": 0.6405,
+            "window_ratios": {
+              "out_of_time": 1.141,
+              "calibration": 2.033
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_5pct_budget",
+            "attribute": "customer_age_band",
+            "group": "46\u201355",
+            "window": "calibration",
+            "fpr_ratio": 1.461,
+            "fpr_p_value": 0.0471,
+            "pooled_fpr_ratio": 1.096,
+            "pooled_q_value": 0.8159,
+            "window_ratios": {
+              "out_of_time": 0.893,
+              "calibration": 1.461
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "window": "calibration",
+            "fpr_ratio": 1.392,
+            "fpr_p_value": 0.0123,
+            "pooled_fpr_ratio": 1.166,
+            "pooled_q_value": 0.3977,
+            "window_ratios": {
+              "out_of_time": 1.039,
+              "calibration": 1.392
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "window": "calibration",
+            "fpr_ratio": 1.424,
+            "fpr_p_value": 0.0304,
+            "pooled_fpr_ratio": 1.289,
+            "pooled_q_value": 0.1166,
+            "window_ratios": {
+              "out_of_time": 1.216,
+              "calibration": 1.424
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Nigeria",
+            "window": "calibration",
+            "fpr_ratio": 1.473,
+            "fpr_p_value": 0.0241,
+            "pooled_fpr_ratio": 1.077,
+            "pooled_q_value": 0.7751,
+            "window_ratios": {
+              "out_of_time": 0.873,
+              "calibration": 1.473
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.944718+00:00",
+      "model_id": "bti-v3-xgb-20260923180911",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: review_required. This differs from the registered verdict (pass). Findings: customer_segment=Corporate pooled 1.289x (q 0.0231); customer_segment=Private Banking pooled 1.314x (q 0.0394). Watchlist: country=Nigeria pooled 1.035x (q 0.9514).",
+      "data": {
+        "status": "review_required",
+        "findings": [
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "pooled_fpr_ratio": 1.289,
+            "pooled_q_value": 0.0231,
+            "legit_flagged": 125,
+            "window_ratios": {
+              "out_of_time": 1.194,
+              "calibration": 1.459
+            }
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "pooled_fpr_ratio": 1.314,
+            "pooled_q_value": 0.0394,
+            "legit_flagged": 89,
+            "window_ratios": {
+              "out_of_time": 1.182,
+              "calibration": 1.564
+            }
+          }
+        ],
+        "watchlist": [
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Nigeria",
+            "window": "calibration",
+            "fpr_ratio": 1.433,
+            "fpr_p_value": 0.0394,
+            "pooled_fpr_ratio": 1.035,
+            "pooled_q_value": 0.9514,
+            "window_ratios": {
+              "out_of_time": 0.83,
+              "calibration": 1.433
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.946373+00:00",
+      "model_id": "bti-v3-xgb-x-20260923180914",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. Findings: none. Watchlist: customer_segment=Corporate pooled 1.209x (q 0.1648); customer_segment=Private Banking pooled 1.264x (q 0.1648).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "window": "calibration",
+            "fpr_ratio": 1.449,
+            "fpr_p_value": 0.0042,
+            "pooled_fpr_ratio": 1.209,
+            "pooled_q_value": 0.1648,
+            "window_ratios": {
+              "out_of_time": 1.068,
+              "calibration": 1.449
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "window": "calibration",
+            "fpr_ratio": 1.467,
+            "fpr_p_value": 0.0171,
+            "pooled_fpr_ratio": 1.264,
+            "pooled_q_value": 0.1648,
+            "window_ratios": {
+              "out_of_time": 1.154,
+              "calibration": 1.467
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.948241+00:00",
+      "model_id": "bti-v3-hgb-r-20260923181435",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. This differs from the registered verdict (review_required). Findings: none. Watchlist: country=Nigeria pooled 1.135x (q 0.618); country=Singapore pooled 1.228x (q 0.681); customer_segment=Corporate pooled 1.155x (q 0.618); customer_segment=Private Banking pooled 1.24x (q 0.3749).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_5pct_budget",
+            "attribute": "country",
+            "group": "Singapore",
+            "window": "out_of_time",
+            "fpr_ratio": 1.508,
+            "fpr_p_value": 0.0459,
+            "pooled_fpr_ratio": 1.228,
+            "pooled_q_value": 0.681,
+            "window_ratios": {
+              "out_of_time": 1.508,
+              "calibration": 0.749
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "window": "calibration",
+            "fpr_ratio": 1.332,
+            "fpr_p_value": 0.0337,
+            "pooled_fpr_ratio": 1.155,
+            "pooled_q_value": 0.618,
+            "window_ratios": {
+              "out_of_time": 1.054,
+              "calibration": 1.332
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "window": "calibration",
+            "fpr_ratio": 1.55,
+            "fpr_p_value": 0.0049,
+            "pooled_fpr_ratio": 1.24,
+            "pooled_q_value": 0.3749,
+            "window_ratios": {
+              "out_of_time": 1.076,
+              "calibration": 1.55
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Nigeria",
+            "window": "calibration",
+            "fpr_ratio": 1.518,
+            "fpr_p_value": 0.0133,
+            "pooled_fpr_ratio": 1.135,
+            "pooled_q_value": 0.618,
+            "window_ratios": {
+              "out_of_time": 0.935,
+              "calibration": 1.518
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.950039+00:00",
+      "model_id": "bti-v3-hgb-xr-20260923181441",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. This differs from the registered verdict (review_required). Findings: none. Watchlist: country=Nigeria pooled 1.082x (q 0.9482); country=Singapore pooled 1.283x (q 0.8169); customer_segment=Private Banking pooled 1.203x (q 0.5089).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_5pct_budget",
+            "attribute": "country",
+            "group": "Singapore",
+            "window": "out_of_time",
+            "fpr_ratio": 1.523,
+            "fpr_p_value": 0.0361,
+            "pooled_fpr_ratio": 1.283,
+            "pooled_q_value": 0.8169,
+            "window_ratios": {
+              "out_of_time": 1.523,
+              "calibration": 0.864
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "window": "calibration",
+            "fpr_ratio": 1.47,
+            "fpr_p_value": 0.0164,
+            "pooled_fpr_ratio": 1.203,
+            "pooled_q_value": 0.5089,
+            "window_ratios": {
+              "out_of_time": 1.065,
+              "calibration": 1.47
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Nigeria",
+            "window": "calibration",
+            "fpr_ratio": 1.525,
+            "fpr_p_value": 0.0123,
+            "pooled_fpr_ratio": 1.082,
+            "pooled_q_value": 0.9482,
+            "window_ratios": {
+              "out_of_time": 0.858,
+              "calibration": 1.525
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.952311+00:00",
+      "model_id": "bti-v3-lgbm-r-20260923181444",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. Findings: none. Watchlist: country=Nigeria pooled 1.055x (q 0.9089); customer_segment=Corporate pooled 1.201x (q 0.2226); customer_segment=Private Banking pooled 1.268x (q 0.1911).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "window": "calibration",
+            "fpr_ratio": 1.392,
+            "fpr_p_value": 0.0123,
+            "pooled_fpr_ratio": 1.201,
+            "pooled_q_value": 0.2226,
+            "window_ratios": {
+              "out_of_time": 1.095,
+              "calibration": 1.392
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "window": "calibration",
+            "fpr_ratio": 1.467,
+            "fpr_p_value": 0.0171,
+            "pooled_fpr_ratio": 1.268,
+            "pooled_q_value": 0.1911,
+            "window_ratios": {
+              "out_of_time": 1.164,
+              "calibration": 1.467
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Nigeria",
+            "window": "calibration",
+            "fpr_ratio": 1.424,
+            "fpr_p_value": 0.0433,
+            "pooled_fpr_ratio": 1.055,
+            "pooled_q_value": 0.9089,
+            "window_ratios": {
+              "out_of_time": 0.866,
+              "calibration": 1.424
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.954473+00:00",
+      "model_id": "bti-v3-lgbm-xr-20260923181447",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. Findings: none. Watchlist: country=Nigeria pooled 1.044x (q 0.8892); customer_segment=Corporate pooled 1.186x (q 0.4074); customer_segment=Private Banking pooled 1.215x (q 0.4074).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "window": "calibration",
+            "fpr_ratio": 1.427,
+            "fpr_p_value": 0.0065,
+            "pooled_fpr_ratio": 1.186,
+            "pooled_q_value": 0.4074,
+            "window_ratios": {
+              "out_of_time": 1.053,
+              "calibration": 1.427
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "window": "calibration",
+            "fpr_ratio": 1.387,
+            "fpr_p_value": 0.0487,
+            "pooled_fpr_ratio": 1.215,
+            "pooled_q_value": 0.4074,
+            "window_ratios": {
+              "out_of_time": 1.125,
+              "calibration": 1.387
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Nigeria",
+            "window": "calibration",
+            "fpr_ratio": 1.43,
+            "fpr_p_value": 0.0407,
+            "pooled_fpr_ratio": 1.044,
+            "pooled_q_value": 0.8892,
+            "window_ratios": {
+              "out_of_time": 0.846,
+              "calibration": 1.43
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.956660+00:00",
+      "model_id": "bti-v3-xgb-r-20260923181450",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. Findings: none. Watchlist: customer_segment=Corporate pooled 1.157x (q 0.3339); customer_segment=Private Banking pooled 1.287x (q 0.126).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "window": "calibration",
+            "fpr_ratio": 1.341,
+            "fpr_p_value": 0.0297,
+            "pooled_fpr_ratio": 1.157,
+            "pooled_q_value": 0.3339,
+            "window_ratios": {
+              "out_of_time": 1.054,
+              "calibration": 1.341
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "window": "calibration",
+            "fpr_ratio": 1.43,
+            "fpr_p_value": 0.0284,
+            "pooled_fpr_ratio": 1.287,
+            "pooled_q_value": 0.126,
+            "window_ratios": {
+              "out_of_time": 1.211,
+              "calibration": 1.43
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:37.958958+00:00",
+      "model_id": "bti-v3-xgb-xr-20260923181453",
+      "author": "bti.modeling.reassess",
+      "subject": "Fairness re-assessment",
+      "detail": "Fairness re-assessed under the pooled, corrected method: pass. This differs from the registered verdict (review_required). Findings: none. Watchlist: country=Germany pooled 1.1x (q 0.6518); customer_segment=Corporate pooled 1.137x (q 0.6518); customer_segment=NRI / Diaspora pooled 1.736x (q 0.7497).",
+      "data": {
+        "status": "pass",
+        "findings": [],
+        "watchlist": [
+          {
+            "operating_point": "stress_5pct_budget",
+            "attribute": "customer_segment",
+            "group": "NRI / Diaspora",
+            "window": "out_of_time",
+            "fpr_ratio": 1.997,
+            "fpr_p_value": 0.0418,
+            "pooled_fpr_ratio": 1.736,
+            "pooled_q_value": 0.7497,
+            "window_ratios": {
+              "out_of_time": 1.997,
+              "calibration": null
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "country",
+            "group": "Germany",
+            "window": "out_of_time",
+            "fpr_ratio": 1.273,
+            "fpr_p_value": 0.0135,
+            "pooled_fpr_ratio": 1.1,
+            "pooled_q_value": 0.6518,
+            "window_ratios": {
+              "out_of_time": 1.273,
+              "calibration": 0.822
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          },
+          {
+            "operating_point": "stress_10pct_budget",
+            "attribute": "customer_segment",
+            "group": "Corporate",
+            "window": "calibration",
+            "fpr_ratio": 1.338,
+            "fpr_p_value": 0.031,
+            "pooled_fpr_ratio": 1.137,
+            "pooled_q_value": 0.6518,
+            "window_ratios": {
+              "out_of_time": 1.023,
+              "calibration": 1.338
+            },
+            "reason": "material in one window only; not significant once windows are pooled and corrected"
+          }
+        ],
+        "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist."
+      }
+    },
+    {
+      "at": "2026-09-24T13:06:38.519495+00:00",
+      "model_id": "bti-v3-xgb-r-20260923181450",
+      "author": "bti.modeling.reassess",
+      "subject": "Correction: German remediation",
+      "detail": "This model took the challenger role in a remediation tournament for a German false-positive finding. Under the corrected method that finding is a multiple-testing artefact: it appears only in the out-of-time window (calibration 0.92-0.99x, pooled 1.10x, never significant after correction; permutation test 23% by chance). The model is retained on its own merits: it removes absolute-amount features that act as a wealth proxy, at no accuracy cost (OOT PR-AUC 0.8857 vs 0.8856), and it does not carry the Corporate / Private Banking disparity found in its predecessor. Private Banking remains on the watchlist (pooled 1.29x, q 0.13).",
+      "data": {}
+    },
+    {
+      "at": "2026-09-24T13:06:38.521955+00:00",
+      "model_id": "bti-v3-lgbm-20260923180905",
+      "author": "bti.modeling.reassess",
+      "subject": "Finding under the corrected method",
+      "detail": "Registered as passing fairness. Under the pooled, corrected method it has a gating disparity: legitimate Corporate customers flagged 1.27x and Private Banking 1.32x the overall rate at the 10% stress budget (q 0.03, above the overall rate in both windows). Mechanism: absolute USD amounts act as a wealth proxy. Already replaced as challenger by bti-v3-xgb-r-20260923181450, which removes those features.",
+      "data": {}
     }
   ]
 }

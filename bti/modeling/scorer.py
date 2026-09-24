@@ -2,7 +2,8 @@
 BTI v3 real-time scorer.
 
 For each transaction it loads point-in-time history (the customer's own
-transactions plus any on the same device or IP within the look-back), runs the
+transactions plus any on the same device, IP or payee within the look-back, and
+the customer's security events when the model uses them), runs the
 same `build_features` used in training, applies the registered model and
 calibrator, and explains the result with exact SHAP reason codes.
 """
@@ -22,7 +23,7 @@ from scipy.special import expit
 from bti.governance.reason_codes import principal_reasons
 from bti.logging_config import get_logger
 from bti.modeling import algorithms, registry
-from bti.modeling.features import FEATURE_NAMES, build_features, event_timestamps, to_model_matrix
+from bti.modeling.features import FEATURE_NAMES, FEEDS, build_features, event_timestamps, to_model_matrix
 
 log = get_logger("modeling.scorer")
 
@@ -30,9 +31,10 @@ HISTORY_COLUMNS = [
     "transaction_id", "customer_id", "transaction_date", "transaction_time", "transaction_amount", "currency",
     "device_id", "ip_location", "merchant_name", "channel", "authorization_method", "merchant_category",
     "transaction_type", "debit_credit_flag", "historical_average_transaction_amount", "account_balance_before",
-    "failed_attempt_count", "login_attempts",
+    "failed_attempt_count", "login_attempts", "latitude", "longitude", "payee_id",
 ]
 MAX_HISTORY_ROWS = 5000
+SECURITY_EVENT_COLUMNS = ["customer_id", "event_time", "event_type"]
 
 
 @dataclass
@@ -78,6 +80,8 @@ def fetch_history(db_session, txn: dict, lookback_days: int, max_rows: int = MAX
         conds.append(Transaction.device_id == txn["device_id"])
     if txn.get("ip_location"):
         conds.append(Transaction.ip_location == txn["ip_location"])
+    if txn.get("payee_id"):
+        conds.append(Transaction.payee_id == txn["payee_id"])
     start = (ts - timedelta(days=lookback_days)).to_pydatetime()
     end = (ts + timedelta(days=1)).normalize().to_pydatetime()
     rows = (db_session.query(*[getattr(Transaction, c) for c in HISTORY_COLUMNS])
@@ -88,6 +92,23 @@ def fetch_history(db_session, txn: dict, lookback_days: int, max_rows: int = MAX
     if not hist.empty and txn.get("transaction_id") is not None:
         hist = hist[hist["transaction_id"].astype(str) != str(txn["transaction_id"])]
     return hist
+
+
+def fetch_security_events(db_session, txn: dict, days: int = 31) -> Optional[pd.DataFrame]:
+    """The customer's security events logged before the transaction (None without a database)."""
+    from bti.database.models import SecurityEvent
+
+    if db_session is None:
+        return None
+    ts = event_timestamps(pd.DataFrame([txn])).iloc[0]
+    if pd.isna(ts):
+        return None
+    rows = (db_session.query(SecurityEvent.customer_id, SecurityEvent.event_time, SecurityEvent.event_type)
+            .filter(SecurityEvent.customer_id == txn.get("customer_id"),
+                    SecurityEvent.event_time >= (ts - timedelta(days=days)).to_pydatetime(),
+                    SecurityEvent.event_time < ts.to_pydatetime())
+            .all())
+    return pd.DataFrame([tuple(r) for r in rows], columns=SECURITY_EVENT_COLUMNS)
 
 
 class V3Scorer:
@@ -115,17 +136,21 @@ class V3Scorer:
             return self._explainers[model_id]
 
     def score(self, txn: dict, db_session=None, history: Optional[pd.DataFrame] = None,
-              role: str = "champion", explain: bool = True) -> V3Score:
+              role: str = "champion", explain: bool = True,
+              security_events: Optional[pd.DataFrame] = None) -> V3Score:
         t0 = time.perf_counter()
         model_id, used_role, provisional = self.resolve(role)
         art = registry.load_artifact(model_id)
 
         if history is None:
             history = fetch_history(db_session, txn, art["lookback_days"])
+        if security_events is None and "security_events" in art.get("feeds", []):
+            security_events = fetch_security_events(db_session, txn)
         frame = pd.concat([history, pd.DataFrame([txn])], ignore_index=True)
         names = art.get("feature_names", FEATURE_NAMES)
         feats = build_features(frame, lookback_days=art["lookback_days"],
-                               feature_version=art.get("feature_version", 1)).iloc[[-1]]
+                               feature_version=art.get("feature_version", 1),
+                               security_events=security_events).iloc[[-1]]
         X = to_model_matrix(feats, art["encodings"], names)
 
         raw = float(art["estimator"].predict_proba(X)[0, 1])
@@ -150,6 +175,10 @@ class V3Scorer:
             notes.append("No champion approved yet — scored by the challenger model; treat as provisional.")
         if db_session is None and history is not None and history.empty:
             notes.append("No transaction history supplied — velocity and novelty features are uninformed.")
+        for feed in art.get("feeds", []):
+            if not feats[FEEDS[feed]["features"]].notna().any(axis=1).iloc[0]:
+                notes.append(f"The model uses the {feed.replace('_', ' ')} feed, but it gave no signal for this "
+                             f"transaction; those features are treated as unknown.")
 
         return V3Score(
             transaction_id=str(txn.get("transaction_id", "UNKNOWN")),
@@ -168,11 +197,13 @@ class V3Scorer:
             base_probability=base_probability,
         )
 
-    def score_frame(self, df: pd.DataFrame, role: str = "champion") -> pd.DataFrame:
+    def score_frame(self, df: pd.DataFrame, role: str = "champion",
+                    security_events: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """Batch scoring where the frame itself is the history (backtests, file uploads)."""
         model_id, used_role, _ = self.resolve(role)
         art = registry.load_artifact(model_id)
-        feats = build_features(df, lookback_days=art["lookback_days"], feature_version=art.get("feature_version", 1))
+        feats = build_features(df, lookback_days=art["lookback_days"], feature_version=art.get("feature_version", 1),
+                               security_events=security_events)
         X = to_model_matrix(feats, art["encodings"], art.get("feature_names", FEATURE_NAMES))
         p = art["calibrator"].predict(art["estimator"].predict_proba(X)[:, 1])
         out = feats.copy()

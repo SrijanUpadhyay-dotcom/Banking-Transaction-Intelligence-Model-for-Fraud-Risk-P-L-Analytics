@@ -14,7 +14,11 @@ Remediation mode (`--remediation "<finding>"`) is for replacing an incumbent
 with a known defect: the incumbent cannot win, and the best new candidate that
 passes every gate replaces it if it is non-inferior (calibration PR-AUC no more
 than `min_gain` below the incumbent's). The finding is recorded with the role
-change.
+change. When the finding names groups (`--remediation-groups
+customer_segment=Corporate`), the fix must also be verified: the replacement may
+not carry a fairness finding for those groups, and its worst pooled FPR ratio
+for each must be below the incumbent's. A candidate that merely avoids the
+finding by chance, without improving the group, is not accepted.
 
 Usage:
   python -m bti.modeling.tournament --developer "Srijan Upadhyay" \\
@@ -27,11 +31,15 @@ import argparse
 import json
 import time
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from bti.logging_config import get_logger
 from bti.modeling import algorithms, registry
-from bti.modeling.train import MONOTONE_INCREASING, prepare, train_candidate
+from bti.modeling.features import FEATURE_SETS
+from bti.modeling.train import (
+    MONOTONE_INCREASING, FeedUnavailableError, assess_fairness, check_feeds, prepare,
+    train_candidate,
+)
 from bti.modeling.tuning import tune as tune_candidate
 
 log = get_logger("modeling.tournament")
@@ -58,29 +66,77 @@ def _summary(card: Dict, incumbent: bool = False) -> Dict:
     }
 
 
+def worst_pooled_ratio(fairness: Dict, group: str) -> Optional[float]:
+    """Highest pooled FPR ratio for `attribute=group` across operating points (None if never tested)."""
+    attribute, name = group.split("=", 1)
+    ratios = [g["fpr_ratio"] for run in fairness.get("operating_points", {}).values()
+              for a in run.get("pooled", run)["attributes"] if a["attribute"] == attribute
+              for g in a["groups"] if g["group"] == name and g["fpr_ratio"] is not None]
+    return max(ratios) if ratios else None
+
+
+def remediation_check(candidate: Dict, incumbent: Dict, groups: List[str]) -> Dict:
+    """Was the named finding fixed? No finding for the group, and a lower worst-case ratio than the incumbent."""
+    checks = []
+    for group in groups:
+        attribute, name = group.split("=", 1)
+        still_found = any(f["attribute"] == attribute and f["group"] == name for f in candidate.get("findings", []))
+        before, after = worst_pooled_ratio(incumbent, group), worst_pooled_ratio(candidate, group)
+        checks.append({"group": group, "incumbent_worst_ratio": before, "candidate_worst_ratio": after,
+                       "finding_remains": still_found,
+                       "passed": bool(not still_found and after is not None and before is not None and after < before)})
+    return {"passed": all(c["passed"] for c in checks), "checks": checks}
+
+
 def run_tournament(developer: str, algorithm_names: List[str], feature_sets: List[str], tune: bool = False,
                    data_path=None, min_gain: float = DEFAULT_MIN_GAIN, assign: bool = True,
-                   remediation: str = "") -> Dict:
+                   remediation: str = "", remediation_groups: Optional[List[str]] = None) -> Dict:
     t0 = time.time()
     data = prepare(data_path)
     incumbent_id = registry.model_for_role("challenger") or registry.model_for_role("champion")
     entrants: List[Dict] = []
+    skipped: List[Dict] = []
+    cards: Dict[str, Dict] = {}
     if incumbent_id:
         entrants.append(_summary(registry.load_card(incumbent_id), incumbent=True))
+    remediation_groups = list(remediation_groups or [])
+    if remediation_groups and not remediation:
+        raise ValueError("remediation_groups needs a remediation finding")
+    incumbent_fairness = None
+    if remediation_groups and incumbent_id:
+        # Re-tested on this data under the current method: the card may predate it.
+        from bti.modeling.reassess import model_probabilities
+        version = registry.load_artifact(incumbent_id).get("feature_version", 1)
+        inc_data = data if version == data.feature_version else prepare(data_path, feature_version=version)
+        incumbent_fairness = assess_fairness(inc_data, model_probabilities(incumbent_id, inc_data))
 
     for algorithm in algorithm_names:
         for feature_set in feature_sets:
-            tuning = tune_candidate(data, algorithm, feature_set, MONOTONE_INCREASING) if tune else None
-            params = tuning["best_params"] if tuning else None
-            if tuning:
-                tuning = {k: v for k, v in tuning.items() if k != "results"} | {"top_results": tuning["results"][:5]}
-            card = train_candidate(data, algorithm, feature_set, params, developer, register=True,
-                                   tuning=tuning, auto_challenger=False)
+            try:
+                check_feeds(data, feature_set)
+                tuning = tune_candidate(data, algorithm, feature_set, MONOTONE_INCREASING) if tune else None
+                params = tuning["best_params"] if tuning else None
+                if tuning:
+                    tuning = ({k: v for k, v in tuning.items() if k != "results"}
+                              | {"top_results": tuning["results"][:5]})
+                card = train_candidate(data, algorithm, feature_set, params, developer, register=True,
+                                       tuning=tuning, auto_challenger=False)
+            except FeedUnavailableError as exc:
+                skipped.append({"algorithm": algorithm, "feature_set": feature_set, "reason": str(exc)})
+                log.warning("Candidate skipped", extra={"algorithm": algorithm, "feature_set": feature_set})
+                continue
+            cards[card["model_id"]] = card
             entrants.append(_summary(card))
             log.info("Candidate registered", extra={"model_id": card["model_id"],
                                                      "validation": card["validation"]["status"]})
 
-    eligible = [e for e in entrants if e["validation"] == "passed" and not (remediation and e["incumbent"])]
+    if incumbent_fairness is not None:
+        for e in entrants:
+            if not e["incumbent"]:
+                e["remediation_check"] = remediation_check(cards[e["model_id"]]["fairness"], incumbent_fairness,
+                                                           remediation_groups)
+    eligible = [e for e in entrants if e["validation"] == "passed" and not (remediation and e["incumbent"])
+                and e.get("remediation_check", {"passed": True})["passed"]]
     best = max(eligible, key=lambda e: e["calibration_pr_auc"], default=None)
     incumbent = next((e for e in entrants if e["incumbent"]), None)
 
@@ -91,7 +147,9 @@ def run_tournament(developer: str, algorithm_names: List[str], feature_sets: Lis
                         "previous": incumbent_id, "finding": remediation,
                         "reason": f"{best['model_id']} is non-inferior (calibration PR-AUC {best['calibration_pr_auc']}"
                                   f" vs incumbent {incumbent['calibration_pr_auc']}, floor {round(floor, 4)}) and "
-                                  f"passes every gate"}
+                                  f"passes every gate"
+                                  + (" and the remediation check (the named groups improved and carry no finding)"
+                                     if remediation_groups else "")}
             if assign:
                 registry.assign_role(best["model_id"], "challenger", approver="bti.modeling.tournament",
                                      rationale=f"Remediation of finding: {remediation}. {decision['reason']}. "
@@ -102,6 +160,8 @@ def run_tournament(developer: str, algorithm_names: List[str], feature_sets: Lis
                                   f"non-inferiority floor {round(floor, 4)}; escalate for a risk decision"}
     elif best is None:
         decision = {"outcome": "no_eligible_candidate", "challenger": incumbent_id}
+        if remediation_groups:
+            decision["reason"] = "No candidate passed every gate and verifiably fixed the named groups"
     elif best["incumbent"]:
         decision = {"outcome": "incumbent_retained", "challenger": incumbent_id,
                     "reason": f"No candidate beat the incumbent's calibration PR-AUC "
@@ -129,8 +189,10 @@ def run_tournament(developer: str, algorithm_names: List[str], feature_sets: Lis
                            f"Passed all validation gates; highest calibration-window PR-AUC; must beat the "
                            f"incumbent by {min_gain}.") + " Out-of-time window reported, never used to select.",
         "remediation_finding": remediation or None,
+        "remediation_groups": remediation_groups or None,
         "tuned": tune,
         "entrants": sorted(entrants, key=lambda e: -(e["calibration_pr_auc"] or 0)),
+        "skipped": skipped,
         "decision": decision,
         "rank_agreement": {"calibration_winner": ranked_cal[0] if ranked_cal else None,
                            "out_of_time_winner": ranked_oot[0] if ranked_oot else None,
@@ -149,13 +211,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Train candidate models and select a challenger")
     parser.add_argument("--developer", required=True)
     parser.add_argument("--algorithms", nargs="+", choices=algorithms.ALGORITHMS, default=list(algorithms.ALGORITHMS))
-    parser.add_argument("--feature-sets", nargs="+", choices=["core", "extended"], default=["core", "extended"])
+    parser.add_argument("--feature-sets", nargs="+", choices=sorted(FEATURE_SETS), default=["core", "extended"])
     parser.add_argument("--tune", action="store_true")
     parser.add_argument("--min-gain", type=float, default=DEFAULT_MIN_GAIN)
     parser.add_argument("--remediation", default="", help="Finding being remediated; switches to non-inferiority")
+    parser.add_argument("--remediation-groups", nargs="*", default=[],
+                        help="attribute=group pairs the fix must verifiably improve, e.g. customer_segment=Corporate")
     args = parser.parse_args()
     r = run_tournament(args.developer, args.algorithms, args.feature_sets, args.tune, min_gain=args.min_gain,
-                       remediation=args.remediation)
+                       remediation=args.remediation, remediation_groups=args.remediation_groups)
     print(f"{'model':32s} {'algo/features':20s} {'gates':10s} {'cal PR':>7s} {'OOT PR':>7s} {'OOT ROC':>8s} {'ECE':>7s}")
     for e in r["entrants"]:
         tag = " (incumbent)" if e["incumbent"] else ""

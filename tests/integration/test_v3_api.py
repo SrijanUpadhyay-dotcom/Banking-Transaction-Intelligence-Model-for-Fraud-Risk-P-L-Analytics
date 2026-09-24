@@ -219,3 +219,31 @@ class TestOperations:
         assert body["saving_vs_single_threshold_usd"] > 0
         assert body["expected_cost_policy"]["false_decline_rate"] < 0.01
         assert body["expected_cost_policy"]["cases_for_review"] <= 0.015 * body["n"]
+
+
+class TestFeeds:
+    def test_security_events_are_ingested_and_validated(self, client):
+        ok = client.post("/api/v1/v3/security-events", headers=KEY, json=[
+            {"customer_id": "CUST-V3", "event_type": "sim_swap", "event_time": "2024-09-20T09:00:00",
+             "source": "mno-api"}])
+        assert ok.status_code == 201 and ok.json() == {"accepted": 1}
+        bad = client.post("/api/v1/v3/security-events", headers=KEY, json=[
+            {"customer_id": "CUST-V3", "event_type": "horoscope_change", "event_time": "2024-09-20T09:00:00"}])
+        assert bad.status_code == 422
+        anonymous = client.post("/api/v1/v3/security-events", json=[
+            {"customer_id": "CUST-V3", "event_type": "sim_swap", "event_time": "2024-09-20T09:00:00"}])
+        assert anonymous.status_code in (401, 403)
+
+    def test_feed_status_reports_what_is_populated_and_used(self, client):
+        body = client.get("/api/v1/v3/feeds", headers=KEY).json()
+        assert set(body["feeds"]) == {"location", "payee", "security_events"}
+        assert body["feeds"]["security_events"]["events_stored"] >= 1
+        assert body["feeds"]["location"]["share_of_transactions"] == 0.0
+        assert not any(f["used_by_scoring_model"] for f in body["feeds"].values())
+
+    def test_scoring_accepts_location_and_payee_fields(self, client):
+        r = client.post("/api/v1/v3/score", headers=KEY,
+                        json=_txn(900, latitude=51.5, longitude=-0.12, payee_id="GB-PAYEE-1"))
+        assert r.status_code == 200, r.text
+        bad = client.post("/api/v1/v3/score", headers=KEY, json=_txn(901, latitude=123.0))
+        assert bad.status_code == 422

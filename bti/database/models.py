@@ -63,6 +63,10 @@ class Transaction(Base):
     device_id          = Column(String(100))
     ip_location        = Column(String(50))
     login_attempts     = Column(Integer, default=1)
+    # Optional feeds: transaction location and beneficiary key (null when the source system lacks them)
+    latitude           = Column(Float)
+    longitude          = Column(Float)
+    payee_id           = Column(String(100), index=True)
     historical_average_transaction_amount = Column(Float)
     monthly_customer_transaction_count    = Column(Integer)
     fee_income         = Column(Float, default=0)
@@ -228,6 +232,25 @@ class FraudLabel(Base):
     reported_by      = Column(String(100))
     notes            = Column(Text)
     created_at       = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class SecurityEvent(Base):
+    """
+    The bank's security-event log: password resets, SIM swaps / number ports,
+    contact-detail changes, device enrolments. Append-only; read point-in-time
+    by the scoring model (only events logged before a transaction count).
+    """
+    __tablename__ = "security_events"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(String(50), nullable=False, index=True)
+    event_type  = Column(String(40), nullable=False)
+    event_time  = Column(DateTime, nullable=False, index=True)
+    source      = Column(String(60))
+    detail      = Column(JSON)
+    received_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (Index("ix_security_event_customer_time", "customer_id", "event_time"),)
 
 
 class ModelRegistry(Base):

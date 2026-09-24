@@ -120,8 +120,21 @@ def render_model_card(card: Dict, index: Dict) -> str:
 
     s.append("## 8. Fairness\n")
     fair = card["fairness"]
-    s.append(f"Status: **{fair['status'].upper()}**. {fair.get('note', '')}\n")
+    s.append(f"Status: **{fair['status'].upper()}**. {fair.get('method') or fair.get('note', '')}\n")
+    for f in fair.get("findings", []):
+        if "pooled_fpr_ratio" in f:
+            s.append(f"- **Finding** ({f['operating_point']}): {f['attribute']} = {f['group']}, pooled FPR ratio "
+                     f"{f['pooled_fpr_ratio']} (q {f['pooled_q_value']}), by window {f['window_ratios']}")
+        else:
+            s.append(f"- **Finding** ({f['operating_point']}): {f['attribute']} = {f['group']}, FPR ratio "
+                     f"{f['fpr_ratio']} (p {f.get('fpr_p_value')})")
+    for f in fair.get("watchlist", []):
+        where = f" in {f['window']}" if f.get("window") else ""
+        s.append(f"- Watchlist ({f['operating_point']}): {f['attribute']} = {f['group']}, FPR ratio "
+                 f"{f.get('fpr_ratio', f.get('pooled_fpr_ratio'))}{where}; pooled {f.get('pooled_fpr_ratio')} "
+                 f"(q {f.get('pooled_q_value')}) — {f['reason']}")
     for name, run in fair.get("operating_points", {}).items():
+        run = run.get("pooled", run)
         worst = []
         for a in run["attributes"]:
             ratios = [g["fpr_ratio"] for g in a["groups"] if g["fpr_ratio"] is not None]
@@ -133,7 +146,14 @@ def render_model_card(card: Dict, index: Dict) -> str:
         s.append("**Remediation log:**\n")
         for r in remediation:
             s.append(f"- *Finding:* {r['finding']}\n  *Root cause:* {r['root_cause']}\n"
-                     f"  *Remediation:* {r['remediation']}\n  *Re-test:* {r['retest']}")
+                     f"  *Remediation:* {r['remediation']}\n  *Re-test:* {r['retest']}"
+                     + (f"\n  *Re-assessment:* {r['reassessment']}" if r.get("reassessment") else ""))
+        s.append("")
+    notes = [n for n in index.get("notes", []) if n["model_id"] == card["model_id"]]
+    if notes:
+        s.append("**Post-registration notes** (appended to the registry; the card above is unchanged):\n")
+        for n in notes:
+            s.append(f"- {n['at'][:10]} — *{n['subject']}* ({n['author']}): {n['detail']}")
         s.append("")
 
     s.append("## 9. Validation gates\n")

@@ -2,12 +2,17 @@
 File-based model registry with champion / challenger roles.
 
 Layout:
-  models/registry/index.json            roles, model list, promotion history
+  models/registry/index.json            roles, model list, promotion history, post-registration notes
   models/registry/<model_id>/model.joblib
   models/registry/<model_id>/card.json   metadata, validation, monitoring baseline
 
 Promotion is gated: the model's automated validation must have passed and the
 approver must differ from the developer (four-eyes principle).
+
+Registered cards are never edited. When a model is re-assessed after
+registration (a corrected test, a new finding, a retraction), the result is
+appended to `notes` in the index, so the record shows both what was believed at
+registration and what is known now.
 """
 
 from __future__ import annotations
@@ -18,7 +23,7 @@ import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import joblib
 
@@ -134,6 +139,27 @@ def assign_role(model_id: str, role: str, approver: str, rationale: str) -> Dict
         index["history"].append(event)
         _atomic_write_json(_index_path(), index)
     return event
+
+
+def add_note(model_id: str, author: str, subject: str, detail: str, data: Optional[Dict] = None) -> Dict:
+    """Append a post-registration note to a model's record. Notes are never edited or removed."""
+    if not author or not author.strip():
+        raise RegistryError("A note needs an author")
+    if not subject or not detail or len(detail.strip()) < 10:
+        raise RegistryError("A note needs a subject and a detail of at least 10 characters")
+    with _lock:
+        index = read_index()
+        if model_id not in {m["model_id"] for m in index["models"]}:
+            raise RegistryError(f"Model {model_id} is not in the registry index")
+        note = {"at": _now(), "model_id": model_id, "author": author.strip(), "subject": subject.strip(),
+                "detail": detail.strip(), "data": data or {}}
+        index.setdefault("notes", []).append(note)
+        _atomic_write_json(_index_path(), index)
+    return note
+
+
+def notes_for(model_id: str) -> List[Dict]:
+    return [n for n in read_index().get("notes", []) if n["model_id"] == model_id]
 
 
 def clear_cache() -> None:

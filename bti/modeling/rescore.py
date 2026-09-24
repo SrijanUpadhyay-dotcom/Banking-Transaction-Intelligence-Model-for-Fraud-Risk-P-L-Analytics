@@ -33,10 +33,11 @@ log = get_logger("modeling.rescore")
 
 
 def rescore_history(csv_path: Optional[Path] = None, role: str = "champion", batch: int = 5000) -> Dict:
-    from bti.modeling.train import default_data_path
+    from bti.modeling.train import default_data_path, default_security_events_path
     csv_path = Path(csv_path or default_data_path())
     df = pd.read_csv(csv_path, low_memory=False)
-    scored = scorer.score_frame(df, role=role)
+    events_path = default_security_events_path()
+    scored = scorer.score_frame(df, role=role, security_events=pd.read_csv(events_path) if events_path else None)
     model_id = scored["model_id"].iloc[0]
     probability = scored["fraud_probability"].to_numpy()
     rows = [{"tid": str(t), "score": round(float(p) * 100, 2), "tier": tier_for(float(p))}

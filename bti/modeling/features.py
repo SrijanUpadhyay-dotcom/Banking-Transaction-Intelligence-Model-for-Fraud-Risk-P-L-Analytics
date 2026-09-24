@@ -48,6 +48,13 @@ SOURCE_FIELDS: Dict[str, SourceField] = {f.name: f for f in [
     SourceField("device_id", _A.IDENTIFIER, "Links device history; never a direct input"),
     SourceField("ip_location", _A.IDENTIFIER, "Links IP history; never a direct input"),
     SourceField("merchant_name", _A.IDENTIFIER, "Links merchant history"),
+    SourceField("payee_id", _A.IDENTIFIER, "Beneficiary account key (payments feed); links payee history"),
+    SourceField("latitude", _A.PRE_AUTH, "Where the transaction happened: terminal location, device GPS, or IP "
+                                         "geolocation resolved upstream (location feed)"),
+    SourceField("longitude", _A.PRE_AUTH, "See latitude"),
+    SourceField("security_event_time", _A.PRE_AUTH, "When a password reset, SIM swap, contact-detail change or "
+                                                    "device enrolment was logged (security-event feed)"),
+    SourceField("security_event_type", _A.PRE_AUTH, "Type of security event (security-event feed)"),
     SourceField("transaction_date", _A.PRE_AUTH, "Event date"),
     SourceField("transaction_time", _A.PRE_AUTH, "Event time"),
     SourceField("transaction_amount", _A.PRE_AUTH, "Requested amount, in account currency"),
@@ -170,11 +177,72 @@ EXTENDED_FEATURES: List[FeatureSpec] = [
                 "Hours between this transaction and the customer's usual time of day"),
 ]
 
+# Feed-dependent signals. They need data the synthetic dataset does not carry (transaction location,
+# payee keys, the bank's security-event log), so they are in no default feature set and training
+# refuses them unless the feed is actually populated (see FEEDS and feed_coverage).
+_GEO = ("customer_id", "latitude", "longitude") + _WHEN
+_PAYEE = ("customer_id", "payee_id") + _WHEN
+_SEC = ("customer_id", "security_event_time", "security_event_type") + _WHEN
+SIGNAL_FEATURES: List[FeatureSpec] = [
+    FeatureSpec("geo_distance_prev_km", _N, _GEO, "GEO_VELOCITY",
+                "Kilometres from the customer's previous located transaction"),
+    FeatureSpec("geo_speed_kmh", _N, _GEO, "GEO_VELOCITY",
+                "Implied travel speed from the customer's previous located transaction"),
+    FeatureSpec("impossible_travel", _N, _GEO, "GEO_VELOCITY",
+                "Implied speed above 900 km/h over more than 300 km"),
+    FeatureSpec("payee_new_for_customer", _N, _PAYEE, "NEW_PAYEE",
+                "Customer has not paid this payee in the look-back"),
+    FeatureSpec("cust_new_payees_24h", _N, _PAYEE, "NEW_PAYEE",
+                "Payments to payees new for the customer in prior 24h"),
+    FeatureSpec("payee_other_customer_txns_7d", _N, _PAYEE, "PAYEE_VELOCITY",
+                "Payments to this payee from other customers in prior 7d (mule pattern)"),
+    FeatureSpec("hours_since_security_event", _N, _SEC, "SECURITY_EVENT",
+                "Hours since the customer's last password reset, SIM swap, contact change or device enrolment "
+                "(within 30 days)"),
+    FeatureSpec("hours_since_sim_swap", _N, _SEC, "SECURITY_EVENT",
+                "Hours since the customer's last SIM swap or number port (within 30 days)"),
+    FeatureSpec("security_events_7d", _N, _SEC, "SECURITY_EVENT", "Security events for the customer in prior 7d"),
+]
+FEEDS: Dict[str, Dict] = {
+    "location": {"features": ["geo_distance_prev_km", "geo_speed_kmh", "impossible_travel"],
+                 "fields": ["latitude", "longitude"],
+                 "source": "Card-present terminal coordinates, mobile device GPS, or an IP-geolocation service "
+                           "resolved before scoring"},
+    "payee": {"features": ["payee_new_for_customer", "cust_new_payees_24h", "payee_other_customer_txns_7d"],
+              "fields": ["payee_id"],
+              "source": "Beneficiary account identifier from the payments system (sort code + account, IBAN, UPI "
+                        "VPA, or a tokenised equivalent)"},
+    "security_events": {"features": ["hours_since_security_event", "hours_since_sim_swap", "security_events_7d"],
+                        "fields": ["security_event_time", "security_event_type"],
+                        "source": "The bank's identity / security log: password resets, SIM swaps and number "
+                                  "ports (mobile-operator API), contact-detail changes, device enrolments"},
+}
+SECURITY_EVENT_TYPES = ("password_reset", "sim_swap", "number_port", "phone_change", "email_change", "address_change",
+                        "device_enrolment", "limit_increase")
+IMPOSSIBLE_SPEED_KMH = 900.0
+IMPOSSIBLE_MIN_KM = 300.0
+SECURITY_LOOKBACK_S = 30 * 86_400
+NO_RECENT_EVENT_HOURS = 24.0 * 31
+
 MODEL_FEATURES: List[FeatureSpec] = CORE_FEATURES
-ALL_FEATURES: List[FeatureSpec] = CORE_FEATURES + EXTENDED_FEATURES
+ALL_FEATURES: List[FeatureSpec] = CORE_FEATURES + EXTENDED_FEATURES + SIGNAL_FEATURES
 FEATURE_NAMES: List[str] = [f.name for f in CORE_FEATURES]
+EXTENDED_NAMES: List[str] = [f.name for f in CORE_FEATURES + EXTENDED_FEATURES]
+SIGNAL_NAMES: List[str] = [f.name for f in SIGNAL_FEATURES]
 ALL_FEATURE_NAMES: List[str] = [f.name for f in ALL_FEATURES]
-FEATURE_SETS: Dict[str, List[str]] = {"core": FEATURE_NAMES, "extended": ALL_FEATURE_NAMES}
+# Absolute size (USD amount, USD balance) tracks customer wealth, which varies by country and segment.
+# The "relative" sets judge amounts only against the customer's own behaviour; loss severity is
+# handled by the expected-cost decision layer (probability × amount), not by the probability model.
+ABSOLUTE_AMOUNT_FEATURES: List[str] = ["amount_usd", "log_amount_usd", "balance_before_usd"]
+FEATURE_SETS: Dict[str, List[str]] = {
+    "core": FEATURE_NAMES,
+    "extended": EXTENDED_NAMES,
+    "core-relative": [n for n in FEATURE_NAMES if n not in ABSOLUTE_AMOUNT_FEATURES],
+    "extended-relative": [n for n in EXTENDED_NAMES if n not in ABSOLUTE_AMOUNT_FEATURES],
+    "signals-relative": [n for n in EXTENDED_NAMES if n not in ABSOLUTE_AMOUNT_FEATURES] + SIGNAL_NAMES,
+}
+FEATURE_SET_SUFFIX: Dict[str, str] = {"core": "", "extended": "-x", "core-relative": "-r", "extended-relative": "-xr",
+                                      "signals-relative": "-sr"}
 CATEGORICAL_FEATURES: List[str] = [f.name for f in ALL_FEATURES if f.kind is Kind.CATEGORICAL]
 NUMERIC_FEATURES: List[str] = [f.name for f in ALL_FEATURES if f.kind is Kind.NUMERIC]
 FEATURE_BY_NAME: Dict[str, FeatureSpec] = {f.name: f for f in ALL_FEATURES}
@@ -273,15 +341,20 @@ def event_timestamps(df: pd.DataFrame) -> pd.Series:
 
 
 def build_features(df: pd.DataFrame, lookback_days: int = DEFAULT_LOOKBACK_DAYS,
-                   feature_version: int = FEATURE_VERSION) -> pd.DataFrame:
+                   feature_version: int = FEATURE_VERSION,
+                   security_events: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     """
     Compute model features for every row of `df` using only information that
     precedes each row's timestamp. Returns a frame indexed like `df`.
+
+    `security_events` (customer_id, event_time, event_type) is the bank's
+    security-event log; without it the security-event features are unknown.
     """
     if feature_version not in (1, 2):
         raise ValueError(f"Unknown feature_version {feature_version}")
     df = df.copy()
-    for col in ("device_id", "ip_location", "merchant_name", "customer_id", "currency",
+    for col in ("device_id", "ip_location", "merchant_name", "customer_id", "currency", "payee_id",
+                "latitude", "longitude",
                 "historical_average_transaction_amount", "account_balance_before",
                 "failed_attempt_count", "login_attempts", "debit_credit_flag", *CATEGORICAL_FEATURES):
         if col not in df.columns:
@@ -368,10 +441,113 @@ def build_features(df: pd.DataFrame, lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     gap = np.abs(np.angle(np.exp(1j * (angle - usual)))) * 24 / (2 * np.pi)
     out["hour_deviation"] = np.where(n_h >= 3, gap, np.nan)
 
+    # ── Feed-dependent signals (unknown when the feed is absent) ─────────────
+    lat = pd.to_numeric(df["latitude"], errors="coerce").to_numpy(float)
+    lon = pd.to_numeric(df["longitude"], errors="coerce").to_numpy(float)
+    dist, gap_s = _previous_located(cust, ts, lat, lon, lookback_s)
+    out["geo_distance_prev_km"] = dist
+    with np.errstate(invalid="ignore", divide="ignore"):
+        speed = dist / (np.maximum(gap_s, 60.0) / 3_600)
+    out["geo_speed_kmh"] = speed
+    out["impossible_travel"] = np.where(np.isnan(dist), np.nan,
+                                        ((speed > IMPOSSIBLE_SPEED_KMH) & (dist > IMPOSSIBLE_MIN_KM)).astype(float))
+
+    payee_present = (df["payee_id"].notna() & (df["payee_id"].astype(str) != "")).to_numpy()
+    cust_payee, _ = _prior_window(_group_ids(df, ["customer_id", "payee_id"]), ts, lookback_s)
+    new_payee = np.where(payee_present & knowable, (cust_payee == 0).astype(float), np.nan)
+    out["payee_new_for_customer"] = new_payee
+    _, new_24h = _prior_window(cust, ts, 86_400, np.nan_to_num(new_payee))
+    out["cust_new_payees_24h"] = np.where(payee_present, new_24h, np.nan)
+    payee_7d, _ = _prior_window(_group_ids(df, ["payee_id"]), ts, 7 * 86_400)
+    cust_payee_7d, _ = _prior_window(_group_ids(df, ["customer_id", "payee_id"]), ts, 7 * 86_400)
+    out["payee_other_customer_txns_7d"] = np.where(payee_present, (payee_7d - cust_payee_7d).astype(float), np.nan)
+
+    since_any, since_sim, count_7d = _security_event_features(df["customer_id"], ts, security_events)
+    out["hours_since_security_event"] = since_any
+    out["hours_since_sim_swap"] = since_sim
+    out["security_events_7d"] = count_7d
+
     for col in CATEGORICAL_FEATURES:
         out[col] = df[col].astype("string")
 
     return out[ALL_FEATURE_NAMES]
+
+
+def feed_coverage(features: pd.DataFrame) -> Dict[str, float]:
+    """Share of rows on which each feed's features are known (0.0 means the feed is absent)."""
+    return {feed: round(float(features[spec["features"]].notna().any(axis=1).mean()), 4) if len(features) else 0.0
+            for feed, spec in FEEDS.items()}
+
+
+def feeds_required(feature_names: Iterable[str]) -> List[str]:
+    names = set(feature_names)
+    return [feed for feed, spec in FEEDS.items() if names & set(spec["features"])]
+
+
+def _haversine_km(lat1, lon1, lat2, lon2):
+    lat1, lon1, lat2, lon2 = map(np.radians, (lat1, lon1, lat2, lon2))
+    a = np.sin((lat2 - lat1) / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2) ** 2
+    return 2 * 6371.0088 * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
+
+
+def _previous_located(gid: np.ndarray, ts: np.ndarray, lat: np.ndarray, lon: np.ndarray,
+                      lookback_s: int) -> Tuple[np.ndarray, np.ndarray]:
+    """Distance (km) and gap (s) to the same customer's latest earlier transaction that has a location."""
+    dist, gap = np.full(len(ts), np.nan), np.full(len(ts), np.nan)
+    located = np.flatnonzero(~np.isnan(lat) & ~np.isnan(lon))
+    if len(located) < 2:
+        return dist, gap
+    order = located[np.lexsort((ts[located], gid[located]))]
+    key = gid[order] * _SPAN + ts[order]
+    prev = np.searchsorted(key, key, side="left") - 1            # strictly earlier timestamp
+    ok = (prev >= 0) & (gid[order[np.maximum(prev, 0)]] == gid[order])
+    cur, before = order[ok], order[prev[ok]]
+    g = (ts[cur] - ts[before]).astype(float)
+    recent = g <= lookback_s
+    cur, before, g = cur[recent], before[recent], g[recent]
+    dist[cur] = _haversine_km(lat[before], lon[before], lat[cur], lon[cur])
+    gap[cur] = g
+    return dist, gap
+
+
+def _security_event_features(customers: pd.Series, ts: np.ndarray, events: Optional[pd.DataFrame]):
+    """
+    Hours since the last (any / SIM-swap) security event strictly before each transaction, and the count in
+    the prior 7 days. Unknown (NaN) without a feed; with a feed, "nothing in the last 30 days" is encoded as
+    NO_RECENT_EVENT_HOURS so it is distinguishable from a missing feed.
+    """
+    n = len(ts)
+    unknown = (np.full(n, np.nan), np.full(n, np.nan), np.full(n, np.nan))
+    if events is None or len(events) == 0:
+        return unknown
+    ev_dt = pd.to_datetime(events["event_time"], errors="coerce")
+    keep = ev_dt.notna().to_numpy()
+    if not keep.any():
+        return unknown
+    ev_ts = (ev_dt[keep] - pd.Timestamp("1970-01-01")).dt.total_seconds().to_numpy().astype(np.int64)
+    ev_cust = events["customer_id"].astype("string").to_numpy()[keep]
+    ev_type = events["event_type"].astype("string").str.lower().to_numpy()[keep]
+    txn_cust = customers.astype("string").to_numpy()
+    codes = {c: i for i, c in enumerate(pd.unique(np.concatenate([txn_cust, ev_cust])))}
+    t_gid = np.array([codes[c] for c in txn_cust], dtype=np.int64)
+    e_gid = np.array([codes[c] for c in ev_cust], dtype=np.int64)
+    q = t_gid * _SPAN + ts
+
+    def hours_since_last(mask):
+        hours = np.full(n, NO_RECENT_EVENT_HOURS)
+        if not mask.any():
+            return hours
+        key = np.sort(e_gid[mask] * _SPAN + ev_ts[mask])
+        i = np.searchsorted(key, q, side="left") - 1               # strictly before the transaction
+        ok = (i >= 0) & (key[np.maximum(i, 0)] // _SPAN == t_gid)
+        age = ts[ok] - key[i[ok]] % _SPAN
+        hours[np.flatnonzero(ok)] = np.where(age <= SECURITY_LOOKBACK_S, age / 3_600, NO_RECENT_EVENT_HOURS)
+        return hours
+
+    key = np.sort(e_gid * _SPAN + ev_ts)
+    count_7d = (np.searchsorted(key, q, side="left") - np.searchsorted(key, q - 7 * 86_400, side="left")).astype(float)
+    return (hours_since_last(np.ones(len(ev_ts), dtype=bool)),
+            hours_since_last(np.isin(ev_type, ["sim_swap", "number_port"])), count_7d)
 
 
 # Categorical fields enter the model as their smoothed historical fraud rate.

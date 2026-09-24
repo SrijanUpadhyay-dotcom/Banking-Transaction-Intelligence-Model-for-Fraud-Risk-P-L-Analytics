@@ -40,14 +40,15 @@ import pandas as pd
 import sklearn
 
 from bti.config import get_settings
-from bti.governance.fairness import fairness_report
+from bti.governance.fairness import fairness_assessment
 from bti.governance.monitoring import build_baseline
 from bti.logging_config import get_logger
 from bti.modeling import algorithms, fx, registry
 from bti.modeling.calibration import PlattCalibrator
 from bti.modeling.features import (
-    CATEGORICAL_FEATURES, DEFAULT_LOOKBACK_DAYS, FEATURE_SETS, FEATURE_VERSION, PROTECTED_ATTRIBUTES, SOURCE_FIELDS,
-    Availability, assert_feature_lineage, build_features, event_timestamps, feature_specs,
+    CATEGORICAL_FEATURES, DEFAULT_LOOKBACK_DAYS, FEATURE_SET_SUFFIX, FEATURE_SETS, FEATURE_VERSION, PROTECTED_ATTRIBUTES, SOURCE_FIELDS,
+    Availability, assert_feature_lineage, build_features, event_timestamps, feature_specs, feed_coverage,
+    feeds_required,
     fit_category_encodings, leakage_audit, out_of_fold_category_encoding, to_model_matrix,
 )
 from bti.modeling.metrics import (
@@ -77,6 +78,10 @@ REMEDIATION_LOG = [
                        "(a larger amount can never lower risk).",
         "retest": "Student ratio at 10% budget fell to 1.12x; fairness gate passes; OOT ROC-AUC 0.9566 -> 0.9581.",
         "superseded_model": "bti-v3-hgb-20260923160131",
+        "reassessment": "Re-tested under the pooled, corrected method (2026-09-24): the Student disparity was "
+                        "confined to the out-of-time window (1.34x there, 0.97x in the calibration window; pooled "
+                        "1.20x, q=0.44), so it would now sit on the watchlist rather than fail the gate. The "
+                        "monotone constraints are kept on their own merits: a larger amount should never lower risk.",
     },
 ]
 GATES = {"min_oot_roc_auc": 0.75, "max_oot_ece": 0.02, "max_feature_single_auc": 0.97}
@@ -122,6 +127,18 @@ def _git_sha() -> Optional[str]:
         return None
 
 
+class FeedUnavailableError(RuntimeError):
+    """A feature set needs a data feed (location, payee, security events) the training data does not carry."""
+
+
+MIN_FEED_COVERAGE = 0.01
+
+
+def default_security_events_path() -> Optional[Path]:
+    path = Path(get_settings().processed_data_dir) / "security_events.csv"
+    return path if path.exists() else None
+
+
 def default_data_path() -> Path:
     settings = get_settings()
     clean = Path(settings.processed_data_dir) / "banking_transactions_clean.csv"
@@ -146,12 +163,17 @@ class TrainingData:
     source_audit: list
     lookback_days: int
     feature_version: int = FEATURE_VERSION
+    security_events: Optional[pd.DataFrame] = None
+    security_events_sha256: Optional[str] = None
+    feeds: Optional[Dict[str, Dict[str, float]]] = None
 
 
 def prepare(data_path: Optional[Path] = None, lookback_days: int = DEFAULT_LOOKBACK_DAYS,
-            feature_version: int = FEATURE_VERSION) -> TrainingData:
+            feature_version: int = FEATURE_VERSION, security_events_path: Optional[Path] = None) -> TrainingData:
     assert_feature_lineage()
     data_path = Path(data_path or default_data_path())
+    events_path = security_events_path or (default_security_events_path() if data_path == default_data_path() else None)
+    events = pd.read_csv(events_path) if events_path else None
     log.info("Loading training data", extra={"path": str(data_path)})
     df = pd.read_csv(data_path, low_memory=False)
     df[LABEL] = pd.to_numeric(df[LABEL], errors="coerce").fillna(0).astype(int)
@@ -162,21 +184,43 @@ def prepare(data_path: Optional[Path] = None, lookback_days: int = DEFAULT_LOOKB
     tr_idx = np.flatnonzero(tr)
     es_start = tr_idx[int(len(tr_idx) * (1 - EARLY_STOP_SHARE))]
     es_val = tr & (np.arange(len(df)) >= es_start)
+    features = build_features(df, lookback_days=lookback_days, feature_version=feature_version,
+                              security_events=events)
+    ca = ((df["_ts"] >= cut_calib) & (df["_ts"] < cut_test)).to_numpy()
+    te = (df["_ts"] >= cut_test).to_numpy()
     return TrainingData(
-        path=data_path, sha256=_sha256(data_path), df=df,
-        features=build_features(df, lookback_days=lookback_days, feature_version=feature_version),
-        y=df[LABEL].to_numpy(), tr=tr,
-        ca=((df["_ts"] >= cut_calib) & (df["_ts"] < cut_test)).to_numpy(),
-        te=(df["_ts"] >= cut_test).to_numpy(), es_fit=tr & ~es_val, es_val=es_val,
+        path=data_path, sha256=_sha256(data_path), df=df, features=features,
+        y=df[LABEL].to_numpy(), tr=tr, ca=ca, te=te, es_fit=tr & ~es_val, es_val=es_val,
         cut_calib=cut_calib, cut_test=cut_test,
         source_audit=leakage_audit(df.drop(columns=["_ts"]), LABEL), lookback_days=lookback_days,
-        feature_version=feature_version,
+        feature_version=feature_version, security_events=events,
+        security_events_sha256=_sha256(Path(events_path)) if events_path else None,
+        feeds={w: feed_coverage(features[m]) for w, m in (("train", tr), ("calibration", ca), ("out_of_time", te))},
     )
+
+
+def assess_fairness(data: TrainingData, p: np.ndarray) -> Dict:
+    """Fairness on the out-of-sample windows at the reference threshold and the 5% / 10% stress budgets."""
+    attrs = [c for c in PROTECTED_ATTRIBUTES if c in data.df.columns and c not in ("geography", "city")]
+    thresholds = {"reference": threshold_for_alert_rate(p[data.ca], REFERENCE_ALERT_BUDGET),
+                  "stress_5pct_budget": threshold_for_alert_rate(p[data.ca], 0.05),
+                  "stress_10pct_budget": threshold_for_alert_rate(p[data.ca], 0.10)}
+    return fairness_assessment(data.y, p, thresholds, {"out_of_time": data.te, "calibration": data.ca},
+                               {c: data.df[c] for c in attrs})
+
+
+def check_feeds(data: TrainingData, feature_set: str) -> None:
+    """Refuse a feature set whose data feeds are absent or too thin in any window of the split."""
+    for feed in feeds_required(FEATURE_SETS[feature_set]):
+        thin = {w: c[feed] for w, c in (data.feeds or {}).items() if c[feed] < MIN_FEED_COVERAGE}
+        if thin or not data.feeds:
+            raise FeedUnavailableError(f"Feature set '{feature_set}' needs the {feed} feed, which covers "
+                                       f"{thin} of rows (minimum {MIN_FEED_COVERAGE:.0%} in every window)")
 
 
 def _model_id(algorithm: str, feature_set: str) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    base = f"bti-v3-{algorithms.SHORT[algorithm]}{'-x' if feature_set == 'extended' else ''}-{stamp}"
+    base = f"bti-v3-{algorithms.SHORT[algorithm]}{FEATURE_SET_SUFFIX[feature_set]}-{stamp}"
     model_id, n = base, 1
     while (registry.registry_dir() / model_id).exists():
         n += 1
@@ -189,6 +233,7 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
                     tuning: Optional[Dict] = None, auto_challenger: bool = True) -> Dict:
     names = FEATURE_SETS[feature_set]
     specs = feature_specs(feature_set)
+    check_feeds(data, feature_set)
     params = dict(params or algorithms.DEFAULT_PARAMS[algorithm])
     df, features, y, tr, ca, te = data.df, data.features, data.y, data.tr, data.ca, data.te
 
@@ -209,7 +254,6 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
     amount_usd = features["amount_usd"].to_numpy()
     accounts = df.get("account_id", df["customer_id"]).to_numpy()
     threshold = threshold_for_alert_rate(p[ca], REFERENCE_ALERT_BUDGET)
-    flagged_te = p[te] >= threshold
     metrics = {
         "train": classification_metrics(y[tr], p[tr]),
         "calibration": classification_metrics(y[ca], p[ca]),
@@ -227,21 +271,7 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
         "segments": {c: segment_performance(y[te], p[te], df.loc[te, c], threshold)
                      for c in SEGMENT_COLUMNS if c in df.columns},
     }
-    groups = {c: df.loc[te, c] for c in PROTECTED_ATTRIBUTES
-              if c in df.columns and c not in ("geography", "city")}
-    fairness_points = {"reference": flagged_te}
-    for budget in (0.05, 0.10):
-        fairness_points[f"stress_{int(budget * 100)}pct_budget"] = (
-            p[te] >= threshold_for_alert_rate(p[ca], budget))
-    fairness_runs = {name: fairness_report(y[te], flags, groups) for name, flags in fairness_points.items()}
-    fairness = {
-        "status": "pass" if all(r["status"] == "pass" for r in fairness_runs.values()) else "review_required",
-        "findings": [{"operating_point": n, **f} for n, r in fairness_runs.items() for f in r["findings"]],
-        "note": "Evaluated at the reference threshold and at looser 5% / 10% alert budgets, where legitimate "
-                "customers are flagged, so the test is informative even when the reference point has no "
-                "false positives.",
-        "operating_points": fairness_runs,
-    }
+    fairness = assess_fairness(data, p)
 
     legacy = {}
     legacy_scores = _legacy_scores(df.loc[te])
@@ -264,7 +294,9 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
         {"gate": "oot_calibration", "passed": metrics["out_of_time"].get("ece", 1) <= GATES["max_oot_ece"],
          "detail": f"OOT ECE {metrics['out_of_time'].get('ece')} vs maximum {GATES['max_oot_ece']}"},
         {"gate": "fairness", "passed": fairness["status"] == "pass",
-         "detail": f"{len(fairness['findings'])} significant false-positive-rate disparities"},
+         "detail": f"{len(fairness['findings'])} false-positive-rate disparities significant on the pooled "
+                   f"out-of-sample windows and present in each ({len(fairness['watchlist'])} on the "
+                   f"non-gating watchlist)"},
     ]
     status = "passed" if all(g["passed"] for g in gates) else "failed"
 
@@ -288,6 +320,8 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
         "data": {
             "path": str(data.path),
             "sha256": data.sha256,
+            "security_events_sha256": data.security_events_sha256,
+            "feed_coverage": data.feeds,
             "rows": int(len(df)),
             "fraud_rate": round(float(y.mean()), 5),
             "window": [str(df["_ts"].min()), str(df["_ts"].max())],
@@ -353,7 +387,8 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
                        **_library_versions(algorithm)},
     }
     artifact = {"estimator": estimator, "calibrator": calibrator, "encodings": encodings,
-                "feature_names": names, "lookback_days": data.lookback_days, "algorithm": algorithm,
+                "feature_names": names, "feeds": feeds_required(names), "lookback_days": data.lookback_days,
+                "algorithm": algorithm,
                 "feature_version": data.feature_version,
                 "reference_threshold": threshold, "model_id": model_id}
 

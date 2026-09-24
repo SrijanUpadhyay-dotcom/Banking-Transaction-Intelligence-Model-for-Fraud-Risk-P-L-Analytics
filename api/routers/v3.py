@@ -8,6 +8,7 @@ score log for audit, monitoring and champion/challenger comparison.
 """
 
 from dataclasses import asdict
+from datetime import datetime
 from typing import List, Optional
 
 import pandas as pd
@@ -15,9 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from api.security import require_api_key
 from bti.database import get_db
+from bti.database.models import SecurityEvent, Transaction
 from bti.logging_config import get_logger
 from bti.modeling import registry
+from bti.modeling.features import FEEDS, SECURITY_EVENT_TYPES
 from bti.modeling.fx import supported_currencies
 from bti.modeling.scorer import scorer
 from bti.operations.scoring_service import score_and_decide
@@ -48,8 +52,20 @@ class V3Transaction(BaseModel):
     account_balance_before: Optional[float] = None
     failed_attempt_count: Optional[int] = 0
     login_attempts: Optional[int] = 1
+    latitude: Optional[float] = Field(None, ge=-90, le=90, description="Location feed: where the transaction "
+                                                                        "happened (terminal, device GPS or IP geo)")
+    longitude: Optional[float] = Field(None, ge=-180, le=180)
+    payee_id: Optional[str] = Field(None, description="Payee feed: beneficiary account key (tokenised is fine)")
 
     model_config = {"extra": "ignore"}
+
+
+class SecurityEventIn(BaseModel):
+    customer_id: str
+    event_type: str = Field(..., description=f"One of {', '.join(SECURITY_EVENT_TYPES)}")
+    event_time: datetime = Field(..., description="When the event happened (ISO 8601, account local time)")
+    source: Optional[str] = Field(None, description="Originating system, e.g. identity platform, MNO API")
+    detail: Optional[dict] = None
 
 
 def _validate_currency(txn: V3Transaction) -> None:
@@ -116,4 +132,53 @@ def v3_model():
         "reference_operating_point": card["performance"]["reference_operating_point"],
         "features": [f["name"] for f in card["features"]["model_features"]],
         "supported_currencies": supported_currencies(),
+    }
+
+
+@router.post("/security-events", status_code=201, dependencies=[Depends(require_api_key)])
+def ingest_security_events(events: List[SecurityEventIn], db: Session = Depends(get_db)):
+    """
+    Security-event feed: password resets, SIM swaps / number ports, contact-detail changes and device
+    enrolments. Append-only. Models trained with the security-event signals read these point-in-time.
+    """
+    if not 1 <= len(events) <= 5000:
+        raise HTTPException(status_code=422, detail="Send between 1 and 5000 events per call")
+    unknown = sorted({e.event_type for e in events} - set(SECURITY_EVENT_TYPES))
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Unknown event_type {unknown}; use {list(SECURITY_EVENT_TYPES)}")
+    db.add_all([SecurityEvent(customer_id=e.customer_id, event_type=e.event_type,
+                              event_time=e.event_time.replace(tzinfo=None), source=e.source, detail=e.detail)
+                for e in events])
+    db.commit()
+    return {"accepted": len(events)}
+
+
+@router.get("/feeds")
+def feed_status(db: Session = Depends(get_db)):
+    """Which optional data feeds are populated, and whether the scoring model uses them."""
+    from sqlalchemy import func
+    total = db.query(func.count(Transaction.transaction_id)).scalar() or 0
+    located = db.query(func.count(Transaction.transaction_id)).filter(Transaction.latitude.isnot(None),
+                                                                     Transaction.longitude.isnot(None)).scalar() or 0
+    with_payee = db.query(func.count(Transaction.transaction_id)).filter(Transaction.payee_id.isnot(None)).scalar() or 0
+    events = db.query(func.count(SecurityEvent.id)).scalar() or 0
+    try:
+        model_id, _, _ = scorer.resolve("champion")
+        used = registry.load_artifact(model_id).get("feeds", [])
+    except registry.RegistryError:
+        model_id, used = None, []
+    stored = {"location": {"transactions_with_location": located},
+              "payee": {"transactions_with_payee": with_payee},
+              "security_events": {"events_stored": events}}
+    share = {"location": located / total if total else 0.0, "payee": with_payee / total if total else 0.0,
+             "security_events": None}
+    return {
+        "transactions": total,
+        "scoring_model": model_id,
+        "feeds": {name: {**stored[name], "share_of_transactions": None if share[name] is None else
+                         round(share[name], 4), "used_by_scoring_model": name in used,
+                         "features": spec["features"], "fields": spec["fields"], "source": spec["source"]}
+                  for name, spec in FEEDS.items()},
+        "note": "Feed-dependent features stay out of every model until the feed covers each window of the "
+                "training history; train with --feature-sets signals-relative once it does.",
     }

@@ -20,7 +20,32 @@ log = get_logger("db.init")
 def create_tables() -> None:
     log.info("Creating database tables...")
     Base.metadata.create_all(bind=engine)
-    log.info("Tables created successfully")
+    added = add_missing_columns()
+    log.info("Tables created successfully", extra={"columns_added": added})
+
+
+def add_missing_columns(bind=None) -> list:
+    """
+    Additive migration: create_all does not alter existing tables, so nullable
+    columns added to the ORM since the database was created are added here.
+    Never drops or changes a column.
+    """
+    from sqlalchemy import inspect, text
+    bind = bind or engine
+    inspector = inspect(bind)
+    added = []
+    with bind.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if not inspector.has_table(table.name):
+                continue
+            existing = {c["name"] for c in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name in existing or not column.nullable or column.primary_key:
+                    continue
+                ddl = column.type.compile(dialect=bind.dialect)
+                conn.execute(text(f'ALTER TABLE {table.name} ADD COLUMN {column.name} {ddl}'))
+                added.append(f"{table.name}.{column.name}")
+    return added
 
 
 def seed_from_csv(csv_path: str, batch_size: int = 5000) -> int:

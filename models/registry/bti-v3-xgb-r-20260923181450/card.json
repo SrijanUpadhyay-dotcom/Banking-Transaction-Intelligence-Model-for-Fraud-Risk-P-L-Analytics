@@ -1,0 +1,2795 @@
+{
+  "model_id": "bti-v3-xgb-r-20260923181450",
+  "model_family": "BTI v3 transaction fraud model",
+  "created_at": "2026-09-23T18:14:50.705124+00:00",
+  "ownership": {
+    "developer": "Srijan Upadhyay",
+    "business_owner": null,
+    "validator": null
+  },
+  "purpose": {
+    "intended_use": "Real-time probability that a payment or account transaction is fraudulent, used to approve, step-up, review or decline before funds move.",
+    "out_of_scope": [
+      "Credit underwriting or credit-limit decisions",
+      "AML transaction monitoring / SAR decisions (separate typologies and regulation)",
+      "Sole basis for account closure without human review"
+    ],
+    "decision_type": "Decision support with automated action under documented policy thresholds"
+  },
+  "regulatory_mapping": [
+    {
+      "framework": "US Federal Reserve SR 11-7 / OCC 2011-12",
+      "scope": "Model risk management"
+    },
+    {
+      "framework": "UK PRA SS1/23",
+      "scope": "Model risk management principles for banks"
+    },
+    {
+      "framework": "EU AI Act",
+      "scope": "Annex III 5(b) exempts AI used to detect financial fraud from the high-risk credit-scoring category; GDPR Art. 22 still applies to solely automated decisions"
+    },
+    {
+      "framework": "MAS FEAT Principles (Singapore)",
+      "scope": "Fairness, ethics, accountability, transparency"
+    },
+    {
+      "framework": "HKMA high-level principles on AI",
+      "scope": "Governance, explainability, data quality"
+    },
+    {
+      "framework": "CBUAE Model Management Standards",
+      "scope": "Model lifecycle governance (UAE)"
+    }
+  ],
+  "data": {
+    "path": "/home/user/Banking-Transaction-Intelligence-Model-for-Fraud-Risk-P-L-Analytics/data/processed/banking_transactions_clean.csv",
+    "sha256": "9e3e0ea0c9b1bc03d502898762c411180cb00f8e22f74fa3d84538106bf18abe",
+    "rows": 50000,
+    "fraud_rate": 0.04974,
+    "window": [
+      "2023-01-01 00:12:28",
+      "2024-12-30 23:46:32"
+    ],
+    "split": {
+      "method": "out_of_time",
+      "train": {
+        "to": "2024-03-17 02:08:45.200000",
+        "rows": 30000,
+        "fraud": 1508,
+        "early_stopping_rows": 4500
+      },
+      "calibration": {
+        "from": "2024-03-17 02:08:45.200000",
+        "to": "2024-07-03 22:24:51.750000",
+        "rows": 7500,
+        "fraud": 357
+      },
+      "out_of_time_test": {
+        "from": "2024-07-03 22:24:51.750000",
+        "rows": 12500,
+        "fraud": 622
+      }
+    },
+    "fx": {
+      "reporting_currency": "USD",
+      "rates_as_of": "2024-12-31 (indicative)",
+      "rates": {
+        "USD": 1.0,
+        "EUR": 1.04,
+        "GBP": 1.25,
+        "INR": 0.0117,
+        "SGD": 0.733,
+        "HKD": 0.1287,
+        "AED": 0.2723,
+        "NGN": 0.00065
+      }
+    }
+  },
+  "features": {
+    "lookback_days": 365,
+    "feature_set": "core-relative",
+    "feature_version": 2,
+    "model_features": [
+      {
+        "name": "amount_vs_hist_avg",
+        "kind": "numeric",
+        "sources": [
+          "transaction_amount",
+          "historical_average_transaction_amount"
+        ],
+        "reason_code": "AMT_VS_HISTORY",
+        "description": "Amount \u00f7 customer's historical average (currency-invariant)"
+      },
+      {
+        "name": "amount_to_balance",
+        "kind": "numeric",
+        "sources": [
+          "transaction_amount",
+          "account_balance_before"
+        ],
+        "reason_code": "AMT_VS_BALANCE",
+        "description": "Amount \u00f7 available balance"
+      },
+      {
+        "name": "failed_attempt_count",
+        "kind": "numeric",
+        "sources": [
+          "failed_attempt_count"
+        ],
+        "reason_code": "AUTH_FAILURES",
+        "description": "Failed credential attempts"
+      },
+      {
+        "name": "login_attempts",
+        "kind": "numeric",
+        "sources": [
+          "login_attempts"
+        ],
+        "reason_code": "LOGIN_ANOMALY",
+        "description": "Login attempts in session"
+      },
+      {
+        "name": "txn_hour",
+        "kind": "numeric",
+        "sources": [
+          "transaction_time"
+        ],
+        "reason_code": "TIME_OF_DAY",
+        "description": "Hour of day"
+      },
+      {
+        "name": "is_off_hours",
+        "kind": "numeric",
+        "sources": [
+          "transaction_time"
+        ],
+        "reason_code": "TIME_OF_DAY",
+        "description": "00:00\u201305:59 or 22:00\u201323:59"
+      },
+      {
+        "name": "is_weekend",
+        "kind": "numeric",
+        "sources": [
+          "transaction_date"
+        ],
+        "reason_code": "TIME_OF_DAY",
+        "description": "Saturday or Sunday"
+      },
+      {
+        "name": "is_debit",
+        "kind": "numeric",
+        "sources": [
+          "debit_credit_flag"
+        ],
+        "reason_code": "TXN_TYPE",
+        "description": "Funds leaving the account"
+      },
+      {
+        "name": "cust_txn_count_1h",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time"
+        ],
+        "reason_code": "VELOCITY",
+        "description": "Customer transactions in prior 1h"
+      },
+      {
+        "name": "cust_txn_count_24h",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time"
+        ],
+        "reason_code": "VELOCITY",
+        "description": "Customer transactions in prior 24h"
+      },
+      {
+        "name": "cust_txn_count_7d",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time"
+        ],
+        "reason_code": "VELOCITY",
+        "description": "Customer transactions in prior 7d"
+      },
+      {
+        "name": "cust_amount_usd_24h",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time",
+          "transaction_amount",
+          "currency"
+        ],
+        "reason_code": "VELOCITY",
+        "description": "Customer USD spend in prior 24h"
+      },
+      {
+        "name": "cust_amount_usd_7d",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time",
+          "transaction_amount",
+          "currency"
+        ],
+        "reason_code": "VELOCITY",
+        "description": "Customer USD spend in prior 7d"
+      },
+      {
+        "name": "secs_since_last_txn",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time"
+        ],
+        "reason_code": "VELOCITY",
+        "description": "Seconds since customer's previous transaction"
+      },
+      {
+        "name": "device_new_for_customer",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time",
+          "device_id"
+        ],
+        "reason_code": "NEW_DEVICE",
+        "description": "Device not used by this customer within the look-back (unknown without prior history)"
+      },
+      {
+        "name": "ip_new_for_customer",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time",
+          "ip_location"
+        ],
+        "reason_code": "NEW_IP",
+        "description": "IP not used by this customer within the look-back (unknown without prior history)"
+      },
+      {
+        "name": "merchant_new_for_customer",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time",
+          "merchant_name"
+        ],
+        "reason_code": "NEW_MERCHANT",
+        "description": "First payment to this merchant within the look-back (unknown without prior history)"
+      },
+      {
+        "name": "device_other_customer_txns",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time",
+          "device_id"
+        ],
+        "reason_code": "SHARED_DEVICE",
+        "description": "Prior transactions on this device by other customers"
+      },
+      {
+        "name": "ip_other_customer_txns",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time",
+          "ip_location"
+        ],
+        "reason_code": "SHARED_DEVICE",
+        "description": "Prior transactions from this IP by other customers"
+      },
+      {
+        "name": "channel",
+        "kind": "categorical",
+        "sources": [
+          "channel"
+        ],
+        "reason_code": "CHANNEL_RISK",
+        "description": "Origination channel"
+      },
+      {
+        "name": "authorization_method",
+        "kind": "categorical",
+        "sources": [
+          "authorization_method"
+        ],
+        "reason_code": "CHANNEL_RISK",
+        "description": "Credential presented"
+      },
+      {
+        "name": "merchant_category",
+        "kind": "categorical",
+        "sources": [
+          "merchant_category"
+        ],
+        "reason_code": "MERCHANT_RISK",
+        "description": "Merchant category"
+      },
+      {
+        "name": "transaction_type",
+        "kind": "categorical",
+        "sources": [
+          "transaction_type"
+        ],
+        "reason_code": "TXN_TYPE",
+        "description": "Transaction type"
+      }
+    ],
+    "monotone_increasing": [
+      "failed_attempt_count",
+      "login_attempts",
+      "amount_vs_hist_avg",
+      "device_new_for_customer",
+      "ip_new_for_customer",
+      "cust_txn_count_1h",
+      "cust_txn_count_24h",
+      "cust_txn_count_7d",
+      "amount_to_balance"
+    ],
+    "excluded_source_fields": [
+      {
+        "field": "customer_segment",
+        "classification": "protected_or_proxy",
+        "reason": "Contains nationality-adjacent segments (NRI / Diaspora); monitored, not modelled"
+      },
+      {
+        "field": "customer_age_band",
+        "classification": "protected_or_proxy",
+        "reason": "Age is a protected characteristic"
+      },
+      {
+        "field": "country",
+        "classification": "protected_or_proxy",
+        "reason": "Residence country \u2014 national-origin proxy; used for jurisdiction policy"
+      },
+      {
+        "field": "geography",
+        "classification": "protected_or_proxy",
+        "reason": "Same as country"
+      },
+      {
+        "field": "city",
+        "classification": "protected_or_proxy",
+        "reason": "Location proxy"
+      },
+      {
+        "field": "transaction_status",
+        "classification": "label_derived",
+        "reason": "Takes the value 'Fraudulent' after investigation"
+      },
+      {
+        "field": "reversal_flag",
+        "classification": "post_event",
+        "reason": "Set after the transaction is reversed"
+      },
+      {
+        "field": "refund_flag",
+        "classification": "post_event",
+        "reason": "Set after a refund"
+      },
+      {
+        "field": "chargeback_flag",
+        "classification": "post_event",
+        "reason": "Set weeks later when the cardholder disputes"
+      },
+      {
+        "field": "fee_income",
+        "classification": "post_event",
+        "reason": "Settlement economics"
+      },
+      {
+        "field": "interchange_income",
+        "classification": "post_event",
+        "reason": "Settlement economics"
+      },
+      {
+        "field": "processing_cost",
+        "classification": "post_event",
+        "reason": "Settlement economics"
+      },
+      {
+        "field": "chargeback_loss",
+        "classification": "post_event",
+        "reason": "Loss booked after dispute"
+      },
+      {
+        "field": "refund_loss",
+        "classification": "post_event",
+        "reason": "Loss booked after refund"
+      },
+      {
+        "field": "fraud_loss",
+        "classification": "label_derived",
+        "reason": "Non-zero only on confirmed fraud"
+      },
+      {
+        "field": "net_revenue",
+        "classification": "post_event",
+        "reason": "Settlement economics"
+      },
+      {
+        "field": "net_pnl_impact",
+        "classification": "label_derived",
+        "reason": "Includes fraud_loss"
+      },
+      {
+        "field": "fraud_flag",
+        "classification": "label_derived",
+        "reason": "The label"
+      },
+      {
+        "field": "fraud_type",
+        "classification": "label_derived",
+        "reason": "Label detail"
+      },
+      {
+        "field": "risk_score",
+        "classification": "label_derived",
+        "reason": "Synthetic generator adds +60 when it creates a fraud (src/01_data_generation.py)"
+      },
+      {
+        "field": "fraud_rule_score",
+        "classification": "label_derived",
+        "reason": "Legacy rules R06/R12/R17 read risk_score"
+      },
+      {
+        "field": "rules_triggered",
+        "classification": "label_derived",
+        "reason": "Legacy rules R06/R12/R17 read risk_score"
+      },
+      {
+        "field": "is_high_risk",
+        "classification": "label_derived",
+        "reason": "Threshold on risk_score"
+      },
+      {
+        "field": "final_risk_score",
+        "classification": "label_derived",
+        "reason": "Legacy composite weights risk_score at 35%"
+      }
+    ],
+    "source_leakage_audit": [
+      {
+        "column": "risk_score",
+        "single_feature_auc": 1.0,
+        "catalogued_as": "label_derived",
+        "suspected_leak": true
+      },
+      {
+        "column": "is_high_risk",
+        "single_feature_auc": 0.9943,
+        "catalogued_as": "label_derived",
+        "suspected_leak": true
+      },
+      {
+        "column": "amount_vs_hist_avg_ratio",
+        "single_feature_auc": 0.8807,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "net_pnl_impact",
+        "single_feature_auc": 0.8329,
+        "catalogued_as": "label_derived",
+        "suspected_leak": false
+      },
+      {
+        "column": "is_revenue_leakage",
+        "single_feature_auc": 0.79,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "login_attempts",
+        "single_feature_auc": 0.7878,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      },
+      {
+        "column": "transaction_amount",
+        "single_feature_auc": 0.7614,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      },
+      {
+        "column": "processing_cost",
+        "single_feature_auc": 0.7608,
+        "catalogued_as": "post_event",
+        "suspected_leak": false
+      },
+      {
+        "column": "fraud_loss",
+        "single_feature_auc": 0.7533,
+        "catalogued_as": "label_derived",
+        "suspected_leak": false
+      },
+      {
+        "column": "fee_income",
+        "single_feature_auc": 0.7497,
+        "catalogued_as": "post_event",
+        "suspected_leak": false
+      },
+      {
+        "column": "chargeback_loss",
+        "single_feature_auc": 0.6749,
+        "catalogued_as": "post_event",
+        "suspected_leak": false
+      },
+      {
+        "column": "chargeback_flag",
+        "single_feature_auc": 0.674,
+        "catalogued_as": "post_event",
+        "suspected_leak": false
+      },
+      {
+        "column": "balance_delta",
+        "single_feature_auc": 0.6472,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      }
+    ],
+    "engineered_leakage_audit": [
+      {
+        "column": "amount_vs_hist_avg",
+        "single_feature_auc": 0.8813,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "login_attempts",
+        "single_feature_auc": 0.7851,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      },
+      {
+        "column": "device_new_for_customer",
+        "single_feature_auc": 0.7193,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "ip_new_for_customer",
+        "single_feature_auc": 0.7193,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "amount_to_balance",
+        "single_feature_auc": 0.7179,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "channel",
+        "single_feature_auc": 0.5112,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      },
+      {
+        "column": "is_debit",
+        "single_feature_auc": 0.5096,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "failed_attempt_count",
+        "single_feature_auc": 0.508,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      },
+      {
+        "column": "secs_since_last_txn",
+        "single_feature_auc": 0.5074,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "transaction_type",
+        "single_feature_auc": 0.5065,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      },
+      {
+        "column": "is_weekend",
+        "single_feature_auc": 0.5063,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "authorization_method",
+        "single_feature_auc": 0.505,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      },
+      {
+        "column": "cust_amount_usd_7d",
+        "single_feature_auc": 0.5021,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "cust_txn_count_7d",
+        "single_feature_auc": 0.502,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "cust_txn_count_24h",
+        "single_feature_auc": 0.5017,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "cust_amount_usd_24h",
+        "single_feature_auc": 0.5017,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "merchant_new_for_customer",
+        "single_feature_auc": 0.5011,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "device_other_customer_txns",
+        "single_feature_auc": 0.5006,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "is_off_hours",
+        "single_feature_auc": 0.5005,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "txn_hour",
+        "single_feature_auc": 0.5004,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "cust_txn_count_1h",
+        "single_feature_auc": 0.5001,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "merchant_category",
+        "single_feature_auc": 0.5001,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      }
+    ],
+    "global_importance": [
+      {
+        "feature": "amount_vs_hist_avg",
+        "mean_abs_shap": 1.42222,
+        "share": 0.4504
+      },
+      {
+        "feature": "login_attempts",
+        "mean_abs_shap": 0.63091,
+        "share": 0.1998
+      },
+      {
+        "feature": "device_new_for_customer",
+        "mean_abs_shap": 0.34108,
+        "share": 0.108
+      },
+      {
+        "feature": "amount_to_balance",
+        "mean_abs_shap": 0.16868,
+        "share": 0.0534
+      },
+      {
+        "feature": "secs_since_last_txn",
+        "mean_abs_shap": 0.12458,
+        "share": 0.0395
+      },
+      {
+        "feature": "ip_new_for_customer",
+        "mean_abs_shap": 0.09348,
+        "share": 0.0296
+      },
+      {
+        "feature": "merchant_category",
+        "mean_abs_shap": 0.07815,
+        "share": 0.0247
+      },
+      {
+        "feature": "is_weekend",
+        "mean_abs_shap": 0.06421,
+        "share": 0.0203
+      },
+      {
+        "feature": "channel",
+        "mean_abs_shap": 0.05288,
+        "share": 0.0167
+      },
+      {
+        "feature": "txn_hour",
+        "mean_abs_shap": 0.03811,
+        "share": 0.0121
+      },
+      {
+        "feature": "transaction_type",
+        "mean_abs_shap": 0.03501,
+        "share": 0.0111
+      },
+      {
+        "feature": "authorization_method",
+        "mean_abs_shap": 0.03412,
+        "share": 0.0108
+      },
+      {
+        "feature": "is_off_hours",
+        "mean_abs_shap": 0.02905,
+        "share": 0.0092
+      },
+      {
+        "feature": "merchant_new_for_customer",
+        "mean_abs_shap": 0.02007,
+        "share": 0.0064
+      },
+      {
+        "feature": "is_debit",
+        "mean_abs_shap": 0.0179,
+        "share": 0.0057
+      },
+      {
+        "feature": "failed_attempt_count",
+        "mean_abs_shap": 0.00426,
+        "share": 0.0014
+      },
+      {
+        "feature": "cust_amount_usd_7d",
+        "mean_abs_shap": 0.00289,
+        "share": 0.0009
+      },
+      {
+        "feature": "cust_txn_count_7d",
+        "mean_abs_shap": 0.00022,
+        "share": 0.0001
+      },
+      {
+        "feature": "cust_txn_count_1h",
+        "mean_abs_shap": 0.0,
+        "share": 0.0
+      },
+      {
+        "feature": "cust_txn_count_24h",
+        "mean_abs_shap": 0.0,
+        "share": 0.0
+      },
+      {
+        "feature": "cust_amount_usd_24h",
+        "mean_abs_shap": 0.0,
+        "share": 0.0
+      },
+      {
+        "feature": "device_other_customer_txns",
+        "mean_abs_shap": 0.0,
+        "share": 0.0
+      },
+      {
+        "feature": "ip_other_customer_txns",
+        "mean_abs_shap": 0.0,
+        "share": 0.0
+      }
+    ],
+    "category_encodings": {
+      "channel": {
+        "prior": 0.05026666666666667,
+        "smoothing": 50.0,
+        "rates": {
+          "API/Open Banking": 0.040886,
+          "ATM": 0.047167,
+          "Branch": 0.044857,
+          "Call Centre": 0.046093,
+          "Internet Banking": 0.050509,
+          "Mobile Banking": 0.053598,
+          "POS Terminal": 0.053776,
+          "USSD": 0.053876
+        },
+        "counts": {
+          "API/Open Banking": 1161,
+          "ATM": 5346,
+          "Branch": 2971,
+          "Call Centre": 612,
+          "Internet Banking": 6652,
+          "Mobile Banking": 9027,
+          "POS Terminal": 3065,
+          "USSD": 1166
+        }
+      },
+      "authorization_method": {
+        "prior": 0.05026666666666667,
+        "smoothing": 50.0,
+        "rates": {
+          "Biometric": 0.051833,
+          "Contactless": 0.061448,
+          "OTP": 0.051507,
+          "PIN": 0.047517,
+          "Password": 0.047207,
+          "Signature": 0.052692,
+          "Token": 0.050354
+        },
+        "counts": {
+          "Biometric": 7484,
+          "Contactless": 1244,
+          "OTP": 6095,
+          "PIN": 8905,
+          "Password": 3562,
+          "Signature": 605,
+          "Token": 2105
+        }
+      },
+      "merchant_category": {
+        "prior": 0.05026666666666667,
+        "smoothing": 50.0,
+        "rates": {
+          "Auto & Transportation": 0.041902,
+          "Crypto Exchanges": 0.044391,
+          "Education": 0.051055,
+          "Electronics & Technology": 0.042297,
+          "Entertainment & Streaming": 0.048944,
+          "Financial Services / Money Transfer": 0.060965,
+          "Fuel & Petroleum": 0.048071,
+          "Gaming & Gambling": 0.040916,
+          "Government & Taxes": 0.081329,
+          "Grocery & Supermarkets": 0.050267,
+          "Healthcare & Pharmacy": 0.050313,
+          "Hotels & Accommodation": 0.05309,
+          "Insurance": 0.047316,
+          "Luxury Goods": 0.042286,
+          "Online Marketplaces": 0.049246,
+          "Real Estate": 0.054523,
+          "Restaurants & Food Delivery": 0.047295,
+          "Retail / General Merchandise": 0.052437,
+          "Travel & Airlines": 0.046989,
+          "Utilities & Telecom": 0.058353
+        },
+        "counts": {
+          "Auto & Transportation": 893,
+          "Crypto Exchanges": 322,
+          "Education": 626,
+          "Electronics & Technology": 2019,
+          "Entertainment & Streaming": 553,
+          "Financial Services / Money Transfer": 2058,
+          "Fuel & Petroleum": 2457,
+          "Gaming & Gambling": 598,
+          "Government & Taxes": 276,
+          "Grocery & Supermarkets": 3561,
+          "Healthcare & Pharmacy": 1749,
+          "Hotels & Accommodation": 1184,
+          "Insurance": 299,
+          "Luxury Goods": 577,
+          "Online Marketplaces": 1788,
+          "Real Estate": 583,
+          "Restaurants & Food Delivery": 2921,
+          "Retail / General Merchandise": 4346,
+          "Travel & Airlines": 1706,
+          "Utilities & Telecom": 1484
+        }
+      },
+      "transaction_type": {
+        "prior": 0.05026666666666667,
+        "smoothing": 50.0,
+        "rates": {
+          "Card Not Present": 0.06002,
+          "Chargeback": 0.039759,
+          "Deposit": 0.052679,
+          "Fee Charge": 0.052051,
+          "Interest Credit": 0.06252,
+          "Payment": 0.046096,
+          "Purchase": 0.050695,
+          "Refund": 0.058194,
+          "Reversal": 0.044998,
+          "Transfer": 0.049595,
+          "Wire Transfer": 0.048306,
+          "Withdrawal": 0.047815
+        },
+        "counts": {
+          "Card Not Present": 625,
+          "Chargeback": 642,
+          "Deposit": 3035,
+          "Fee Charge": 1151,
+          "Interest Credit": 614,
+          "Payment": 3020,
+          "Purchase": 8462,
+          "Refund": 1471,
+          "Reversal": 917,
+          "Transfer": 5344,
+          "Wire Transfer": 1182,
+          "Withdrawal": 3537
+        }
+      }
+    }
+  },
+  "methodology": {
+    "algorithm": "XGBoost XGBClassifier (hist tree method)",
+    "algorithm_key": "xgboost",
+    "calibration": {
+      "method": "platt_sigmoid_on_logit",
+      "slope": 1.022691,
+      "intercept": 0.183752,
+      "fitted_on": "calibration window"
+    },
+    "categorical_encoding": "Smoothed fraud rate per category (m=50), out-of-fold on the training window; applied as a fitted parameter at inference",
+    "hyperparameters": {
+      "learning_rate": 0.03,
+      "max_depth": 6,
+      "min_child_weight": 5,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "reg_lambda": 1.0
+    },
+    "early_stopping": "50 rounds on the most recent 15% of the training window",
+    "iterations_used": 216,
+    "tuning": null,
+    "threshold_policy": "Reference threshold = 2% alert budget on the calibration window",
+    "reference_threshold": 0.9872786328516472
+  },
+  "performance": {
+    "metrics": {
+      "train": {
+        "n": 30000,
+        "n_fraud": 1508,
+        "base_rate": 0.05027,
+        "roc_auc": 0.9593,
+        "pr_auc": 0.8641,
+        "gini": 0.9186,
+        "ks": 0.8181,
+        "brier": 0.01295,
+        "log_loss": 0.05901,
+        "ece": 0.00216
+      },
+      "calibration": {
+        "n": 7500,
+        "n_fraud": 357,
+        "base_rate": 0.0476,
+        "roc_auc": 0.9419,
+        "pr_auc": 0.8519,
+        "gini": 0.8838,
+        "ks": 0.8073,
+        "brier": 0.01226,
+        "log_loss": 0.05914,
+        "ece": 0.0031
+      },
+      "out_of_time": {
+        "n": 12500,
+        "n_fraud": 622,
+        "base_rate": 0.04976,
+        "roc_auc": 0.9556,
+        "pr_auc": 0.8857,
+        "gini": 0.9111,
+        "ks": 0.8449,
+        "brier": 0.0105,
+        "log_loss": 0.0516,
+        "ece": 0.00305
+      },
+      "out_of_time_uncalibrated": {
+        "n": 12500,
+        "n_fraud": 622,
+        "base_rate": 0.04976,
+        "roc_auc": 0.9556,
+        "pr_auc": 0.8857,
+        "gini": 0.9111,
+        "ks": 0.8449,
+        "brier": 0.01055,
+        "log_loss": 0.05165,
+        "ece": 0.0036
+      }
+    },
+    "reference_operating_point": {
+      "chosen_on": "calibration window",
+      "alert_budget": 0.02,
+      "threshold": 0.987279,
+      "alerts": 275,
+      "alert_rate": 0.022,
+      "precision": 1.0,
+      "tdr": 0.4421,
+      "false_positive_ratio": 0.0,
+      "legit_customers_impacted_per_10k": 0.0,
+      "vdr": 0.6414,
+      "fraud_value_intercepted_usd": 12845646.51,
+      "fraud_value_missed_usd": 7180798.72,
+      "adr": 0.4463
+    },
+    "alert_budgets": [
+      {
+        "alert_budget": 0.005,
+        "threshold": 0.999587,
+        "alerts": 63,
+        "alert_rate": 0.00504,
+        "precision": 1.0,
+        "tdr": 0.1013,
+        "false_positive_ratio": 0.0,
+        "legit_customers_impacted_per_10k": 0.0,
+        "vdr": 0.2224,
+        "fraud_value_intercepted_usd": 4454629.23,
+        "fraud_value_missed_usd": 15571816.0,
+        "adr": 0.104
+      },
+      {
+        "alert_budget": 0.01,
+        "threshold": 0.997616,
+        "alerts": 125,
+        "alert_rate": 0.01,
+        "precision": 1.0,
+        "tdr": 0.201,
+        "false_positive_ratio": 0.0,
+        "legit_customers_impacted_per_10k": 0.0,
+        "vdr": 0.4069,
+        "fraud_value_intercepted_usd": 8148049.35,
+        "fraud_value_missed_usd": 11878395.88,
+        "adr": 0.2064
+      },
+      {
+        "alert_budget": 0.02,
+        "threshold": 0.988868,
+        "alerts": 250,
+        "alert_rate": 0.02,
+        "precision": 1.0,
+        "tdr": 0.4019,
+        "false_positive_ratio": 0.0,
+        "legit_customers_impacted_per_10k": 0.0,
+        "vdr": 0.6384,
+        "fraud_value_intercepted_usd": 12785821.76,
+        "fraud_value_missed_usd": 7240623.47,
+        "adr": 0.4077
+      },
+      {
+        "alert_budget": 0.05,
+        "threshold": 0.129643,
+        "alerts": 625,
+        "alert_rate": 0.05,
+        "precision": 0.8288,
+        "tdr": 0.8328,
+        "false_positive_ratio": 0.21,
+        "legit_customers_impacted_per_10k": 90.1,
+        "vdr": 0.941,
+        "fraud_value_intercepted_usd": 18844723.88,
+        "fraud_value_missed_usd": 1181721.35,
+        "adr": 0.8305
+      },
+      {
+        "alert_budget": 0.1,
+        "threshold": 0.042976,
+        "alerts": 1250,
+        "alert_rate": 0.1,
+        "precision": 0.444,
+        "tdr": 0.8923,
+        "false_positive_ratio": 1.25,
+        "legit_customers_impacted_per_10k": 585.1,
+        "vdr": 0.9857,
+        "fraud_value_intercepted_usd": 19739071.04,
+        "fraud_value_missed_usd": 287374.19,
+        "adr": 0.8893
+      }
+    ],
+    "lift_table": [
+      {
+        "decile": 1,
+        "score_min": 0.04298,
+        "score_max": 0.99967,
+        "n": 1250,
+        "n_fraud": 555,
+        "fraud_rate": 0.444,
+        "cum_fraud_captured": 0.8923,
+        "cum_lift": 8.923,
+        "decile_lift": 8.923,
+        "cum_value_captured": 0.9857
+      },
+      {
+        "decile": 2,
+        "score_min": 0.01588,
+        "score_max": 0.04298,
+        "n": 1250,
+        "n_fraud": 19,
+        "fraud_rate": 0.0152,
+        "cum_fraud_captured": 0.9228,
+        "cum_lift": 4.614,
+        "decile_lift": 0.305,
+        "cum_value_captured": 0.9953
+      },
+      {
+        "decile": 3,
+        "score_min": 0.01044,
+        "score_max": 0.01586,
+        "n": 1250,
+        "n_fraud": 8,
+        "fraud_rate": 0.0064,
+        "cum_fraud_captured": 0.9357,
+        "cum_lift": 3.119,
+        "decile_lift": 0.129,
+        "cum_value_captured": 0.9955
+      },
+      {
+        "decile": 4,
+        "score_min": 0.00759,
+        "score_max": 0.01044,
+        "n": 1250,
+        "n_fraud": 10,
+        "fraud_rate": 0.008,
+        "cum_fraud_captured": 0.9518,
+        "cum_lift": 2.379,
+        "decile_lift": 0.161,
+        "cum_value_captured": 0.9985
+      },
+      {
+        "decile": 5,
+        "score_min": 0.00554,
+        "score_max": 0.00759,
+        "n": 1250,
+        "n_fraud": 7,
+        "fraud_rate": 0.0056,
+        "cum_fraud_captured": 0.963,
+        "cum_lift": 1.926,
+        "decile_lift": 0.113,
+        "cum_value_captured": 0.9985
+      },
+      {
+        "decile": 6,
+        "score_min": 0.00412,
+        "score_max": 0.00554,
+        "n": 1250,
+        "n_fraud": 4,
+        "fraud_rate": 0.0032,
+        "cum_fraud_captured": 0.9695,
+        "cum_lift": 1.616,
+        "decile_lift": 0.064,
+        "cum_value_captured": 0.9986
+      },
+      {
+        "decile": 7,
+        "score_min": 0.00317,
+        "score_max": 0.00412,
+        "n": 1250,
+        "n_fraud": 9,
+        "fraud_rate": 0.0072,
+        "cum_fraud_captured": 0.9839,
+        "cum_lift": 1.406,
+        "decile_lift": 0.145,
+        "cum_value_captured": 0.9997
+      },
+      {
+        "decile": 8,
+        "score_min": 0.00252,
+        "score_max": 0.00317,
+        "n": 1250,
+        "n_fraud": 0,
+        "fraud_rate": 0.0,
+        "cum_fraud_captured": 0.9839,
+        "cum_lift": 1.23,
+        "decile_lift": 0.0,
+        "cum_value_captured": 0.9997
+      },
+      {
+        "decile": 9,
+        "score_min": 0.00195,
+        "score_max": 0.00252,
+        "n": 1250,
+        "n_fraud": 5,
+        "fraud_rate": 0.004,
+        "cum_fraud_captured": 0.992,
+        "cum_lift": 1.102,
+        "decile_lift": 0.08,
+        "cum_value_captured": 1.0
+      },
+      {
+        "decile": 10,
+        "score_min": 0.00086,
+        "score_max": 0.00195,
+        "n": 1250,
+        "n_fraud": 5,
+        "fraud_rate": 0.004,
+        "cum_fraud_captured": 1.0,
+        "cum_lift": 1.0,
+        "decile_lift": 0.08,
+        "cum_value_captured": 1.0
+      }
+    ],
+    "segments": {
+      "channel": [
+        {
+          "segment": "API/Open Banking",
+          "n": 478,
+          "fraud_rate": 0.0523,
+          "roc_auc": 0.9866,
+          "alert_rate": 0.0293,
+          "tdr": 0.56,
+          "fpr": 0.0
+        },
+        {
+          "segment": "ATM",
+          "n": 2321,
+          "fraud_rate": 0.0405,
+          "roc_auc": 0.9471,
+          "alert_rate": 0.0177,
+          "tdr": 0.4362,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Branch",
+          "n": 1221,
+          "fraud_rate": 0.0573,
+          "roc_auc": 0.9457,
+          "alert_rate": 0.0221,
+          "tdr": 0.3857,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Call Centre",
+          "n": 212,
+          "fraud_rate": 0.0519,
+          "roc_auc": 0.9937,
+          "alert_rate": 0.0236,
+          "tdr": 0.4545,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Internet Banking",
+          "n": 2818,
+          "fraud_rate": 0.0511,
+          "roc_auc": 0.9657,
+          "alert_rate": 0.0241,
+          "tdr": 0.4722,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Mobile Banking",
+          "n": 3701,
+          "fraud_rate": 0.0489,
+          "roc_auc": 0.952,
+          "alert_rate": 0.0203,
+          "tdr": 0.4144,
+          "fpr": 0.0
+        },
+        {
+          "segment": "POS Terminal",
+          "n": 1219,
+          "fraud_rate": 0.0566,
+          "roc_auc": 0.9463,
+          "alert_rate": 0.0263,
+          "tdr": 0.4638,
+          "fpr": 0.0
+        },
+        {
+          "segment": "USSD",
+          "n": 530,
+          "fraud_rate": 0.0528,
+          "roc_auc": 0.9613,
+          "alert_rate": 0.0245,
+          "tdr": 0.4643,
+          "fpr": 0.0
+        }
+      ],
+      "country": [
+        {
+          "segment": "Germany",
+          "n": 1083,
+          "fraud_rate": 0.0388,
+          "roc_auc": 0.9518,
+          "alert_rate": 0.0157,
+          "tdr": 0.4048,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Hong Kong",
+          "n": 856,
+          "fraud_rate": 0.0456,
+          "roc_auc": 0.9449,
+          "alert_rate": 0.021,
+          "tdr": 0.4615,
+          "fpr": 0.0
+        },
+        {
+          "segment": "India",
+          "n": 2510,
+          "fraud_rate": 0.0594,
+          "roc_auc": 0.9702,
+          "alert_rate": 0.0251,
+          "tdr": 0.4228,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Nigeria",
+          "n": 613,
+          "fraud_rate": 0.0408,
+          "roc_auc": 0.9488,
+          "alert_rate": 0.0179,
+          "tdr": 0.44,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Singapore",
+          "n": 1063,
+          "fraud_rate": 0.0395,
+          "roc_auc": 0.9553,
+          "alert_rate": 0.0198,
+          "tdr": 0.5,
+          "fpr": 0.0
+        },
+        {
+          "segment": "UAE",
+          "n": 762,
+          "fraud_rate": 0.0446,
+          "roc_auc": 0.9762,
+          "alert_rate": 0.021,
+          "tdr": 0.4706,
+          "fpr": 0.0
+        },
+        {
+          "segment": "United Kingdom",
+          "n": 2283,
+          "fraud_rate": 0.0539,
+          "roc_auc": 0.9559,
+          "alert_rate": 0.0223,
+          "tdr": 0.4146,
+          "fpr": 0.0
+        },
+        {
+          "segment": "United States",
+          "n": 3330,
+          "fraud_rate": 0.0505,
+          "roc_auc": 0.9431,
+          "alert_rate": 0.0234,
+          "tdr": 0.4643,
+          "fpr": 0.0
+        }
+      ],
+      "customer_segment": [
+        {
+          "segment": "Corporate",
+          "n": 975,
+          "fraud_rate": 0.0595,
+          "roc_auc": 0.9499,
+          "alert_rate": 0.0267,
+          "tdr": 0.4483,
+          "fpr": 0.0
+        },
+        {
+          "segment": "NRI / Diaspora",
+          "n": 324,
+          "fraud_rate": 0.0463,
+          "roc_auc": 0.9953,
+          "alert_rate": 0.0247,
+          "tdr": 0.5333,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Premium",
+          "n": 2538,
+          "fraud_rate": 0.0496,
+          "roc_auc": 0.9561,
+          "alert_rate": 0.0197,
+          "tdr": 0.3968,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Private Banking",
+          "n": 693,
+          "fraud_rate": 0.0433,
+          "roc_auc": 0.9829,
+          "alert_rate": 0.0245,
+          "tdr": 0.5667,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Retail",
+          "n": 5617,
+          "fraud_rate": 0.0491,
+          "roc_auc": 0.9475,
+          "alert_rate": 0.0194,
+          "tdr": 0.3949,
+          "fpr": 0.0
+        },
+        {
+          "segment": "SME",
+          "n": 1474,
+          "fraud_rate": 0.0475,
+          "roc_auc": 0.9664,
+          "alert_rate": 0.0285,
+          "tdr": 0.6,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Student",
+          "n": 879,
+          "fraud_rate": 0.0535,
+          "roc_auc": 0.973,
+          "alert_rate": 0.0262,
+          "tdr": 0.4894,
+          "fpr": 0.0
+        }
+      ],
+      "customer_age_band": [
+        {
+          "segment": "18\u201325",
+          "n": 1548,
+          "fraud_rate": 0.0497,
+          "roc_auc": 0.9564,
+          "alert_rate": 0.02,
+          "tdr": 0.4026,
+          "fpr": 0.0
+        },
+        {
+          "segment": "26\u201335",
+          "n": 3496,
+          "fraud_rate": 0.0492,
+          "roc_auc": 0.958,
+          "alert_rate": 0.0217,
+          "tdr": 0.4419,
+          "fpr": 0.0
+        },
+        {
+          "segment": "36\u201345",
+          "n": 3212,
+          "fraud_rate": 0.0486,
+          "roc_auc": 0.9627,
+          "alert_rate": 0.0221,
+          "tdr": 0.4551,
+          "fpr": 0.0
+        },
+        {
+          "segment": "46\u201355",
+          "n": 2148,
+          "fraud_rate": 0.0531,
+          "roc_auc": 0.9454,
+          "alert_rate": 0.0223,
+          "tdr": 0.4211,
+          "fpr": 0.0
+        },
+        {
+          "segment": "56\u201365",
+          "n": 1228,
+          "fraud_rate": 0.0586,
+          "roc_auc": 0.9573,
+          "alert_rate": 0.0261,
+          "tdr": 0.4444,
+          "fpr": 0.0
+        },
+        {
+          "segment": "65+",
+          "n": 868,
+          "fraud_rate": 0.0357,
+          "roc_auc": 0.9369,
+          "alert_rate": 0.0196,
+          "tdr": 0.5484,
+          "fpr": 0.0
+        }
+      ]
+    },
+    "legacy_benchmark": {
+      "note": "Legacy composite weights label-derived risk_score at 35%; figures are not valid evidence of performance and are shown only to document the leakage.",
+      "n": 12500,
+      "n_fraud": 622,
+      "base_rate": 0.04976,
+      "roc_auc": 1.0,
+      "pr_auc": 1.0,
+      "gini": 1.0,
+      "ks": 1.0,
+      "brier": 0.04912,
+      "log_loss": 0.25122,
+      "ece": 0.04971
+    }
+  },
+  "fairness": {
+    "status": "pass",
+    "findings": [],
+    "note": "Evaluated at the reference threshold and at looser 5% / 10% alert budgets, where legitimate customers are flagged, so the test is informative even when the reference point has no false positives.",
+    "operating_points": {
+      "reference": {
+        "method": "False-positive-rate parity with two-proportion z-test; approval adverse impact ratio",
+        "overall_fpr": 0.0,
+        "overall_tdr": 0.4421,
+        "ratio_threshold": 1.25,
+        "alpha": 0.05,
+        "min_group_n": 200,
+        "attributes": [
+          {
+            "attribute": "customer_segment",
+            "groups": [
+              {
+                "group": "Corporate",
+                "n": 975,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.4483,
+                "disparity_flag": false,
+                "approval_air": 0.9926
+              },
+              {
+                "group": "NRI / Diaspora",
+                "n": 324,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.5333,
+                "disparity_flag": false,
+                "approval_air": 0.9946
+              },
+              {
+                "group": "Premium",
+                "n": 2538,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.3968,
+                "disparity_flag": false,
+                "approval_air": 0.9997
+              },
+              {
+                "group": "Private Banking",
+                "n": 693,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.5667,
+                "disparity_flag": false,
+                "approval_air": 0.9948
+              },
+              {
+                "group": "Retail",
+                "n": 5617,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.3949,
+                "disparity_flag": false,
+                "approval_air": 1.0
+              },
+              {
+                "group": "SME",
+                "n": 1474,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.6,
+                "disparity_flag": false,
+                "approval_air": 0.9907
+              },
+              {
+                "group": "Student",
+                "n": 879,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.4894,
+                "disparity_flag": false,
+                "approval_air": 0.9931
+              }
+            ]
+          },
+          {
+            "attribute": "customer_age_band",
+            "groups": [
+              {
+                "group": "18\u201325",
+                "n": 1548,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.4026,
+                "disparity_flag": false,
+                "approval_air": 0.9996
+              },
+              {
+                "group": "26\u201335",
+                "n": 3496,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.4419,
+                "disparity_flag": false,
+                "approval_air": 0.9978
+              },
+              {
+                "group": "36\u201345",
+                "n": 3212,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.4551,
+                "disparity_flag": false,
+                "approval_air": 0.9974
+              },
+              {
+                "group": "46\u201355",
+                "n": 2148,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.4211,
+                "disparity_flag": false,
+                "approval_air": 0.9972
+              },
+              {
+                "group": "56\u201365",
+                "n": 1228,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.4444,
+                "disparity_flag": false,
+                "approval_air": 0.9934
+              },
+              {
+                "group": "65+",
+                "n": 868,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.5484,
+                "disparity_flag": false,
+                "approval_air": 1.0
+              }
+            ]
+          },
+          {
+            "attribute": "country",
+            "groups": [
+              {
+                "group": "Germany",
+                "n": 1083,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.4048,
+                "disparity_flag": false,
+                "approval_air": 1.0
+              },
+              {
+                "group": "Hong Kong",
+                "n": 856,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.4615,
+                "disparity_flag": false,
+                "approval_air": 0.9946
+              },
+              {
+                "group": "India",
+                "n": 2510,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.4228,
+                "disparity_flag": false,
+                "approval_air": 0.9904
+              },
+              {
+                "group": "Nigeria",
+                "n": 613,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.44,
+                "disparity_flag": false,
+                "approval_air": 0.9977
+              },
+              {
+                "group": "Singapore",
+                "n": 1063,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.5,
+                "disparity_flag": false,
+                "approval_air": 0.9959
+              },
+              {
+                "group": "UAE",
+                "n": 762,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.4706,
+                "disparity_flag": false,
+                "approval_air": 0.9946
+              },
+              {
+                "group": "United Kingdom",
+                "n": 2283,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.4146,
+                "disparity_flag": false,
+                "approval_air": 0.9933
+              },
+              {
+                "group": "United States",
+                "n": 3330,
+                "legit_flagged": 0,
+                "fpr": 0.0,
+                "fpr_ratio": null,
+                "fpr_p_value": 1.0,
+                "tdr": 0.4643,
+                "disparity_flag": false,
+                "approval_air": 0.9922
+              }
+            ]
+          }
+        ],
+        "findings": [],
+        "status": "pass"
+      },
+      "stress_5pct_budget": {
+        "method": "False-positive-rate parity with two-proportion z-test; approval adverse impact ratio",
+        "overall_fpr": 0.01212,
+        "overall_tdr": 0.8408,
+        "ratio_threshold": 1.25,
+        "alpha": 0.05,
+        "min_group_n": 200,
+        "attributes": [
+          {
+            "attribute": "customer_segment",
+            "groups": [
+              {
+                "group": "Corporate",
+                "n": 975,
+                "legit_flagged": 13,
+                "fpr": 0.01418,
+                "fpr_ratio": 1.169,
+                "fpr_p_value": 0.5542,
+                "tdr": 0.7931,
+                "disparity_flag": false,
+                "approval_air": 0.9866
+              },
+              {
+                "group": "NRI / Diaspora",
+                "n": 324,
+                "legit_flagged": 5,
+                "fpr": 0.01618,
+                "fpr_ratio": 1.335,
+                "fpr_p_value": 0.509,
+                "tdr": 0.8667,
+                "disparity_flag": false,
+                "approval_air": 0.9918
+              },
+              {
+                "group": "Premium",
+                "n": 2538,
+                "legit_flagged": 35,
+                "fpr": 0.01451,
+                "fpr_ratio": 1.197,
+                "fpr_p_value": 0.2301,
+                "tdr": 0.873,
+                "disparity_flag": false,
+                "approval_air": 0.9902
+              },
+              {
+                "group": "Private Banking",
+                "n": 693,
+                "legit_flagged": 7,
+                "fpr": 0.01056,
+                "fpr_ratio": 0.871,
+                "fpr_p_value": 0.7047,
+                "tdr": 0.9,
+                "disparity_flag": false,
+                "approval_air": 0.9987
+              },
+              {
+                "group": "Retail",
+                "n": 5617,
+                "legit_flagged": 57,
+                "fpr": 0.01067,
+                "fpr_ratio": 0.88,
+                "fpr_p_value": 0.1915,
+                "tdr": 0.8333,
+                "disparity_flag": false,
+                "approval_air": 0.9965
+              },
+              {
+                "group": "SME",
+                "n": 1474,
+                "legit_flagged": 21,
+                "fpr": 0.01496,
+                "fpr_ratio": 1.234,
+                "fpr_p_value": 0.3014,
+                "tdr": 0.8714,
+                "disparity_flag": false,
+                "approval_air": 0.9918
+              },
+              {
+                "group": "Student",
+                "n": 879,
+                "legit_flagged": 6,
+                "fpr": 0.00721,
+                "fpr_ratio": 0.595,
+                "fpr_p_value": 0.1794,
+                "tdr": 0.766,
+                "disparity_flag": false,
+                "approval_air": 1.0
+              }
+            ]
+          },
+          {
+            "attribute": "customer_age_band",
+            "groups": [
+              {
+                "group": "18\u201325",
+                "n": 1548,
+                "legit_flagged": 12,
+                "fpr": 0.00816,
+                "fpr_ratio": 0.673,
+                "fpr_p_value": 0.1376,
+                "tdr": 0.8182,
+                "disparity_flag": false,
+                "approval_air": 0.9892
+              },
+              {
+                "group": "26\u201335",
+                "n": 3496,
+                "legit_flagged": 43,
+                "fpr": 0.01294,
+                "fpr_ratio": 1.067,
+                "fpr_p_value": 0.6138,
+                "tdr": 0.8198,
+                "disparity_flag": false,
+                "approval_air": 0.9848
+              },
+              {
+                "group": "36\u201345",
+                "n": 3212,
+                "legit_flagged": 44,
+                "fpr": 0.0144,
+                "fpr_ratio": 1.188,
+                "fpr_p_value": 0.1824,
+                "tdr": 0.8846,
+                "disparity_flag": false,
+                "approval_air": 0.9806
+              },
+              {
+                "group": "46\u201355",
+                "n": 2148,
+                "legit_flagged": 23,
+                "fpr": 0.01131,
+                "fpr_ratio": 0.933,
+                "fpr_p_value": 0.712,
+                "tdr": 0.807,
+                "disparity_flag": false,
+                "approval_air": 0.9839
+              },
+              {
+                "group": "56\u201365",
+                "n": 1228,
+                "legit_flagged": 17,
+                "fpr": 0.01471,
+                "fpr_ratio": 1.213,
+                "fpr_p_value": 0.3984,
+                "tdr": 0.8472,
+                "disparity_flag": false,
+                "approval_air": 0.9735
+              },
+              {
+                "group": "65+",
+                "n": 868,
+                "legit_flagged": 5,
+                "fpr": 0.00597,
+                "fpr_ratio": 0.493,
+                "fpr_p_value": 0.0918,
+                "tdr": 0.9032,
+                "disparity_flag": false,
+                "approval_air": 1.0
+              }
+            ]
+          },
+          {
+            "attribute": "country",
+            "groups": [
+              {
+                "group": "Germany",
+                "n": 1083,
+                "legit_flagged": 16,
+                "fpr": 0.01537,
+                "fpr_ratio": 1.268,
+                "fpr_p_value": 0.3163,
+                "tdr": 0.8571,
+                "disparity_flag": false,
+                "approval_air": 0.9908
+              },
+              {
+                "group": "Hong Kong",
+                "n": 856,
+                "legit_flagged": 12,
+                "fpr": 0.01469,
+                "fpr_ratio": 1.212,
+                "fpr_p_value": 0.4876,
+                "tdr": 0.7949,
+                "disparity_flag": false,
+                "approval_air": 0.9885
+              },
+              {
+                "group": "India",
+                "n": 2510,
+                "legit_flagged": 33,
+                "fpr": 0.01398,
+                "fpr_ratio": 1.153,
+                "fpr_p_value": 0.3578,
+                "tdr": 0.8859,
+                "disparity_flag": false,
+                "approval_air": 0.9723
+              },
+              {
+                "group": "Nigeria",
+                "n": 613,
+                "legit_flagged": 3,
+                "fpr": 0.0051,
+                "fpr_ratio": 0.421,
+                "fpr_p_value": 0.1105,
+                "tdr": 0.84,
+                "disparity_flag": false,
+                "approval_air": 1.0
+              },
+              {
+                "group": "Singapore",
+                "n": 1063,
+                "legit_flagged": 18,
+                "fpr": 0.01763,
+                "fpr_ratio": 1.454,
+                "fpr_p_value": 0.0926,
+                "tdr": 0.7857,
+                "disparity_flag": false,
+                "approval_air": 0.9908
+              },
+              {
+                "group": "UAE",
+                "n": 762,
+                "legit_flagged": 6,
+                "fpr": 0.00824,
+                "fpr_ratio": 0.68,
+                "fpr_p_value": 0.3233,
+                "tdr": 0.8529,
+                "disparity_flag": false,
+                "approval_air": 0.9929
+              },
+              {
+                "group": "United Kingdom",
+                "n": 2283,
+                "legit_flagged": 28,
+                "fpr": 0.01296,
+                "fpr_ratio": 1.069,
+                "fpr_p_value": 0.6934,
+                "tdr": 0.8374,
+                "disparity_flag": false,
+                "approval_air": 0.981
+              },
+              {
+                "group": "United States",
+                "n": 3330,
+                "legit_flagged": 28,
+                "fpr": 0.00886,
+                "fpr_ratio": 0.73,
+                "fpr_p_value": 0.05,
+                "tdr": 0.8214,
+                "disparity_flag": false,
+                "approval_air": 0.9889
+              }
+            ]
+          }
+        ],
+        "findings": [],
+        "status": "pass"
+      },
+      "stress_10pct_budget": {
+        "method": "False-positive-rate parity with two-proportion z-test; approval adverse impact ratio",
+        "overall_fpr": 0.06727,
+        "overall_tdr": 0.8971,
+        "ratio_threshold": 1.25,
+        "alpha": 0.05,
+        "min_group_n": 200,
+        "attributes": [
+          {
+            "attribute": "customer_segment",
+            "groups": [
+              {
+                "group": "Corporate",
+                "n": 975,
+                "legit_flagged": 65,
+                "fpr": 0.07088,
+                "fpr_ratio": 1.054,
+                "fpr_p_value": 0.649,
+                "tdr": 0.8966,
+                "disparity_flag": false,
+                "approval_air": 0.9782
+              },
+              {
+                "group": "NRI / Diaspora",
+                "n": 324,
+                "legit_flagged": 23,
+                "fpr": 0.07443,
+                "fpr_ratio": 1.107,
+                "fpr_p_value": 0.6103,
+                "tdr": 1.0,
+                "disparity_flag": false,
+                "approval_air": 0.9812
+              },
+              {
+                "group": "Premium",
+                "n": 2538,
+                "legit_flagged": 178,
+                "fpr": 0.0738,
+                "fpr_ratio": 1.097,
+                "fpr_p_value": 0.1515,
+                "tdr": 0.9127,
+                "disparity_flag": false,
+                "approval_air": 0.9833
+              },
+              {
+                "group": "Private Banking",
+                "n": 693,
+                "legit_flagged": 54,
+                "fpr": 0.08145,
+                "fpr_ratio": 1.211,
+                "fpr_p_value": 0.1336,
+                "tdr": 0.9333,
+                "disparity_flag": false,
+                "approval_air": 0.9801
+              },
+              {
+                "group": "Retail",
+                "n": 5617,
+                "legit_flagged": 323,
+                "fpr": 0.06048,
+                "fpr_ratio": 0.899,
+                "fpr_p_value": 0.0076,
+                "tdr": 0.8732,
+                "disparity_flag": false,
+                "approval_air": 1.0
+              },
+              {
+                "group": "SME",
+                "n": 1474,
+                "legit_flagged": 105,
+                "fpr": 0.07479,
+                "fpr_ratio": 1.112,
+                "fpr_p_value": 0.231,
+                "tdr": 0.9429,
+                "disparity_flag": false,
+                "approval_air": 0.9827
+              },
+              {
+                "group": "Student",
+                "n": 879,
+                "legit_flagged": 51,
+                "fpr": 0.0613,
+                "fpr_ratio": 0.911,
+                "fpr_p_value": 0.476,
+                "tdr": 0.8723,
+                "disparity_flag": false,
+                "approval_air": 0.9953
+              }
+            ]
+          },
+          {
+            "attribute": "customer_age_band",
+            "groups": [
+              {
+                "group": "18\u201325",
+                "n": 1548,
+                "legit_flagged": 87,
+                "fpr": 0.05914,
+                "fpr_ratio": 0.879,
+                "fpr_p_value": 0.1839,
+                "tdr": 0.8831,
+                "disparity_flag": false,
+                "approval_air": 0.9875
+              },
+              {
+                "group": "26\u201335",
+                "n": 3496,
+                "legit_flagged": 223,
+                "fpr": 0.06709,
+                "fpr_ratio": 0.997,
+                "fpr_p_value": 0.9612,
+                "tdr": 0.9012,
+                "disparity_flag": false,
+                "approval_air": 0.9787
+              },
+              {
+                "group": "36\u201345",
+                "n": 3212,
+                "legit_flagged": 231,
+                "fpr": 0.07559,
+                "fpr_ratio": 1.124,
+                "fpr_p_value": 0.0331,
+                "tdr": 0.9103,
+                "disparity_flag": false,
+                "approval_air": 0.9699
+              },
+              {
+                "group": "46\u201355",
+                "n": 2148,
+                "legit_flagged": 130,
+                "fpr": 0.06391,
+                "fpr_ratio": 0.95,
+                "fpr_p_value": 0.5071,
+                "tdr": 0.8684,
+                "disparity_flag": false,
+                "approval_air": 0.9804
+              },
+              {
+                "group": "56\u201365",
+                "n": 1228,
+                "legit_flagged": 79,
+                "fpr": 0.06834,
+                "fpr_ratio": 1.016,
+                "fpr_p_value": 0.8783,
+                "tdr": 0.9167,
+                "disparity_flag": false,
+                "approval_air": 0.9678
+              },
+              {
+                "group": "65+",
+                "n": 868,
+                "legit_flagged": 49,
+                "fpr": 0.05854,
+                "fpr_ratio": 0.87,
+                "fpr_p_value": 0.2959,
+                "tdr": 0.9032,
+                "disparity_flag": false,
+                "approval_air": 1.0
+              }
+            ]
+          },
+          {
+            "attribute": "country",
+            "groups": [
+              {
+                "group": "Germany",
+                "n": 1083,
+                "legit_flagged": 85,
+                "fpr": 0.08165,
+                "fpr_ratio": 1.214,
+                "fpr_p_value": 0.0524,
+                "tdr": 0.9048,
+                "disparity_flag": false,
+                "approval_air": 0.9738
+              },
+              {
+                "group": "Hong Kong",
+                "n": 856,
+                "legit_flagged": 49,
+                "fpr": 0.05998,
+                "fpr_ratio": 0.892,
+                "fpr_p_value": 0.3885,
+                "tdr": 0.8718,
+                "disparity_flag": false,
+                "approval_air": 0.992
+              },
+              {
+                "group": "India",
+                "n": 2510,
+                "legit_flagged": 161,
+                "fpr": 0.06819,
+                "fpr_ratio": 1.014,
+                "fpr_p_value": 0.8413,
+                "tdr": 0.9128,
+                "disparity_flag": false,
+                "approval_air": 0.9686
+              },
+              {
+                "group": "Nigeria",
+                "n": 613,
+                "legit_flagged": 32,
+                "fpr": 0.05442,
+                "fpr_ratio": 0.809,
+                "fpr_p_value": 0.2021,
+                "tdr": 0.92,
+                "disparity_flag": false,
+                "approval_air": 1.0
+              },
+              {
+                "group": "Singapore",
+                "n": 1063,
+                "legit_flagged": 66,
+                "fpr": 0.06464,
+                "fpr_ratio": 0.961,
+                "fpr_p_value": 0.7262,
+                "tdr": 0.881,
+                "disparity_flag": false,
+                "approval_air": 0.9921
+              },
+              {
+                "group": "UAE",
+                "n": 762,
+                "legit_flagged": 42,
+                "fpr": 0.05769,
+                "fpr_ratio": 0.858,
+                "fpr_p_value": 0.2871,
+                "tdr": 0.9412,
+                "disparity_flag": false,
+                "approval_air": 0.9919
+              },
+              {
+                "group": "United Kingdom",
+                "n": 2283,
+                "legit_flagged": 164,
+                "fpr": 0.07593,
+                "fpr_ratio": 1.129,
+                "fpr_p_value": 0.0757,
+                "tdr": 0.9024,
+                "disparity_flag": false,
+                "approval_air": 0.9662
+              },
+              {
+                "group": "United States",
+                "n": 3330,
+                "legit_flagged": 200,
+                "fpr": 0.06325,
+                "fpr_ratio": 0.94,
+                "fpr_p_value": 0.2926,
+                "tdr": 0.875,
+                "disparity_flag": false,
+                "approval_air": 0.9841
+              }
+            ]
+          }
+        ],
+        "findings": [],
+        "status": "pass"
+      }
+    }
+  },
+  "monitoring": {
+    "baseline_window": "calibration",
+    "baseline": {
+      "n": 7500,
+      "features": {
+        "amount_vs_hist_avg": {
+          "type": "numeric",
+          "edges": [
+            0.07886449741481268,
+            0.1632484334451548,
+            0.2637354547823669,
+            0.3767025096552618,
+            0.5055469330181908,
+            0.6765529974536794,
+            0.8939658135008504,
+            1.215564724696793,
+            1.796861251795463
+          ],
+          "dist": [
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.0
+          ]
+        },
+        "amount_to_balance": {
+          "type": "numeric",
+          "edges": [
+            0.0006727569733522285,
+            0.0016042371378769552,
+            0.003152910503454134,
+            0.0054903456069537735,
+            0.009667958460345027,
+            0.01902638223913351,
+            0.04160506252380877,
+            0.10834740897119668,
+            0.6075103401318204
+          ],
+          "dist": [
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.0
+          ]
+        },
+        "failed_attempt_count": {
+          "type": "numeric",
+          "edges": [
+            0.0,
+            1.0,
+            2.0
+          ],
+          "dist": [
+            0.0,
+            0.7568,
+            0.13706666666666667,
+            0.10613333333333333,
+            0.0
+          ]
+        },
+        "login_attempts": {
+          "type": "numeric",
+          "edges": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "dist": [
+            0.0,
+            0.6781333333333334,
+            0.14626666666666666,
+            0.1756,
+            0.0
+          ]
+        },
+        "txn_hour": {
+          "type": "numeric",
+          "edges": [
+            2.0,
+            4.0,
+            7.0,
+            9.0,
+            12.0,
+            14.0,
+            16.0,
+            19.0,
+            21.0
+          ],
+          "dist": [
+            0.08573333333333333,
+            0.08466666666666667,
+            0.1196,
+            0.0788,
+            0.12506666666666666,
+            0.08346666666666666,
+            0.082,
+            0.12693333333333334,
+            0.08586666666666666,
+            0.12786666666666666,
+            0.0
+          ]
+        },
+        "is_off_hours": {
+          "type": "numeric",
+          "edges": [
+            0.0,
+            1.0
+          ],
+          "dist": [
+            0.0,
+            0.6668,
+            0.3332,
+            0.0
+          ]
+        },
+        "is_weekend": {
+          "type": "numeric",
+          "edges": [
+            0.0,
+            1.0
+          ],
+          "dist": [
+            0.0,
+            0.7118666666666666,
+            0.28813333333333335,
+            0.0
+          ]
+        },
+        "is_debit": {
+          "type": "numeric",
+          "edges": [
+            0.0,
+            1.0
+          ],
+          "dist": [
+            0.0,
+            0.1664,
+            0.8336,
+            0.0
+          ]
+        },
+        "cust_txn_count_1h": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "cust_txn_count_24h": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "cust_txn_count_7d": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "cust_amount_usd_24h": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "cust_amount_usd_7d": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "secs_since_last_txn": {
+          "type": "numeric",
+          "edges": [
+            1019695.7000000002,
+            2131188.0,
+            3448459.3,
+            4821018.800000001,
+            6486861.0,
+            8477557.600000001,
+            11160463.200000005,
+            14765040.200000003,
+            19824340.1
+          ],
+          "dist": [
+            0.09586666666666667,
+            0.09586666666666667,
+            0.09586666666666667,
+            0.09573333333333334,
+            0.09586666666666667,
+            0.09586666666666667,
+            0.09573333333333334,
+            0.09586666666666667,
+            0.09586666666666667,
+            0.09586666666666667,
+            0.0416
+          ]
+        },
+        "device_new_for_customer": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            0.9584,
+            0.0416
+          ]
+        },
+        "ip_new_for_customer": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            0.9584,
+            0.0416
+          ]
+        },
+        "merchant_new_for_customer": {
+          "type": "numeric",
+          "edges": [
+            1.0
+          ],
+          "dist": [
+            0.0516,
+            0.9068,
+            0.0416
+          ]
+        },
+        "device_other_customer_txns": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "ip_other_customer_txns": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "channel": {
+          "type": "categorical",
+          "categories": [
+            "API/Open Banking",
+            "ATM",
+            "Branch",
+            "Call Centre",
+            "Internet Banking",
+            "Mobile Banking",
+            "POS Terminal",
+            "USSD"
+          ],
+          "dist": [
+            0.04253333333333333,
+            0.17906666666666668,
+            0.10386666666666666,
+            0.020933333333333335,
+            0.21493333333333334,
+            0.29986666666666667,
+            0.09933333333333333,
+            0.039466666666666664,
+            0.0,
+            0.0
+          ]
+        },
+        "authorization_method": {
+          "type": "categorical",
+          "categories": [
+            "Biometric",
+            "Contactless",
+            "OTP",
+            "PIN",
+            "Password",
+            "Signature",
+            "Token"
+          ],
+          "dist": [
+            0.2492,
+            0.038533333333333336,
+            0.19613333333333333,
+            0.30493333333333333,
+            0.12253333333333333,
+            0.020266666666666665,
+            0.0684,
+            0.0,
+            0.0
+          ]
+        },
+        "merchant_category": {
+          "type": "categorical",
+          "categories": [
+            "Auto & Transportation",
+            "Crypto Exchanges",
+            "Education",
+            "Electronics & Technology",
+            "Entertainment & Streaming",
+            "Financial Services / Money Transfer",
+            "Fuel & Petroleum",
+            "Gaming & Gambling",
+            "Government & Taxes",
+            "Grocery & Supermarkets",
+            "Healthcare & Pharmacy",
+            "Hotels & Accommodation",
+            "Insurance",
+            "Luxury Goods",
+            "Online Marketplaces",
+            "Real Estate",
+            "Restaurants & Food Delivery",
+            "Retail / General Merchandise",
+            "Travel & Airlines",
+            "Utilities & Telecom"
+          ],
+          "dist": [
+            0.031466666666666664,
+            0.0092,
+            0.020266666666666665,
+            0.07053333333333334,
+            0.017466666666666665,
+            0.0696,
+            0.0732,
+            0.017866666666666666,
+            0.009466666666666667,
+            0.11746666666666666,
+            0.06413333333333333,
+            0.040266666666666666,
+            0.009866666666666666,
+            0.020533333333333334,
+            0.058133333333333335,
+            0.0176,
+            0.09826666666666667,
+            0.1492,
+            0.0556,
+            0.04986666666666666,
+            0.0,
+            0.0
+          ]
+        },
+        "transaction_type": {
+          "type": "categorical",
+          "categories": [
+            "Card Not Present",
+            "Chargeback",
+            "Deposit",
+            "Fee Charge",
+            "Interest Credit",
+            "Payment",
+            "Purchase",
+            "Refund",
+            "Reversal",
+            "Transfer",
+            "Wire Transfer",
+            "Withdrawal"
+          ],
+          "dist": [
+            0.0188,
+            0.0204,
+            0.09813333333333334,
+            0.036,
+            0.020533333333333334,
+            0.09813333333333334,
+            0.28146666666666664,
+            0.047733333333333336,
+            0.028533333333333334,
+            0.1916,
+            0.0416,
+            0.11706666666666667,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "score": {
+        "edges": [
+          0.0019204272367861494,
+          0.0024414365110760152,
+          0.0031138658136226323,
+          0.003991440614936973,
+          0.005269730139911843,
+          0.00725478245414264,
+          0.009873196310208979,
+          0.014875244514593666,
+          0.03839185159771598
+        ],
+        "dist": [
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.0
+        ]
+      }
+    },
+    "plan": {
+      "population_stability": "Score PSI and per-feature CSI weekly; investigate >= 0.10, escalate >= 0.25",
+      "performance": "ROC-AUC, PR-AUC, VDR on labels older than the 90-day maturity window, monthly",
+      "calibration": "Recalibrate when OOT ECE exceeds 0.02 on matured labels",
+      "fairness": "Re-run false-positive-rate parity quarterly",
+      "revalidation": "Full independent revalidation annually or on material change"
+    }
+  },
+  "validation": {
+    "status": "passed",
+    "gates": [
+      {
+        "gate": "feature_lineage",
+        "passed": true,
+        "detail": "All model features trace to pre-authorisation fields"
+      },
+      {
+        "gate": "no_single_feature_leak",
+        "passed": true,
+        "detail": "Features above 0.97 single-feature AUC: none"
+      },
+      {
+        "gate": "oot_discrimination",
+        "passed": true,
+        "detail": "OOT ROC-AUC 0.9556 vs minimum 0.75"
+      },
+      {
+        "gate": "oot_calibration",
+        "passed": true,
+        "detail": "OOT ECE 0.00305 vs maximum 0.02"
+      },
+      {
+        "gate": "fairness",
+        "passed": true,
+        "detail": "0 significant false-positive-rate disparities"
+      }
+    ],
+    "thresholds": {
+      "min_oot_roc_auc": 0.75,
+      "max_oot_ece": 0.02,
+      "max_feature_single_auc": 0.97
+    },
+    "remediation_log": [
+      {
+        "finding": "Fairness gate failed at the 10% alert-budget stress point: legitimate Student-segment transactions flagged 1.34x the overall rate (p=0.006).",
+        "root_cause": "SHAP gap analysis: amount_usd and amount_to_balance raised risk for small absolute amounts \u2014 the model learned that the low-amount region holds fraud, making absolute amount a proxy for the Student segment.",
+        "remediation": "Monotone-increasing constraints on amount_usd, log_amount_usd and amount_to_balance (a larger amount can never lower risk).",
+        "retest": "Student ratio at 10% budget fell to 1.12x; fairness gate passes; OOT ROC-AUC 0.9566 -> 0.9581.",
+        "superseded_model": "bti-v3-hgb-20260923160131"
+      }
+    ]
+  },
+  "limitations": [
+    "Trained on synthetic data; performance must be re-established on the bank's own labelled history before production use.",
+    "FX amounts use indicative reference rates unless overridden with the bank's official rate feed.",
+    "The synthetic customer base has ~6 transactions per customer, so velocity features are sparse; their contribution will be larger on real transaction streams.",
+    "Labels are taken at face value; production labels need a maturity window (chargebacks arrive 30-120 days after the transaction) before performance is measured.",
+    "historical_average_transaction_amount is a profile field supplied by the source system and must be maintained point-in-time to avoid look-ahead."
+  ],
+  "provenance": {
+    "git_sha": "5af5abf02853a6d916d5a4e1b79bfb1ea68e105f",
+    "python": "3.11.15",
+    "sklearn": "1.9.0",
+    "pandas": "3.0.5",
+    "numpy": "2.4.6",
+    "xgboost": "3.2.0"
+  }
+}
