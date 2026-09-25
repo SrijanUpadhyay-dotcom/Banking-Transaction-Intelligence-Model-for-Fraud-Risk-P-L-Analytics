@@ -1,0 +1,4517 @@
+{
+  "model_id": "bti-v3-hgb-rn-20260925003518",
+  "model_family": "BTI v3 transaction fraud model",
+  "created_at": "2026-09-25T00:35:18.625990+00:00",
+  "ownership": {
+    "developer": "Srijan Upadhyay",
+    "business_owner": null,
+    "validator": null
+  },
+  "purpose": {
+    "intended_use": "Real-time probability that a payment or account transaction is fraudulent, used to approve, step-up, review or decline before funds move.",
+    "out_of_scope": [
+      "Credit underwriting or credit-limit decisions",
+      "AML transaction monitoring / SAR decisions (separate typologies and regulation)",
+      "Sole basis for account closure without human review"
+    ],
+    "decision_type": "Decision support with automated action under documented policy thresholds"
+  },
+  "regulatory_mapping": [
+    {
+      "framework": "US Federal Reserve SR 11-7 / OCC 2011-12",
+      "scope": "Model risk management"
+    },
+    {
+      "framework": "UK PRA SS1/23",
+      "scope": "Model risk management principles for banks"
+    },
+    {
+      "framework": "EU AI Act",
+      "scope": "Annex III 5(b) exempts AI used to detect financial fraud from the high-risk credit-scoring category; GDPR Art. 22 still applies to solely automated decisions"
+    },
+    {
+      "framework": "MAS FEAT Principles (Singapore)",
+      "scope": "Fairness, ethics, accountability, transparency"
+    },
+    {
+      "framework": "HKMA high-level principles on AI",
+      "scope": "Governance, explainability, data quality"
+    },
+    {
+      "framework": "CBUAE Model Management Standards",
+      "scope": "Model lifecycle governance (UAE)"
+    }
+  ],
+  "data": {
+    "path": "/home/user/Banking-Transaction-Intelligence-Model-for-Fraud-Risk-P-L-Analytics/data/processed/banking_transactions_clean.csv",
+    "sha256": "9e3e0ea0c9b1bc03d502898762c411180cb00f8e22f74fa3d84538106bf18abe",
+    "security_events_sha256": null,
+    "feed_coverage": {
+      "train": {
+        "location": 0.0,
+        "payee": 0.0,
+        "security_events": 0.0
+      },
+      "calibration": {
+        "location": 0.0,
+        "payee": 0.0,
+        "security_events": 0.0
+      },
+      "out_of_time": {
+        "location": 0.0,
+        "payee": 0.0,
+        "security_events": 0.0
+      }
+    },
+    "rows": 50000,
+    "fraud_rate": 0.04974,
+    "window": [
+      "2023-01-01 00:12:28",
+      "2024-12-30 23:46:32"
+    ],
+    "split": {
+      "method": "out_of_time",
+      "train": {
+        "to": "2024-03-17 02:08:45.200000",
+        "rows": 30000,
+        "fraud": 1508,
+        "early_stopping_rows": 4500
+      },
+      "calibration": {
+        "from": "2024-03-17 02:08:45.200000",
+        "to": "2024-07-03 22:24:51.750000",
+        "rows": 7500,
+        "fraud": 357
+      },
+      "out_of_time_test": {
+        "from": "2024-07-03 22:24:51.750000",
+        "rows": 12500,
+        "fraud": 622
+      }
+    },
+    "fx": {
+      "reporting_currency": "USD",
+      "rates_as_of": "2024-12-31 (indicative)",
+      "rates": {
+        "USD": 1.0,
+        "EUR": 1.04,
+        "GBP": 1.25,
+        "INR": 0.0117,
+        "SGD": 0.733,
+        "HKD": 0.1287,
+        "AED": 0.2723,
+        "NGN": 0.00065
+      }
+    }
+  },
+  "features": {
+    "lookback_days": 365,
+    "feature_set": "core-relative-nb",
+    "feature_version": 2,
+    "model_features": [
+      {
+        "name": "amount_vs_hist_avg",
+        "kind": "numeric",
+        "sources": [
+          "transaction_amount",
+          "historical_average_transaction_amount"
+        ],
+        "reason_code": "AMT_VS_HISTORY",
+        "description": "Amount \u00f7 customer's historical average (currency-invariant)"
+      },
+      {
+        "name": "failed_attempt_count",
+        "kind": "numeric",
+        "sources": [
+          "failed_attempt_count"
+        ],
+        "reason_code": "AUTH_FAILURES",
+        "description": "Failed credential attempts"
+      },
+      {
+        "name": "login_attempts",
+        "kind": "numeric",
+        "sources": [
+          "login_attempts"
+        ],
+        "reason_code": "LOGIN_ANOMALY",
+        "description": "Login attempts in session"
+      },
+      {
+        "name": "txn_hour",
+        "kind": "numeric",
+        "sources": [
+          "transaction_time"
+        ],
+        "reason_code": "TIME_OF_DAY",
+        "description": "Hour of day"
+      },
+      {
+        "name": "is_off_hours",
+        "kind": "numeric",
+        "sources": [
+          "transaction_time"
+        ],
+        "reason_code": "TIME_OF_DAY",
+        "description": "00:00\u201305:59 or 22:00\u201323:59"
+      },
+      {
+        "name": "is_weekend",
+        "kind": "numeric",
+        "sources": [
+          "transaction_date"
+        ],
+        "reason_code": "TIME_OF_DAY",
+        "description": "Saturday or Sunday"
+      },
+      {
+        "name": "is_debit",
+        "kind": "numeric",
+        "sources": [
+          "debit_credit_flag"
+        ],
+        "reason_code": "TXN_TYPE",
+        "description": "Funds leaving the account"
+      },
+      {
+        "name": "cust_txn_count_1h",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time"
+        ],
+        "reason_code": "VELOCITY",
+        "description": "Customer transactions in prior 1h"
+      },
+      {
+        "name": "cust_txn_count_24h",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time"
+        ],
+        "reason_code": "VELOCITY",
+        "description": "Customer transactions in prior 24h"
+      },
+      {
+        "name": "cust_txn_count_7d",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time"
+        ],
+        "reason_code": "VELOCITY",
+        "description": "Customer transactions in prior 7d"
+      },
+      {
+        "name": "cust_amount_usd_24h",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time",
+          "transaction_amount",
+          "currency"
+        ],
+        "reason_code": "VELOCITY",
+        "description": "Customer USD spend in prior 24h"
+      },
+      {
+        "name": "cust_amount_usd_7d",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time",
+          "transaction_amount",
+          "currency"
+        ],
+        "reason_code": "VELOCITY",
+        "description": "Customer USD spend in prior 7d"
+      },
+      {
+        "name": "secs_since_last_txn",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time"
+        ],
+        "reason_code": "VELOCITY",
+        "description": "Seconds since customer's previous transaction"
+      },
+      {
+        "name": "device_new_for_customer",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time",
+          "device_id"
+        ],
+        "reason_code": "NEW_DEVICE",
+        "description": "Device not used by this customer within the look-back (unknown without prior history)"
+      },
+      {
+        "name": "ip_new_for_customer",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time",
+          "ip_location"
+        ],
+        "reason_code": "NEW_IP",
+        "description": "IP not used by this customer within the look-back (unknown without prior history)"
+      },
+      {
+        "name": "merchant_new_for_customer",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time",
+          "merchant_name"
+        ],
+        "reason_code": "NEW_MERCHANT",
+        "description": "First payment to this merchant within the look-back (unknown without prior history)"
+      },
+      {
+        "name": "device_other_customer_txns",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time",
+          "device_id"
+        ],
+        "reason_code": "SHARED_DEVICE",
+        "description": "Prior transactions on this device by other customers"
+      },
+      {
+        "name": "ip_other_customer_txns",
+        "kind": "numeric",
+        "sources": [
+          "customer_id",
+          "transaction_date",
+          "transaction_time",
+          "ip_location"
+        ],
+        "reason_code": "SHARED_DEVICE",
+        "description": "Prior transactions from this IP by other customers"
+      },
+      {
+        "name": "channel",
+        "kind": "categorical",
+        "sources": [
+          "channel"
+        ],
+        "reason_code": "CHANNEL_RISK",
+        "description": "Origination channel"
+      },
+      {
+        "name": "authorization_method",
+        "kind": "categorical",
+        "sources": [
+          "authorization_method"
+        ],
+        "reason_code": "CHANNEL_RISK",
+        "description": "Credential presented"
+      },
+      {
+        "name": "merchant_category",
+        "kind": "categorical",
+        "sources": [
+          "merchant_category"
+        ],
+        "reason_code": "MERCHANT_RISK",
+        "description": "Merchant category"
+      },
+      {
+        "name": "transaction_type",
+        "kind": "categorical",
+        "sources": [
+          "transaction_type"
+        ],
+        "reason_code": "TXN_TYPE",
+        "description": "Transaction type"
+      }
+    ],
+    "monotone_increasing": [
+      "failed_attempt_count",
+      "login_attempts",
+      "amount_vs_hist_avg",
+      "device_new_for_customer",
+      "ip_new_for_customer",
+      "cust_txn_count_1h",
+      "cust_txn_count_24h",
+      "cust_txn_count_7d"
+    ],
+    "excluded_source_fields": [
+      {
+        "field": "customer_segment",
+        "classification": "protected_or_proxy",
+        "reason": "Contains nationality-adjacent segments (NRI / Diaspora); monitored, not modelled"
+      },
+      {
+        "field": "customer_age_band",
+        "classification": "protected_or_proxy",
+        "reason": "Age is a protected characteristic"
+      },
+      {
+        "field": "country",
+        "classification": "protected_or_proxy",
+        "reason": "Residence country \u2014 national-origin proxy; used for jurisdiction policy"
+      },
+      {
+        "field": "geography",
+        "classification": "protected_or_proxy",
+        "reason": "Same as country"
+      },
+      {
+        "field": "city",
+        "classification": "protected_or_proxy",
+        "reason": "Location proxy"
+      },
+      {
+        "field": "transaction_status",
+        "classification": "label_derived",
+        "reason": "Takes the value 'Fraudulent' after investigation"
+      },
+      {
+        "field": "reversal_flag",
+        "classification": "post_event",
+        "reason": "Set after the transaction is reversed"
+      },
+      {
+        "field": "refund_flag",
+        "classification": "post_event",
+        "reason": "Set after a refund"
+      },
+      {
+        "field": "chargeback_flag",
+        "classification": "post_event",
+        "reason": "Set weeks later when the cardholder disputes"
+      },
+      {
+        "field": "fee_income",
+        "classification": "post_event",
+        "reason": "Settlement economics"
+      },
+      {
+        "field": "interchange_income",
+        "classification": "post_event",
+        "reason": "Settlement economics"
+      },
+      {
+        "field": "processing_cost",
+        "classification": "post_event",
+        "reason": "Settlement economics"
+      },
+      {
+        "field": "chargeback_loss",
+        "classification": "post_event",
+        "reason": "Loss booked after dispute"
+      },
+      {
+        "field": "refund_loss",
+        "classification": "post_event",
+        "reason": "Loss booked after refund"
+      },
+      {
+        "field": "fraud_loss",
+        "classification": "label_derived",
+        "reason": "Non-zero only on confirmed fraud"
+      },
+      {
+        "field": "net_revenue",
+        "classification": "post_event",
+        "reason": "Settlement economics"
+      },
+      {
+        "field": "net_pnl_impact",
+        "classification": "label_derived",
+        "reason": "Includes fraud_loss"
+      },
+      {
+        "field": "fraud_flag",
+        "classification": "label_derived",
+        "reason": "The label"
+      },
+      {
+        "field": "fraud_type",
+        "classification": "label_derived",
+        "reason": "Label detail"
+      },
+      {
+        "field": "risk_score",
+        "classification": "label_derived",
+        "reason": "Synthetic generator adds +60 when it creates a fraud (src/01_data_generation.py)"
+      },
+      {
+        "field": "fraud_rule_score",
+        "classification": "label_derived",
+        "reason": "Legacy rules R06/R12/R17 read risk_score"
+      },
+      {
+        "field": "rules_triggered",
+        "classification": "label_derived",
+        "reason": "Legacy rules R06/R12/R17 read risk_score"
+      },
+      {
+        "field": "is_high_risk",
+        "classification": "label_derived",
+        "reason": "Threshold on risk_score"
+      },
+      {
+        "field": "final_risk_score",
+        "classification": "label_derived",
+        "reason": "Legacy composite weights risk_score at 35%"
+      }
+    ],
+    "source_leakage_audit": [
+      {
+        "column": "risk_score",
+        "single_feature_auc": 1.0,
+        "catalogued_as": "label_derived",
+        "suspected_leak": true
+      },
+      {
+        "column": "is_high_risk",
+        "single_feature_auc": 0.9943,
+        "catalogued_as": "label_derived",
+        "suspected_leak": true
+      },
+      {
+        "column": "amount_vs_hist_avg_ratio",
+        "single_feature_auc": 0.8807,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "net_pnl_impact",
+        "single_feature_auc": 0.8329,
+        "catalogued_as": "label_derived",
+        "suspected_leak": false
+      },
+      {
+        "column": "is_revenue_leakage",
+        "single_feature_auc": 0.79,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "login_attempts",
+        "single_feature_auc": 0.7878,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      },
+      {
+        "column": "transaction_amount",
+        "single_feature_auc": 0.7614,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      },
+      {
+        "column": "processing_cost",
+        "single_feature_auc": 0.7608,
+        "catalogued_as": "post_event",
+        "suspected_leak": false
+      },
+      {
+        "column": "fraud_loss",
+        "single_feature_auc": 0.7533,
+        "catalogued_as": "label_derived",
+        "suspected_leak": false
+      },
+      {
+        "column": "fee_income",
+        "single_feature_auc": 0.7497,
+        "catalogued_as": "post_event",
+        "suspected_leak": false
+      },
+      {
+        "column": "chargeback_loss",
+        "single_feature_auc": 0.6749,
+        "catalogued_as": "post_event",
+        "suspected_leak": false
+      },
+      {
+        "column": "chargeback_flag",
+        "single_feature_auc": 0.674,
+        "catalogued_as": "post_event",
+        "suspected_leak": false
+      },
+      {
+        "column": "balance_delta",
+        "single_feature_auc": 0.6472,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      }
+    ],
+    "engineered_leakage_audit": [
+      {
+        "column": "amount_vs_hist_avg",
+        "single_feature_auc": 0.8813,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "login_attempts",
+        "single_feature_auc": 0.7851,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      },
+      {
+        "column": "device_new_for_customer",
+        "single_feature_auc": 0.7193,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "ip_new_for_customer",
+        "single_feature_auc": 0.7193,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "channel",
+        "single_feature_auc": 0.5112,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      },
+      {
+        "column": "is_debit",
+        "single_feature_auc": 0.5096,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "failed_attempt_count",
+        "single_feature_auc": 0.508,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      },
+      {
+        "column": "secs_since_last_txn",
+        "single_feature_auc": 0.5074,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "transaction_type",
+        "single_feature_auc": 0.5065,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      },
+      {
+        "column": "is_weekend",
+        "single_feature_auc": 0.5063,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "authorization_method",
+        "single_feature_auc": 0.505,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      },
+      {
+        "column": "cust_amount_usd_7d",
+        "single_feature_auc": 0.5021,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "cust_txn_count_7d",
+        "single_feature_auc": 0.502,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "cust_txn_count_24h",
+        "single_feature_auc": 0.5017,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "cust_amount_usd_24h",
+        "single_feature_auc": 0.5017,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "merchant_new_for_customer",
+        "single_feature_auc": 0.5011,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "device_other_customer_txns",
+        "single_feature_auc": 0.5006,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "is_off_hours",
+        "single_feature_auc": 0.5005,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "txn_hour",
+        "single_feature_auc": 0.5004,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "cust_txn_count_1h",
+        "single_feature_auc": 0.5001,
+        "catalogued_as": "uncatalogued",
+        "suspected_leak": false
+      },
+      {
+        "column": "merchant_category",
+        "single_feature_auc": 0.5001,
+        "catalogued_as": "pre_authorization",
+        "suspected_leak": false
+      }
+    ],
+    "global_importance": [
+      {
+        "feature": "amount_vs_hist_avg",
+        "mean_abs_shap": 1.0079,
+        "share": 0.3773
+      },
+      {
+        "feature": "login_attempts",
+        "mean_abs_shap": 0.43597,
+        "share": 0.1632
+      },
+      {
+        "feature": "secs_since_last_txn",
+        "mean_abs_shap": 0.23006,
+        "share": 0.0861
+      },
+      {
+        "feature": "device_new_for_customer",
+        "mean_abs_shap": 0.19795,
+        "share": 0.0741
+      },
+      {
+        "feature": "merchant_category",
+        "mean_abs_shap": 0.18512,
+        "share": 0.0693
+      },
+      {
+        "feature": "transaction_type",
+        "mean_abs_shap": 0.11031,
+        "share": 0.0413
+      },
+      {
+        "feature": "txn_hour",
+        "mean_abs_shap": 0.09335,
+        "share": 0.0349
+      },
+      {
+        "feature": "is_weekend",
+        "mean_abs_shap": 0.08935,
+        "share": 0.0335
+      },
+      {
+        "feature": "authorization_method",
+        "mean_abs_shap": 0.08815,
+        "share": 0.033
+      },
+      {
+        "feature": "channel",
+        "mean_abs_shap": 0.08333,
+        "share": 0.0312
+      },
+      {
+        "feature": "is_debit",
+        "mean_abs_shap": 0.05719,
+        "share": 0.0214
+      },
+      {
+        "feature": "is_off_hours",
+        "mean_abs_shap": 0.03753,
+        "share": 0.014
+      },
+      {
+        "feature": "failed_attempt_count",
+        "mean_abs_shap": 0.02064,
+        "share": 0.0077
+      },
+      {
+        "feature": "cust_amount_usd_7d",
+        "mean_abs_shap": 0.01742,
+        "share": 0.0065
+      },
+      {
+        "feature": "merchant_new_for_customer",
+        "mean_abs_shap": 0.01282,
+        "share": 0.0048
+      },
+      {
+        "feature": "cust_txn_count_7d",
+        "mean_abs_shap": 0.00179,
+        "share": 0.0007
+      },
+      {
+        "feature": "cust_amount_usd_24h",
+        "mean_abs_shap": 0.0013,
+        "share": 0.0005
+      },
+      {
+        "feature": "device_other_customer_txns",
+        "mean_abs_shap": 0.00076,
+        "share": 0.0003
+      },
+      {
+        "feature": "cust_txn_count_24h",
+        "mean_abs_shap": 0.00018,
+        "share": 0.0001
+      },
+      {
+        "feature": "cust_txn_count_1h",
+        "mean_abs_shap": 0.0,
+        "share": 0.0
+      },
+      {
+        "feature": "ip_new_for_customer",
+        "mean_abs_shap": 0.0,
+        "share": 0.0
+      },
+      {
+        "feature": "ip_other_customer_txns",
+        "mean_abs_shap": 0.0,
+        "share": 0.0
+      }
+    ],
+    "category_encodings": {
+      "channel": {
+        "prior": 0.05026666666666667,
+        "smoothing": 50.0,
+        "rates": {
+          "API/Open Banking": 0.040886,
+          "ATM": 0.047167,
+          "Branch": 0.044857,
+          "Call Centre": 0.046093,
+          "Internet Banking": 0.050509,
+          "Mobile Banking": 0.053598,
+          "POS Terminal": 0.053776,
+          "USSD": 0.053876
+        },
+        "counts": {
+          "API/Open Banking": 1161,
+          "ATM": 5346,
+          "Branch": 2971,
+          "Call Centre": 612,
+          "Internet Banking": 6652,
+          "Mobile Banking": 9027,
+          "POS Terminal": 3065,
+          "USSD": 1166
+        }
+      },
+      "authorization_method": {
+        "prior": 0.05026666666666667,
+        "smoothing": 50.0,
+        "rates": {
+          "Biometric": 0.051833,
+          "Contactless": 0.061448,
+          "OTP": 0.051507,
+          "PIN": 0.047517,
+          "Password": 0.047207,
+          "Signature": 0.052692,
+          "Token": 0.050354
+        },
+        "counts": {
+          "Biometric": 7484,
+          "Contactless": 1244,
+          "OTP": 6095,
+          "PIN": 8905,
+          "Password": 3562,
+          "Signature": 605,
+          "Token": 2105
+        }
+      },
+      "merchant_category": {
+        "prior": 0.05026666666666667,
+        "smoothing": 50.0,
+        "rates": {
+          "Auto & Transportation": 0.041902,
+          "Crypto Exchanges": 0.044391,
+          "Education": 0.051055,
+          "Electronics & Technology": 0.042297,
+          "Entertainment & Streaming": 0.048944,
+          "Financial Services / Money Transfer": 0.060965,
+          "Fuel & Petroleum": 0.048071,
+          "Gaming & Gambling": 0.040916,
+          "Government & Taxes": 0.081329,
+          "Grocery & Supermarkets": 0.050267,
+          "Healthcare & Pharmacy": 0.050313,
+          "Hotels & Accommodation": 0.05309,
+          "Insurance": 0.047316,
+          "Luxury Goods": 0.042286,
+          "Online Marketplaces": 0.049246,
+          "Real Estate": 0.054523,
+          "Restaurants & Food Delivery": 0.047295,
+          "Retail / General Merchandise": 0.052437,
+          "Travel & Airlines": 0.046989,
+          "Utilities & Telecom": 0.058353
+        },
+        "counts": {
+          "Auto & Transportation": 893,
+          "Crypto Exchanges": 322,
+          "Education": 626,
+          "Electronics & Technology": 2019,
+          "Entertainment & Streaming": 553,
+          "Financial Services / Money Transfer": 2058,
+          "Fuel & Petroleum": 2457,
+          "Gaming & Gambling": 598,
+          "Government & Taxes": 276,
+          "Grocery & Supermarkets": 3561,
+          "Healthcare & Pharmacy": 1749,
+          "Hotels & Accommodation": 1184,
+          "Insurance": 299,
+          "Luxury Goods": 577,
+          "Online Marketplaces": 1788,
+          "Real Estate": 583,
+          "Restaurants & Food Delivery": 2921,
+          "Retail / General Merchandise": 4346,
+          "Travel & Airlines": 1706,
+          "Utilities & Telecom": 1484
+        }
+      },
+      "transaction_type": {
+        "prior": 0.05026666666666667,
+        "smoothing": 50.0,
+        "rates": {
+          "Card Not Present": 0.06002,
+          "Chargeback": 0.039759,
+          "Deposit": 0.052679,
+          "Fee Charge": 0.052051,
+          "Interest Credit": 0.06252,
+          "Payment": 0.046096,
+          "Purchase": 0.050695,
+          "Refund": 0.058194,
+          "Reversal": 0.044998,
+          "Transfer": 0.049595,
+          "Wire Transfer": 0.048306,
+          "Withdrawal": 0.047815
+        },
+        "counts": {
+          "Card Not Present": 625,
+          "Chargeback": 642,
+          "Deposit": 3035,
+          "Fee Charge": 1151,
+          "Interest Credit": 614,
+          "Payment": 3020,
+          "Purchase": 8462,
+          "Refund": 1471,
+          "Reversal": 917,
+          "Transfer": 5344,
+          "Wire Transfer": 1182,
+          "Withdrawal": 3537
+        }
+      }
+    }
+  },
+  "methodology": {
+    "algorithm": "scikit-learn HistGradientBoostingClassifier (histogram gradient boosting)",
+    "algorithm_key": "hgb",
+    "calibration": {
+      "method": "platt_sigmoid_on_logit",
+      "slope": 0.942993,
+      "intercept": -0.042538,
+      "fitted_on": "calibration window"
+    },
+    "categorical_encoding": "Smoothed fraud rate per category (m=50), out-of-fold on the training window; applied as a fitted parameter at inference",
+    "hyperparameters": {
+      "learning_rate": 0.05,
+      "max_leaf_nodes": 31,
+      "min_samples_leaf": 50,
+      "l2_regularization": 1.0
+    },
+    "early_stopping": "50 rounds on the most recent 15% of the training window",
+    "iterations_used": 158,
+    "tuning": null,
+    "threshold_policy": "Reference threshold = 2% alert budget on the calibration window",
+    "reference_threshold": 0.9928475142759143
+  },
+  "performance": {
+    "metrics": {
+      "train": {
+        "n": 30000,
+        "n_fraud": 1508,
+        "base_rate": 0.05027,
+        "roc_auc": 0.9754,
+        "pr_auc": 0.8924,
+        "gini": 0.9508,
+        "ks": 0.847,
+        "brier": 0.01185,
+        "log_loss": 0.05189,
+        "ece": 0.0048
+      },
+      "calibration": {
+        "n": 7500,
+        "n_fraud": 357,
+        "base_rate": 0.0476,
+        "roc_auc": 0.9398,
+        "pr_auc": 0.8492,
+        "gini": 0.8795,
+        "ks": 0.8058,
+        "brier": 0.01238,
+        "log_loss": 0.06026,
+        "ece": 0.00362
+      },
+      "out_of_time": {
+        "n": 12500,
+        "n_fraud": 622,
+        "base_rate": 0.04976,
+        "roc_auc": 0.9554,
+        "pr_auc": 0.8814,
+        "gini": 0.9107,
+        "ks": 0.8419,
+        "brier": 0.01079,
+        "log_loss": 0.05301,
+        "ece": 0.00272
+      },
+      "out_of_time_uncalibrated": {
+        "n": 12500,
+        "n_fraud": 622,
+        "base_rate": 0.04976,
+        "roc_auc": 0.9554,
+        "pr_auc": 0.8814,
+        "gini": 0.9107,
+        "ks": 0.8419,
+        "brier": 0.01073,
+        "log_loss": 0.05273,
+        "ece": 0.00189
+      }
+    },
+    "reference_operating_point": {
+      "chosen_on": "calibration window",
+      "alert_budget": 0.02,
+      "threshold": 0.992848,
+      "alerts": 282,
+      "alert_rate": 0.02256,
+      "precision": 1.0,
+      "tdr": 0.4534,
+      "false_positive_ratio": 0.0,
+      "legit_customers_impacted_per_10k": 0.0,
+      "vdr": 0.6077,
+      "fraud_value_intercepted_usd": 12169821.54,
+      "fraud_value_missed_usd": 7856623.69,
+      "adr": 0.4597
+    },
+    "alert_budgets": [
+      {
+        "alert_budget": 0.005,
+        "threshold": 0.999284,
+        "alerts": 63,
+        "alert_rate": 0.00504,
+        "precision": 1.0,
+        "tdr": 0.1013,
+        "false_positive_ratio": 0.0,
+        "legit_customers_impacted_per_10k": 0.0,
+        "vdr": 0.3368,
+        "fraud_value_intercepted_usd": 6745750.8,
+        "fraud_value_missed_usd": 13280694.44,
+        "adr": 0.104
+      },
+      {
+        "alert_budget": 0.01,
+        "threshold": 0.99717,
+        "alerts": 125,
+        "alert_rate": 0.01,
+        "precision": 1.0,
+        "tdr": 0.201,
+        "false_positive_ratio": 0.0,
+        "legit_customers_impacted_per_10k": 0.0,
+        "vdr": 0.4008,
+        "fraud_value_intercepted_usd": 8027095.76,
+        "fraud_value_missed_usd": 11999349.47,
+        "adr": 0.2064
+      },
+      {
+        "alert_budget": 0.02,
+        "threshold": 0.994135,
+        "alerts": 250,
+        "alert_rate": 0.02,
+        "precision": 1.0,
+        "tdr": 0.4019,
+        "false_positive_ratio": 0.0,
+        "legit_customers_impacted_per_10k": 0.0,
+        "vdr": 0.6031,
+        "fraud_value_intercepted_usd": 12078693.63,
+        "fraud_value_missed_usd": 7947751.6,
+        "adr": 0.406
+      },
+      {
+        "alert_budget": 0.05,
+        "threshold": 0.1429,
+        "alerts": 625,
+        "alert_rate": 0.05,
+        "precision": 0.8256,
+        "tdr": 0.8296,
+        "false_positive_ratio": 0.21,
+        "legit_customers_impacted_per_10k": 91.8,
+        "vdr": 0.9406,
+        "fraud_value_intercepted_usd": 18837158.17,
+        "fraud_value_missed_usd": 1189287.06,
+        "adr": 0.8272
+      },
+      {
+        "alert_budget": 0.1,
+        "threshold": 0.044066,
+        "alerts": 1250,
+        "alert_rate": 0.1,
+        "precision": 0.44,
+        "tdr": 0.8842,
+        "false_positive_ratio": 1.27,
+        "legit_customers_impacted_per_10k": 589.3,
+        "vdr": 0.9713,
+        "fraud_value_intercepted_usd": 19452329.26,
+        "fraud_value_missed_usd": 574115.97,
+        "adr": 0.8809
+      }
+    ],
+    "lift_table": [
+      {
+        "decile": 1,
+        "score_min": 0.04407,
+        "score_max": 0.99958,
+        "n": 1250,
+        "n_fraud": 550,
+        "fraud_rate": 0.44,
+        "cum_fraud_captured": 0.8842,
+        "cum_lift": 8.842,
+        "decile_lift": 8.842,
+        "cum_value_captured": 0.9713
+      },
+      {
+        "decile": 2,
+        "score_min": 0.01806,
+        "score_max": 0.044,
+        "n": 1250,
+        "n_fraud": 22,
+        "fraud_rate": 0.0176,
+        "cum_fraud_captured": 0.9196,
+        "cum_lift": 4.598,
+        "decile_lift": 0.354,
+        "cum_value_captured": 0.9907
+      },
+      {
+        "decile": 3,
+        "score_min": 0.01127,
+        "score_max": 0.01806,
+        "n": 1250,
+        "n_fraud": 11,
+        "fraud_rate": 0.0088,
+        "cum_fraud_captured": 0.9373,
+        "cum_lift": 3.124,
+        "decile_lift": 0.177,
+        "cum_value_captured": 0.9921
+      },
+      {
+        "decile": 4,
+        "score_min": 0.0078,
+        "score_max": 0.01126,
+        "n": 1250,
+        "n_fraud": 10,
+        "fraud_rate": 0.008,
+        "cum_fraud_captured": 0.9534,
+        "cum_lift": 2.383,
+        "decile_lift": 0.161,
+        "cum_value_captured": 0.9957
+      },
+      {
+        "decile": 5,
+        "score_min": 0.00554,
+        "score_max": 0.0078,
+        "n": 1250,
+        "n_fraud": 7,
+        "fraud_rate": 0.0056,
+        "cum_fraud_captured": 0.9646,
+        "cum_lift": 1.929,
+        "decile_lift": 0.113,
+        "cum_value_captured": 0.9958
+      },
+      {
+        "decile": 6,
+        "score_min": 0.00408,
+        "score_max": 0.00554,
+        "n": 1250,
+        "n_fraud": 6,
+        "fraud_rate": 0.0048,
+        "cum_fraud_captured": 0.9743,
+        "cum_lift": 1.624,
+        "decile_lift": 0.096,
+        "cum_value_captured": 0.9986
+      },
+      {
+        "decile": 7,
+        "score_min": 0.003,
+        "score_max": 0.00408,
+        "n": 1250,
+        "n_fraud": 3,
+        "fraud_rate": 0.0024,
+        "cum_fraud_captured": 0.9791,
+        "cum_lift": 1.399,
+        "decile_lift": 0.048,
+        "cum_value_captured": 0.9987
+      },
+      {
+        "decile": 8,
+        "score_min": 0.00217,
+        "score_max": 0.003,
+        "n": 1250,
+        "n_fraud": 7,
+        "fraud_rate": 0.0056,
+        "cum_fraud_captured": 0.9904,
+        "cum_lift": 1.238,
+        "decile_lift": 0.113,
+        "cum_value_captured": 0.9997
+      },
+      {
+        "decile": 9,
+        "score_min": 0.00149,
+        "score_max": 0.00217,
+        "n": 1250,
+        "n_fraud": 2,
+        "fraud_rate": 0.0016,
+        "cum_fraud_captured": 0.9936,
+        "cum_lift": 1.104,
+        "decile_lift": 0.032,
+        "cum_value_captured": 0.9997
+      },
+      {
+        "decile": 10,
+        "score_min": 0.00037,
+        "score_max": 0.00149,
+        "n": 1250,
+        "n_fraud": 4,
+        "fraud_rate": 0.0032,
+        "cum_fraud_captured": 1.0,
+        "cum_lift": 1.0,
+        "decile_lift": 0.064,
+        "cum_value_captured": 1.0
+      }
+    ],
+    "segments": {
+      "channel": [
+        {
+          "segment": "API/Open Banking",
+          "n": 478,
+          "fraud_rate": 0.0523,
+          "roc_auc": 0.9829,
+          "alert_rate": 0.0293,
+          "tdr": 0.56,
+          "fpr": 0.0
+        },
+        {
+          "segment": "ATM",
+          "n": 2321,
+          "fraud_rate": 0.0405,
+          "roc_auc": 0.9432,
+          "alert_rate": 0.0177,
+          "tdr": 0.4362,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Branch",
+          "n": 1221,
+          "fraud_rate": 0.0573,
+          "roc_auc": 0.9415,
+          "alert_rate": 0.0229,
+          "tdr": 0.4,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Call Centre",
+          "n": 212,
+          "fraud_rate": 0.0519,
+          "roc_auc": 0.9986,
+          "alert_rate": 0.0142,
+          "tdr": 0.2727,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Internet Banking",
+          "n": 2818,
+          "fraud_rate": 0.0511,
+          "roc_auc": 0.9603,
+          "alert_rate": 0.0259,
+          "tdr": 0.5069,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Mobile Banking",
+          "n": 3701,
+          "fraud_rate": 0.0489,
+          "roc_auc": 0.9559,
+          "alert_rate": 0.0195,
+          "tdr": 0.3978,
+          "fpr": 0.0
+        },
+        {
+          "segment": "POS Terminal",
+          "n": 1219,
+          "fraud_rate": 0.0566,
+          "roc_auc": 0.9521,
+          "alert_rate": 0.0295,
+          "tdr": 0.5217,
+          "fpr": 0.0
+        },
+        {
+          "segment": "USSD",
+          "n": 530,
+          "fraud_rate": 0.0528,
+          "roc_auc": 0.9705,
+          "alert_rate": 0.0283,
+          "tdr": 0.5357,
+          "fpr": 0.0
+        }
+      ],
+      "country": [
+        {
+          "segment": "Germany",
+          "n": 1083,
+          "fraud_rate": 0.0388,
+          "roc_auc": 0.9531,
+          "alert_rate": 0.0166,
+          "tdr": 0.4286,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Hong Kong",
+          "n": 856,
+          "fraud_rate": 0.0456,
+          "roc_auc": 0.9493,
+          "alert_rate": 0.0222,
+          "tdr": 0.4872,
+          "fpr": 0.0
+        },
+        {
+          "segment": "India",
+          "n": 2510,
+          "fraud_rate": 0.0594,
+          "roc_auc": 0.9696,
+          "alert_rate": 0.0271,
+          "tdr": 0.4564,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Nigeria",
+          "n": 613,
+          "fraud_rate": 0.0408,
+          "roc_auc": 0.9568,
+          "alert_rate": 0.0228,
+          "tdr": 0.56,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Singapore",
+          "n": 1063,
+          "fraud_rate": 0.0395,
+          "roc_auc": 0.948,
+          "alert_rate": 0.0179,
+          "tdr": 0.4524,
+          "fpr": 0.0
+        },
+        {
+          "segment": "UAE",
+          "n": 762,
+          "fraud_rate": 0.0446,
+          "roc_auc": 0.9762,
+          "alert_rate": 0.0197,
+          "tdr": 0.4412,
+          "fpr": 0.0
+        },
+        {
+          "segment": "United Kingdom",
+          "n": 2283,
+          "fraud_rate": 0.0539,
+          "roc_auc": 0.9559,
+          "alert_rate": 0.0219,
+          "tdr": 0.4065,
+          "fpr": 0.0
+        },
+        {
+          "segment": "United States",
+          "n": 3330,
+          "fraud_rate": 0.0505,
+          "roc_auc": 0.9421,
+          "alert_rate": 0.0237,
+          "tdr": 0.4702,
+          "fpr": 0.0
+        }
+      ],
+      "customer_segment": [
+        {
+          "segment": "Corporate",
+          "n": 975,
+          "fraud_rate": 0.0595,
+          "roc_auc": 0.9394,
+          "alert_rate": 0.0287,
+          "tdr": 0.4828,
+          "fpr": 0.0
+        },
+        {
+          "segment": "NRI / Diaspora",
+          "n": 324,
+          "fraud_rate": 0.0463,
+          "roc_auc": 0.9899,
+          "alert_rate": 0.0309,
+          "tdr": 0.6667,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Premium",
+          "n": 2538,
+          "fraud_rate": 0.0496,
+          "roc_auc": 0.9598,
+          "alert_rate": 0.0197,
+          "tdr": 0.3968,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Private Banking",
+          "n": 693,
+          "fraud_rate": 0.0433,
+          "roc_auc": 0.989,
+          "alert_rate": 0.0245,
+          "tdr": 0.5667,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Retail",
+          "n": 5617,
+          "fraud_rate": 0.0491,
+          "roc_auc": 0.9479,
+          "alert_rate": 0.0205,
+          "tdr": 0.4167,
+          "fpr": 0.0
+        },
+        {
+          "segment": "SME",
+          "n": 1474,
+          "fraud_rate": 0.0475,
+          "roc_auc": 0.9633,
+          "alert_rate": 0.0265,
+          "tdr": 0.5571,
+          "fpr": 0.0
+        },
+        {
+          "segment": "Student",
+          "n": 879,
+          "fraud_rate": 0.0535,
+          "roc_auc": 0.9637,
+          "alert_rate": 0.0262,
+          "tdr": 0.4894,
+          "fpr": 0.0
+        }
+      ],
+      "customer_age_band": [
+        {
+          "segment": "18\u201325",
+          "n": 1548,
+          "fraud_rate": 0.0497,
+          "roc_auc": 0.9559,
+          "alert_rate": 0.0194,
+          "tdr": 0.3896,
+          "fpr": 0.0
+        },
+        {
+          "segment": "26\u201335",
+          "n": 3496,
+          "fraud_rate": 0.0492,
+          "roc_auc": 0.9578,
+          "alert_rate": 0.0232,
+          "tdr": 0.4709,
+          "fpr": 0.0
+        },
+        {
+          "segment": "36\u201345",
+          "n": 3212,
+          "fraud_rate": 0.0486,
+          "roc_auc": 0.9627,
+          "alert_rate": 0.0227,
+          "tdr": 0.4679,
+          "fpr": 0.0
+        },
+        {
+          "segment": "46\u201355",
+          "n": 2148,
+          "fraud_rate": 0.0531,
+          "roc_auc": 0.9391,
+          "alert_rate": 0.0242,
+          "tdr": 0.4561,
+          "fpr": 0.0
+        },
+        {
+          "segment": "56\u201365",
+          "n": 1228,
+          "fraud_rate": 0.0586,
+          "roc_auc": 0.9638,
+          "alert_rate": 0.0252,
+          "tdr": 0.4306,
+          "fpr": 0.0
+        },
+        {
+          "segment": "65+",
+          "n": 868,
+          "fraud_rate": 0.0357,
+          "roc_auc": 0.9438,
+          "alert_rate": 0.0173,
+          "tdr": 0.4839,
+          "fpr": 0.0
+        }
+      ]
+    },
+    "legacy_benchmark": {
+      "note": "Legacy composite weights label-derived risk_score at 35%; figures are not valid evidence of performance and are shown only to document the leakage.",
+      "n": 12500,
+      "n_fraud": 622,
+      "base_rate": 0.04976,
+      "roc_auc": 1.0,
+      "pr_auc": 1.0,
+      "gini": 1.0,
+      "ks": 1.0,
+      "brier": 0.04912,
+      "log_loss": 0.25122,
+      "ece": 0.04971
+    }
+  },
+  "fairness": {
+    "status": "pass",
+    "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist.",
+    "windows": [
+      "out_of_time",
+      "calibration"
+    ],
+    "findings": [],
+    "watchlist": [
+      {
+        "operating_point": "stress_5pct_budget",
+        "attribute": "country",
+        "group": "Singapore",
+        "window": "out_of_time",
+        "fpr_ratio": 1.556,
+        "fpr_p_value": 0.0244,
+        "pooled_fpr_ratio": 1.351,
+        "pooled_q_value": 0.8022,
+        "window_ratios": {
+          "out_of_time": 1.556,
+          "calibration": 0.987
+        },
+        "reason": "material in one window only; not significant once windows are pooled and corrected"
+      },
+      {
+        "operating_point": "stress_10pct_budget",
+        "attribute": "country",
+        "group": "Nigeria",
+        "window": "calibration",
+        "fpr_ratio": 1.532,
+        "fpr_p_value": 0.0114,
+        "pooled_fpr_ratio": 1.15,
+        "pooled_q_value": 0.972,
+        "window_ratios": {
+          "out_of_time": 0.954,
+          "calibration": 1.532
+        },
+        "reason": "material in one window only; not significant once windows are pooled and corrected"
+      }
+    ],
+    "operating_points": {
+      "reference": {
+        "threshold": 0.992848,
+        "pooled": {
+          "method": "False-positive-rate parity, two-proportion z-test with Benjamini\u2013Hochberg correction across all groups; approval adverse impact ratio",
+          "tests": 21,
+          "overall_fpr": 0.0,
+          "overall_tdr": 0.4413,
+          "ratio_threshold": 1.25,
+          "alpha": 0.05,
+          "min_group_n": 200,
+          "attributes": [
+            {
+              "attribute": "customer_segment",
+              "groups": [
+                {
+                  "group": "Corporate",
+                  "n": 1570,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4318,
+                  "approval_air": 0.9954,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "NRI / Diaspora",
+                  "n": 521,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.6667,
+                  "approval_air": 0.9927,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Premium",
+                  "n": 4013,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.3835,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Private Banking",
+                  "n": 1082,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.5319,
+                  "approval_air": 0.9965,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Retail",
+                  "n": 9149,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4279,
+                  "approval_air": 0.9992,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "SME",
+                  "n": 2241,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.5047,
+                  "approval_air": 0.9955,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Student",
+                  "n": 1424,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4795,
+                  "approval_air": 0.995,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "customer_age_band",
+              "groups": [
+                {
+                  "group": "18\u201325",
+                  "n": 2480,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4186,
+                  "approval_air": 0.9982,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "26\u201335",
+                  "n": 5589,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4649,
+                  "approval_air": 0.9974,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "36\u201345",
+                  "n": 5067,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4146,
+                  "approval_air": 0.9999,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "46\u201355",
+                  "n": 3472,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4682,
+                  "approval_air": 0.9966,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "56\u201365",
+                  "n": 1995,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.402,
+                  "approval_air": 0.9995,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "65+",
+                  "n": 1397,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4828,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "country",
+              "groups": [
+                {
+                  "group": "Germany",
+                  "n": 1810,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4405,
+                  "approval_air": 0.9978,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Hong Kong",
+                  "n": 1340,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4746,
+                  "approval_air": 0.9974,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "India",
+                  "n": 4070,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4233,
+                  "approval_air": 0.9959,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Nigeria",
+                  "n": 956,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4878,
+                  "approval_air": 0.9973,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Singapore",
+                  "n": 1749,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4571,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "UAE",
+                  "n": 1204,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4655,
+                  "approval_air": 0.9958,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United Kingdom",
+                  "n": 3561,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4153,
+                  "approval_air": 0.9969,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United States",
+                  "n": 5310,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4498,
+                  "approval_air": 0.9954,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                }
+              ]
+            }
+          ],
+          "findings": [],
+          "status": "pass"
+        },
+        "out_of_time": {
+          "method": "False-positive-rate parity, two-proportion z-test with Benjamini\u2013Hochberg correction across all groups; approval adverse impact ratio",
+          "tests": 21,
+          "overall_fpr": 0.0,
+          "overall_tdr": 0.4534,
+          "ratio_threshold": 1.25,
+          "alpha": 0.05,
+          "min_group_n": 200,
+          "attributes": [
+            {
+              "attribute": "customer_segment",
+              "groups": [
+                {
+                  "group": "Corporate",
+                  "n": 975,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4828,
+                  "approval_air": 0.9908,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "NRI / Diaspora",
+                  "n": 324,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.6667,
+                  "approval_air": 0.9886,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Premium",
+                  "n": 2538,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.3968,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Private Banking",
+                  "n": 693,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.5667,
+                  "approval_air": 0.9951,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Retail",
+                  "n": 5617,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4167,
+                  "approval_air": 0.9992,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "SME",
+                  "n": 1474,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.5571,
+                  "approval_air": 0.9931,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Student",
+                  "n": 879,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4894,
+                  "approval_air": 0.9934,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "customer_age_band",
+              "groups": [
+                {
+                  "group": "18\u201325",
+                  "n": 1548,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.3896,
+                  "approval_air": 0.9979,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "26\u201335",
+                  "n": 3496,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4709,
+                  "approval_air": 0.994,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "36\u201345",
+                  "n": 3212,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4679,
+                  "approval_air": 0.9945,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "46\u201355",
+                  "n": 2148,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4561,
+                  "approval_air": 0.993,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "56\u201365",
+                  "n": 1228,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4306,
+                  "approval_air": 0.9919,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "65+",
+                  "n": 868,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4839,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "country",
+              "groups": [
+                {
+                  "group": "Germany",
+                  "n": 1083,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4286,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Hong Kong",
+                  "n": 856,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4872,
+                  "approval_air": 0.9943,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "India",
+                  "n": 2510,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4564,
+                  "approval_air": 0.9894,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Nigeria",
+                  "n": 613,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.56,
+                  "approval_air": 0.9937,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Singapore",
+                  "n": 1063,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4524,
+                  "approval_air": 0.9987,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "UAE",
+                  "n": 762,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4412,
+                  "approval_air": 0.9969,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United Kingdom",
+                  "n": 2283,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4065,
+                  "approval_air": 0.9946,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United States",
+                  "n": 3330,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4702,
+                  "approval_air": 0.9928,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                }
+              ]
+            }
+          ],
+          "findings": [],
+          "status": "pass"
+        },
+        "calibration": {
+          "method": "False-positive-rate parity, two-proportion z-test with Benjamini\u2013Hochberg correction across all groups; approval adverse impact ratio",
+          "tests": 20,
+          "overall_fpr": 0.0,
+          "overall_tdr": 0.4202,
+          "ratio_threshold": 1.25,
+          "alpha": 0.05,
+          "min_group_n": 200,
+          "attributes": [
+            {
+              "attribute": "customer_segment",
+              "groups": [
+                {
+                  "group": "Corporate",
+                  "n": 595,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.3333,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Premium",
+                  "n": 1475,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.3625,
+                  "approval_air": 0.9971,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Private Banking",
+                  "n": 389,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4706,
+                  "approval_air": 0.9962,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Retail",
+                  "n": 3532,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4472,
+                  "approval_air": 0.9964,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "SME",
+                  "n": 767,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4054,
+                  "approval_air": 0.9972,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Student",
+                  "n": 545,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4615,
+                  "approval_air": 0.9947,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "customer_age_band",
+              "groups": [
+                {
+                  "group": "18\u201325",
+                  "n": 932,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4615,
+                  "approval_air": 0.9871,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "26\u201335",
+                  "n": 2093,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4545,
+                  "approval_air": 0.9914,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "36\u201345",
+                  "n": 1855,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.3222,
+                  "approval_air": 0.9974,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "46\u201355",
+                  "n": 1324,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4915,
+                  "approval_air": 0.991,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "56\u201365",
+                  "n": 767,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.3333,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "65+",
+                  "n": 529,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4815,
+                  "approval_air": 0.9883,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "country",
+              "groups": [
+                {
+                  "group": "Germany",
+                  "n": 727,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4524,
+                  "approval_air": 0.9884,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Hong Kong",
+                  "n": 484,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.45,
+                  "approval_air": 0.9961,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "India",
+                  "n": 1560,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.3485,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Nigeria",
+                  "n": 343,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.375,
+                  "approval_air": 0.9972,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Singapore",
+                  "n": 686,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4643,
+                  "approval_air": 0.9957,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "UAE",
+                  "n": 442,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.5,
+                  "approval_air": 0.9874,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United Kingdom",
+                  "n": 1278,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4333,
+                  "approval_air": 0.9943,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United States",
+                  "n": 1980,
+                  "legit_flagged": 0,
+                  "fpr": 0.0,
+                  "fpr_ratio": null,
+                  "fpr_p_value": 1.0,
+                  "tdr": 0.4158,
+                  "approval_air": 0.9934,
+                  "fpr_q_value": 1.0,
+                  "disparity_flag": false
+                }
+              ]
+            }
+          ],
+          "findings": [],
+          "status": "pass"
+        }
+      },
+      "stress_5pct_budget": {
+        "threshold": 0.112685,
+        "pooled": {
+          "method": "False-positive-rate parity, two-proportion z-test with Benjamini\u2013Hochberg correction across all groups; approval adverse impact ratio",
+          "tests": 21,
+          "overall_fpr": 0.01367,
+          "overall_tdr": 0.8253,
+          "ratio_threshold": 1.25,
+          "alpha": 0.05,
+          "min_group_n": 200,
+          "attributes": [
+            {
+              "attribute": "customer_segment",
+              "groups": [
+                {
+                  "group": "Corporate",
+                  "n": 1570,
+                  "legit_flagged": 21,
+                  "fpr": 0.01417,
+                  "fpr_ratio": 1.037,
+                  "fpr_p_value": 0.8627,
+                  "tdr": 0.7841,
+                  "approval_air": 0.9903,
+                  "fpr_q_value": 0.9598,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "NRI / Diaspora",
+                  "n": 521,
+                  "legit_flagged": 8,
+                  "fpr": 0.016,
+                  "fpr_ratio": 1.171,
+                  "fpr_p_value": 0.6492,
+                  "tdr": 0.8571,
+                  "approval_air": 0.9981,
+                  "fpr_q_value": 0.9598,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Premium",
+                  "n": 4013,
+                  "legit_flagged": 55,
+                  "fpr": 0.01445,
+                  "fpr_ratio": 1.057,
+                  "fpr_p_value": 0.6439,
+                  "tdr": 0.8058,
+                  "approval_air": 0.9926,
+                  "fpr_q_value": 0.9598,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Private Banking",
+                  "n": 1082,
+                  "legit_flagged": 13,
+                  "fpr": 0.01256,
+                  "fpr_ratio": 0.919,
+                  "fpr_p_value": 0.7521,
+                  "tdr": 0.8298,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.9598,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Retail",
+                  "n": 9149,
+                  "legit_flagged": 116,
+                  "fpr": 0.01331,
+                  "fpr_ratio": 0.974,
+                  "fpr_p_value": 0.699,
+                  "tdr": 0.8284,
+                  "approval_air": 0.9956,
+                  "fpr_q_value": 0.9598,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "SME",
+                  "n": 2241,
+                  "legit_flagged": 28,
+                  "fpr": 0.01312,
+                  "fpr_ratio": 0.96,
+                  "fpr_p_value": 0.8169,
+                  "tdr": 0.8785,
+                  "approval_air": 0.9933,
+                  "fpr_q_value": 0.9598,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Student",
+                  "n": 1424,
+                  "legit_flagged": 19,
+                  "fpr": 0.01406,
+                  "fpr_ratio": 1.029,
+                  "fpr_p_value": 0.8969,
+                  "tdr": 0.8219,
+                  "approval_air": 0.9922,
+                  "fpr_q_value": 0.9598,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "customer_age_band",
+              "groups": [
+                {
+                  "group": "18\u201325",
+                  "n": 2480,
+                  "legit_flagged": 22,
+                  "fpr": 0.00936,
+                  "fpr_ratio": 0.685,
+                  "fpr_p_value": 0.0545,
+                  "tdr": 0.8372,
+                  "approval_air": 0.9923,
+                  "fpr_q_value": 0.8022,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "26\u201335",
+                  "n": 5589,
+                  "legit_flagged": 81,
+                  "fpr": 0.01523,
+                  "fpr_ratio": 1.114,
+                  "fpr_p_value": 0.2477,
+                  "tdr": 0.8229,
+                  "approval_air": 0.9903,
+                  "fpr_q_value": 0.8264,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "36\u201345",
+                  "n": 5067,
+                  "legit_flagged": 75,
+                  "fpr": 0.01556,
+                  "fpr_ratio": 1.138,
+                  "fpr_p_value": 0.1914,
+                  "tdr": 0.8496,
+                  "approval_air": 0.9885,
+                  "fpr_q_value": 0.8264,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "46\u201355",
+                  "n": 3472,
+                  "legit_flagged": 39,
+                  "fpr": 0.01182,
+                  "fpr_ratio": 0.865,
+                  "fpr_p_value": 0.3148,
+                  "tdr": 0.8035,
+                  "approval_air": 0.9935,
+                  "fpr_q_value": 0.8264,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "56\u201365",
+                  "n": 1995,
+                  "legit_flagged": 29,
+                  "fpr": 0.01532,
+                  "fpr_ratio": 1.121,
+                  "fpr_p_value": 0.5146,
+                  "tdr": 0.7843,
+                  "approval_air": 0.99,
+                  "fpr_q_value": 0.9598,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "65+",
+                  "n": 1397,
+                  "legit_flagged": 14,
+                  "fpr": 0.01046,
+                  "fpr_ratio": 0.765,
+                  "fpr_p_value": 0.2935,
+                  "tdr": 0.8448,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.8264,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "country",
+              "groups": [
+                {
+                  "group": "Germany",
+                  "n": 1810,
+                  "legit_flagged": 29,
+                  "fpr": 0.0168,
+                  "fpr_ratio": 1.229,
+                  "fpr_p_value": 0.2398,
+                  "tdr": 0.8333,
+                  "approval_air": 0.9919,
+                  "fpr_q_value": 0.8264,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Hong Kong",
+                  "n": 1340,
+                  "legit_flagged": 17,
+                  "fpr": 0.01327,
+                  "fpr_ratio": 0.971,
+                  "fpr_p_value": 0.8989,
+                  "tdr": 0.7797,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.9598,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "India",
+                  "n": 4070,
+                  "legit_flagged": 52,
+                  "fpr": 0.01349,
+                  "fpr_ratio": 0.987,
+                  "fpr_p_value": 0.9141,
+                  "tdr": 0.8419,
+                  "approval_air": 0.9893,
+                  "fpr_q_value": 0.9598,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Nigeria",
+                  "n": 956,
+                  "legit_flagged": 12,
+                  "fpr": 0.01311,
+                  "fpr_ratio": 0.959,
+                  "fpr_p_value": 0.8823,
+                  "tdr": 0.8293,
+                  "approval_air": 0.9988,
+                  "fpr_q_value": 0.9598,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Singapore",
+                  "n": 1749,
+                  "legit_flagged": 31,
+                  "fpr": 0.01846,
+                  "fpr_ratio": 1.351,
+                  "fpr_p_value": 0.0764,
+                  "tdr": 0.7571,
+                  "approval_air": 0.9989,
+                  "fpr_q_value": 0.8022,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "UAE",
+                  "n": 1204,
+                  "legit_flagged": 15,
+                  "fpr": 0.01309,
+                  "fpr_ratio": 0.958,
+                  "fpr_p_value": 0.8615,
+                  "tdr": 0.8793,
+                  "approval_air": 0.9918,
+                  "fpr_q_value": 0.9598,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United Kingdom",
+                  "n": 3561,
+                  "legit_flagged": 46,
+                  "fpr": 0.01362,
+                  "fpr_ratio": 0.996,
+                  "fpr_p_value": 0.9773,
+                  "tdr": 0.8361,
+                  "approval_air": 0.9907,
+                  "fpr_q_value": 0.9773,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United States",
+                  "n": 5310,
+                  "legit_flagged": 58,
+                  "fpr": 0.01151,
+                  "fpr_ratio": 0.842,
+                  "fpr_p_value": 0.1228,
+                  "tdr": 0.8178,
+                  "approval_air": 0.9944,
+                  "fpr_q_value": 0.8264,
+                  "disparity_flag": false
+                }
+              ]
+            }
+          ],
+          "findings": [],
+          "status": "pass"
+        },
+        "out_of_time": {
+          "method": "False-positive-rate parity, two-proportion z-test with Benjamini\u2013Hochberg correction across all groups; approval adverse impact ratio",
+          "tests": 21,
+          "overall_fpr": 0.01448,
+          "overall_tdr": 0.8376,
+          "ratio_threshold": 1.25,
+          "alpha": 0.05,
+          "min_group_n": 200,
+          "attributes": [
+            {
+              "attribute": "customer_segment",
+              "groups": [
+                {
+                  "group": "Corporate",
+                  "n": 975,
+                  "legit_flagged": 13,
+                  "fpr": 0.01418,
+                  "fpr_ratio": 0.979,
+                  "fpr_p_value": 0.9361,
+                  "tdr": 0.7759,
+                  "approval_air": 0.9905,
+                  "fpr_q_value": 0.9373,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "NRI / Diaspora",
+                  "n": 324,
+                  "legit_flagged": 5,
+                  "fpr": 0.01618,
+                  "fpr_ratio": 1.117,
+                  "fpr_p_value": 0.7998,
+                  "tdr": 0.8667,
+                  "approval_air": 0.9947,
+                  "fpr_q_value": 0.9373,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Premium",
+                  "n": 2538,
+                  "legit_flagged": 33,
+                  "fpr": 0.01368,
+                  "fpr_ratio": 0.945,
+                  "fpr_p_value": 0.7129,
+                  "tdr": 0.8413,
+                  "approval_air": 0.9955,
+                  "fpr_q_value": 0.9373,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Private Banking",
+                  "n": 693,
+                  "legit_flagged": 8,
+                  "fpr": 0.01207,
+                  "fpr_ratio": 0.833,
+                  "fpr_p_value": 0.5923,
+                  "tdr": 0.9,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.9373,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Retail",
+                  "n": 5617,
+                  "legit_flagged": 80,
+                  "fpr": 0.01498,
+                  "fpr_ratio": 1.034,
+                  "fpr_p_value": 0.6814,
+                  "tdr": 0.837,
+                  "approval_air": 0.9949,
+                  "fpr_q_value": 0.9373,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "SME",
+                  "n": 1474,
+                  "legit_flagged": 20,
+                  "fpr": 0.01425,
+                  "fpr_ratio": 0.984,
+                  "fpr_p_value": 0.9373,
+                  "tdr": 0.8857,
+                  "approval_air": 0.9946,
+                  "fpr_q_value": 0.9373,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Student",
+                  "n": 879,
+                  "legit_flagged": 13,
+                  "fpr": 0.01562,
+                  "fpr_ratio": 1.079,
+                  "fpr_p_value": 0.7745,
+                  "tdr": 0.7872,
+                  "approval_air": 0.9933,
+                  "fpr_q_value": 0.9373,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "customer_age_band",
+              "groups": [
+                {
+                  "group": "18\u201325",
+                  "n": 1548,
+                  "legit_flagged": 14,
+                  "fpr": 0.00952,
+                  "fpr_ratio": 0.657,
+                  "fpr_p_value": 0.0887,
+                  "tdr": 0.8052,
+                  "approval_air": 0.992,
+                  "fpr_q_value": 0.4526,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "26\u201335",
+                  "n": 3496,
+                  "legit_flagged": 57,
+                  "fpr": 0.01715,
+                  "fpr_ratio": 1.184,
+                  "fpr_p_value": 0.1293,
+                  "tdr": 0.8081,
+                  "approval_air": 0.9848,
+                  "fpr_q_value": 0.4526,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "36\u201345",
+                  "n": 3212,
+                  "legit_flagged": 53,
+                  "fpr": 0.01734,
+                  "fpr_ratio": 1.198,
+                  "fpr_p_value": 0.1243,
+                  "tdr": 0.8846,
+                  "approval_air": 0.9812,
+                  "fpr_q_value": 0.4526,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "46\u201355",
+                  "n": 2148,
+                  "legit_flagged": 22,
+                  "fpr": 0.01082,
+                  "fpr_ratio": 0.747,
+                  "fpr_p_value": 0.1286,
+                  "tdr": 0.8158,
+                  "approval_air": 0.9874,
+                  "fpr_q_value": 0.4526,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "56\u201365",
+                  "n": 1228,
+                  "legit_flagged": 18,
+                  "fpr": 0.01557,
+                  "fpr_ratio": 1.075,
+                  "fpr_p_value": 0.7439,
+                  "tdr": 0.8472,
+                  "approval_air": 0.9762,
+                  "fpr_q_value": 0.9373,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "65+",
+                  "n": 868,
+                  "legit_flagged": 8,
+                  "fpr": 0.00956,
+                  "fpr_ratio": 0.66,
+                  "fpr_p_value": 0.2163,
+                  "tdr": 0.9032,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.5678,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "country",
+              "groups": [
+                {
+                  "group": "Germany",
+                  "n": 1083,
+                  "legit_flagged": 20,
+                  "fpr": 0.01921,
+                  "fpr_ratio": 1.327,
+                  "fpr_p_value": 0.1809,
+                  "tdr": 0.8571,
+                  "approval_air": 0.9954,
+                  "fpr_q_value": 0.5427,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Hong Kong",
+                  "n": 856,
+                  "legit_flagged": 13,
+                  "fpr": 0.01591,
+                  "fpr_ratio": 1.099,
+                  "fpr_p_value": 0.7227,
+                  "tdr": 0.7692,
+                  "approval_air": 0.9969,
+                  "fpr_q_value": 0.9373,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "India",
+                  "n": 2510,
+                  "legit_flagged": 33,
+                  "fpr": 0.01398,
+                  "fpr_ratio": 0.965,
+                  "fpr_p_value": 0.8191,
+                  "tdr": 0.8859,
+                  "approval_air": 0.9807,
+                  "fpr_q_value": 0.9373,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Nigeria",
+                  "n": 613,
+                  "legit_flagged": 8,
+                  "fpr": 0.01361,
+                  "fpr_ratio": 0.94,
+                  "fpr_p_value": 0.8554,
+                  "tdr": 0.84,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.9373,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Singapore",
+                  "n": 1063,
+                  "legit_flagged": 23,
+                  "fpr": 0.02253,
+                  "fpr_ratio": 1.556,
+                  "fpr_p_value": 0.0244,
+                  "tdr": 0.7857,
+                  "approval_air": 0.9944,
+                  "fpr_q_value": 0.2562,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "UAE",
+                  "n": 762,
+                  "legit_flagged": 9,
+                  "fpr": 0.01236,
+                  "fpr_ratio": 0.854,
+                  "fpr_p_value": 0.6215,
+                  "tdr": 0.8529,
+                  "approval_air": 0.9973,
+                  "fpr_q_value": 0.9373,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United Kingdom",
+                  "n": 2283,
+                  "legit_flagged": 34,
+                  "fpr": 0.01574,
+                  "fpr_ratio": 1.087,
+                  "fpr_p_value": 0.5878,
+                  "tdr": 0.8293,
+                  "approval_air": 0.9871,
+                  "fpr_q_value": 0.9373,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United States",
+                  "n": 3330,
+                  "legit_flagged": 32,
+                  "fpr": 0.01012,
+                  "fpr_ratio": 0.699,
+                  "fpr_p_value": 0.0166,
+                  "tdr": 0.8214,
+                  "approval_air": 0.9961,
+                  "fpr_q_value": 0.2562,
+                  "disparity_flag": false
+                }
+              ]
+            }
+          ],
+          "findings": [],
+          "status": "pass"
+        },
+        "calibration": {
+          "method": "False-positive-rate parity, two-proportion z-test with Benjamini\u2013Hochberg correction across all groups; approval adverse impact ratio",
+          "tests": 20,
+          "overall_fpr": 0.01232,
+          "overall_tdr": 0.8039,
+          "ratio_threshold": 1.25,
+          "alpha": 0.05,
+          "min_group_n": 200,
+          "attributes": [
+            {
+              "attribute": "customer_segment",
+              "groups": [
+                {
+                  "group": "Corporate",
+                  "n": 595,
+                  "legit_flagged": 8,
+                  "fpr": 0.01416,
+                  "fpr_ratio": 1.149,
+                  "fpr_p_value": 0.6796,
+                  "tdr": 0.8,
+                  "approval_air": 0.9895,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Premium",
+                  "n": 1475,
+                  "legit_flagged": 22,
+                  "fpr": 0.01577,
+                  "fpr_ratio": 1.28,
+                  "fpr_p_value": 0.1927,
+                  "tdr": 0.75,
+                  "approval_air": 0.9876,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Private Banking",
+                  "n": 389,
+                  "legit_flagged": 5,
+                  "fpr": 0.01344,
+                  "fpr_ratio": 1.091,
+                  "fpr_p_value": 0.8404,
+                  "tdr": 0.7059,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Retail",
+                  "n": 3532,
+                  "legit_flagged": 36,
+                  "fpr": 0.01068,
+                  "fpr_ratio": 0.867,
+                  "fpr_p_value": 0.2348,
+                  "tdr": 0.8137,
+                  "approval_air": 0.9963,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "SME",
+                  "n": 767,
+                  "legit_flagged": 8,
+                  "fpr": 0.01096,
+                  "fpr_ratio": 0.89,
+                  "fpr_p_value": 0.725,
+                  "tdr": 0.8649,
+                  "approval_air": 0.9912,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Student",
+                  "n": 545,
+                  "legit_flagged": 6,
+                  "fpr": 0.01156,
+                  "fpr_ratio": 0.938,
+                  "fpr_p_value": 0.8707,
+                  "tdr": 0.8846,
+                  "approval_air": 0.9901,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "customer_age_band",
+              "groups": [
+                {
+                  "group": "18\u201325",
+                  "n": 932,
+                  "legit_flagged": 8,
+                  "fpr": 0.00909,
+                  "fpr_ratio": 0.738,
+                  "fpr_p_value": 0.3538,
+                  "tdr": 0.8846,
+                  "approval_air": 0.9804,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "26\u201335",
+                  "n": 2093,
+                  "legit_flagged": 24,
+                  "fpr": 0.01204,
+                  "fpr_ratio": 0.977,
+                  "fpr_p_value": 0.8924,
+                  "tdr": 0.8485,
+                  "approval_air": 0.987,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "36\u201345",
+                  "n": 1855,
+                  "legit_flagged": 22,
+                  "fpr": 0.01246,
+                  "fpr_ratio": 1.012,
+                  "fpr_p_value": 0.9493,
+                  "tdr": 0.7889,
+                  "approval_air": 0.9885,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "46\u201355",
+                  "n": 1324,
+                  "legit_flagged": 17,
+                  "fpr": 0.01344,
+                  "fpr_ratio": 1.091,
+                  "fpr_p_value": 0.6908,
+                  "tdr": 0.7797,
+                  "approval_air": 0.9912,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "56\u201365",
+                  "n": 767,
+                  "legit_flagged": 11,
+                  "fpr": 0.01493,
+                  "fpr_ratio": 1.211,
+                  "fpr_p_value": 0.4983,
+                  "tdr": 0.6333,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "65+",
+                  "n": 529,
+                  "legit_flagged": 6,
+                  "fpr": 0.01195,
+                  "fpr_ratio": 0.97,
+                  "fpr_p_value": 0.9383,
+                  "tdr": 0.7778,
+                  "approval_air": 0.9876,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "country",
+              "groups": [
+                {
+                  "group": "Germany",
+                  "n": 727,
+                  "legit_flagged": 9,
+                  "fpr": 0.01314,
+                  "fpr_ratio": 1.066,
+                  "fpr_p_value": 0.8381,
+                  "tdr": 0.8095,
+                  "approval_air": 0.9809,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Hong Kong",
+                  "n": 484,
+                  "legit_flagged": 4,
+                  "fpr": 0.00862,
+                  "fpr_ratio": 0.7,
+                  "fpr_p_value": 0.4551,
+                  "tdr": 0.8,
+                  "approval_air": 0.9995,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "India",
+                  "n": 1560,
+                  "legit_flagged": 19,
+                  "fpr": 0.01272,
+                  "fpr_ratio": 1.032,
+                  "fpr_p_value": 0.8755,
+                  "tdr": 0.7424,
+                  "approval_air": 0.9971,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Nigeria",
+                  "n": 343,
+                  "legit_flagged": 4,
+                  "fpr": 0.01223,
+                  "fpr_ratio": 0.993,
+                  "fpr_p_value": 0.9883,
+                  "tdr": 0.8125,
+                  "approval_air": 0.9909,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Singapore",
+                  "n": 686,
+                  "legit_flagged": 8,
+                  "fpr": 0.01216,
+                  "fpr_ratio": 0.987,
+                  "fpr_p_value": 0.9685,
+                  "tdr": 0.7143,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "UAE",
+                  "n": 442,
+                  "legit_flagged": 6,
+                  "fpr": 0.01435,
+                  "fpr_ratio": 1.165,
+                  "fpr_p_value": 0.6976,
+                  "tdr": 0.9167,
+                  "approval_air": 0.9765,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United Kingdom",
+                  "n": 1278,
+                  "legit_flagged": 12,
+                  "fpr": 0.00985,
+                  "fpr_ratio": 0.8,
+                  "fpr_p_value": 0.3913,
+                  "tdr": 0.85,
+                  "approval_air": 0.9912,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United States",
+                  "n": 1980,
+                  "legit_flagged": 26,
+                  "fpr": 0.01384,
+                  "fpr_ratio": 1.123,
+                  "fpr_p_value": 0.4873,
+                  "tdr": 0.8119,
+                  "approval_air": 0.9857,
+                  "fpr_q_value": 0.9883,
+                  "disparity_flag": false
+                }
+              ]
+            }
+          ],
+          "findings": [],
+          "status": "pass"
+        }
+      },
+      "stress_10pct_budget": {
+        "threshold": 0.038788,
+        "pooled": {
+          "method": "False-positive-rate parity, two-proportion z-test with Benjamini\u2013Hochberg correction across all groups; approval adverse impact ratio",
+          "tests": 21,
+          "overall_fpr": 0.06556,
+          "overall_tdr": 0.8836,
+          "ratio_threshold": 1.25,
+          "alpha": 0.05,
+          "min_group_n": 200,
+          "attributes": [
+            {
+              "attribute": "customer_segment",
+              "groups": [
+                {
+                  "group": "Corporate",
+                  "n": 1570,
+                  "legit_flagged": 103,
+                  "fpr": 0.0695,
+                  "fpr_ratio": 1.06,
+                  "fpr_p_value": 0.5232,
+                  "tdr": 0.875,
+                  "approval_air": 0.9877,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "NRI / Diaspora",
+                  "n": 521,
+                  "legit_flagged": 34,
+                  "fpr": 0.068,
+                  "fpr_ratio": 1.037,
+                  "fpr_p_value": 0.8232,
+                  "tdr": 0.9524,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Premium",
+                  "n": 4013,
+                  "legit_flagged": 244,
+                  "fpr": 0.06409,
+                  "fpr_ratio": 0.978,
+                  "fpr_p_value": 0.6827,
+                  "tdr": 0.8641,
+                  "approval_air": 0.9983,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Private Banking",
+                  "n": 1082,
+                  "legit_flagged": 73,
+                  "fpr": 0.07053,
+                  "fpr_ratio": 1.076,
+                  "fpr_p_value": 0.5063,
+                  "tdr": 0.8511,
+                  "approval_air": 0.9991,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Retail",
+                  "n": 9149,
+                  "legit_flagged": 566,
+                  "fpr": 0.06497,
+                  "fpr_ratio": 0.991,
+                  "fpr_p_value": 0.762,
+                  "tdr": 0.8833,
+                  "approval_air": 0.9995,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "SME",
+                  "n": 2241,
+                  "legit_flagged": 138,
+                  "fpr": 0.06467,
+                  "fpr_ratio": 0.986,
+                  "fpr_p_value": 0.8598,
+                  "tdr": 0.9159,
+                  "approval_air": 0.9981,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Student",
+                  "n": 1424,
+                  "legit_flagged": 89,
+                  "fpr": 0.06588,
+                  "fpr_ratio": 1.005,
+                  "fpr_p_value": 0.9609,
+                  "tdr": 0.9041,
+                  "approval_air": 0.9942,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "customer_age_band",
+              "groups": [
+                {
+                  "group": "18\u201325",
+                  "n": 2480,
+                  "legit_flagged": 141,
+                  "fpr": 0.05997,
+                  "fpr_ratio": 0.915,
+                  "fpr_p_value": 0.2426,
+                  "tdr": 0.907,
+                  "approval_air": 0.9879,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "26\u201335",
+                  "n": 5589,
+                  "legit_flagged": 351,
+                  "fpr": 0.066,
+                  "fpr_ratio": 1.007,
+                  "fpr_p_value": 0.8777,
+                  "tdr": 0.8745,
+                  "approval_air": 0.9866,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "36\u201345",
+                  "n": 5067,
+                  "legit_flagged": 330,
+                  "fpr": 0.06845,
+                  "fpr_ratio": 1.044,
+                  "fpr_p_value": 0.3478,
+                  "tdr": 0.8943,
+                  "approval_air": 0.9829,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "46\u201355",
+                  "n": 3472,
+                  "legit_flagged": 215,
+                  "fpr": 0.06517,
+                  "fpr_ratio": 0.994,
+                  "fpr_p_value": 0.9211,
+                  "tdr": 0.8728,
+                  "approval_air": 0.9864,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "56\u201365",
+                  "n": 1995,
+                  "legit_flagged": 131,
+                  "fpr": 0.0692,
+                  "fpr_ratio": 1.056,
+                  "fpr_p_value": 0.4997,
+                  "tdr": 0.8725,
+                  "approval_air": 0.981,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "65+",
+                  "n": 1397,
+                  "legit_flagged": 79,
+                  "fpr": 0.059,
+                  "fpr_ratio": 0.9,
+                  "fpr_p_value": 0.3145,
+                  "tdr": 0.8793,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "country",
+              "groups": [
+                {
+                  "group": "Germany",
+                  "n": 1810,
+                  "legit_flagged": 123,
+                  "fpr": 0.07126,
+                  "fpr_ratio": 1.087,
+                  "fpr_p_value": 0.3154,
+                  "tdr": 0.8571,
+                  "approval_air": 0.9824,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Hong Kong",
+                  "n": 1340,
+                  "legit_flagged": 73,
+                  "fpr": 0.05699,
+                  "fpr_ratio": 0.869,
+                  "fpr_p_value": 0.1993,
+                  "tdr": 0.8475,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "India",
+                  "n": 4070,
+                  "legit_flagged": 252,
+                  "fpr": 0.06537,
+                  "fpr_ratio": 0.997,
+                  "fpr_p_value": 0.9576,
+                  "tdr": 0.8791,
+                  "approval_air": 0.9818,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Nigeria",
+                  "n": 956,
+                  "legit_flagged": 69,
+                  "fpr": 0.07541,
+                  "fpr_ratio": 1.15,
+                  "fpr_p_value": 0.2172,
+                  "tdr": 0.9268,
+                  "approval_air": 0.9778,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Singapore",
+                  "n": 1749,
+                  "legit_flagged": 114,
+                  "fpr": 0.0679,
+                  "fpr_ratio": 1.036,
+                  "fpr_p_value": 0.6852,
+                  "tdr": 0.8857,
+                  "approval_air": 0.9903,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "UAE",
+                  "n": 1204,
+                  "legit_flagged": 72,
+                  "fpr": 0.06283,
+                  "fpr_ratio": 0.958,
+                  "fpr_p_value": 0.6999,
+                  "tdr": 0.931,
+                  "approval_air": 0.9858,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United Kingdom",
+                  "n": 3561,
+                  "legit_flagged": 221,
+                  "fpr": 0.06542,
+                  "fpr_ratio": 0.998,
+                  "fpr_p_value": 0.972,
+                  "tdr": 0.9071,
+                  "approval_air": 0.9814,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United States",
+                  "n": 5310,
+                  "legit_flagged": 323,
+                  "fpr": 0.06407,
+                  "fpr_ratio": 0.977,
+                  "fpr_p_value": 0.6194,
+                  "tdr": 0.8699,
+                  "approval_air": 0.9856,
+                  "fpr_q_value": 0.972,
+                  "disparity_flag": false
+                }
+              ]
+            }
+          ],
+          "findings": [],
+          "status": "pass"
+        },
+        "out_of_time": {
+          "method": "False-positive-rate parity, two-proportion z-test with Benjamini\u2013Hochberg correction across all groups; approval adverse impact ratio",
+          "tests": 21,
+          "overall_fpr": 0.06777,
+          "overall_tdr": 0.8955,
+          "ratio_threshold": 1.25,
+          "alpha": 0.05,
+          "min_group_n": 200,
+          "attributes": [
+            {
+              "attribute": "customer_segment",
+              "groups": [
+                {
+                  "group": "Corporate",
+                  "n": 975,
+                  "legit_flagged": 62,
+                  "fpr": 0.06761,
+                  "fpr_ratio": 0.998,
+                  "fpr_p_value": 0.9839,
+                  "tdr": 0.8793,
+                  "approval_air": 0.9834,
+                  "fpr_q_value": 0.9839,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "NRI / Diaspora",
+                  "n": 324,
+                  "legit_flagged": 24,
+                  "fpr": 0.07767,
+                  "fpr_ratio": 1.146,
+                  "fpr_p_value": 0.4831,
+                  "tdr": 1.0,
+                  "approval_air": 0.9785,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Premium",
+                  "n": 2538,
+                  "legit_flagged": 160,
+                  "fpr": 0.06633,
+                  "fpr_ratio": 0.979,
+                  "fpr_p_value": 0.7531,
+                  "tdr": 0.9048,
+                  "approval_air": 0.9923,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Private Banking",
+                  "n": 693,
+                  "legit_flagged": 43,
+                  "fpr": 0.06486,
+                  "fpr_ratio": 0.957,
+                  "fpr_p_value": 0.7586,
+                  "tdr": 0.9,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Retail",
+                  "n": 5617,
+                  "legit_flagged": 367,
+                  "fpr": 0.06871,
+                  "fpr_ratio": 1.014,
+                  "fpr_p_value": 0.7122,
+                  "tdr": 0.8841,
+                  "approval_air": 0.9914,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "SME",
+                  "n": 1474,
+                  "legit_flagged": 88,
+                  "fpr": 0.06268,
+                  "fpr_ratio": 0.925,
+                  "fpr_p_value": 0.4187,
+                  "tdr": 0.9286,
+                  "approval_air": 0.9969,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Student",
+                  "n": 879,
+                  "legit_flagged": 61,
+                  "fpr": 0.07332,
+                  "fpr_ratio": 1.082,
+                  "fpr_p_value": 0.5094,
+                  "tdr": 0.8723,
+                  "approval_air": 0.9833,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "customer_age_band",
+              "groups": [
+                {
+                  "group": "18\u201325",
+                  "n": 1548,
+                  "legit_flagged": 84,
+                  "fpr": 0.0571,
+                  "fpr_ratio": 0.843,
+                  "fpr_p_value": 0.082,
+                  "tdr": 0.9091,
+                  "approval_air": 0.9857,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "26\u201335",
+                  "n": 3496,
+                  "legit_flagged": 228,
+                  "fpr": 0.06859,
+                  "fpr_ratio": 1.012,
+                  "fpr_p_value": 0.8247,
+                  "tdr": 0.8837,
+                  "approval_air": 0.9756,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "36\u201345",
+                  "n": 3212,
+                  "legit_flagged": 225,
+                  "fpr": 0.07363,
+                  "fpr_ratio": 1.086,
+                  "fpr_p_value": 0.1352,
+                  "tdr": 0.9103,
+                  "approval_air": 0.9695,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "46\u201355",
+                  "n": 2148,
+                  "legit_flagged": 135,
+                  "fpr": 0.06637,
+                  "fpr_ratio": 0.979,
+                  "fpr_p_value": 0.7825,
+                  "tdr": 0.8684,
+                  "approval_air": 0.9753,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "56\u201365",
+                  "n": 1228,
+                  "legit_flagged": 86,
+                  "fpr": 0.07439,
+                  "fpr_ratio": 1.098,
+                  "fpr_p_value": 0.3458,
+                  "tdr": 0.9167,
+                  "approval_air": 0.9591,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "65+",
+                  "n": 868,
+                  "legit_flagged": 47,
+                  "fpr": 0.05615,
+                  "fpr_ratio": 0.829,
+                  "fpr_p_value": 0.1654,
+                  "tdr": 0.9032,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "country",
+              "groups": [
+                {
+                  "group": "Germany",
+                  "n": 1083,
+                  "legit_flagged": 80,
+                  "fpr": 0.07685,
+                  "fpr_ratio": 1.134,
+                  "fpr_p_value": 0.2225,
+                  "tdr": 0.9048,
+                  "approval_air": 0.988,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Hong Kong",
+                  "n": 856,
+                  "legit_flagged": 50,
+                  "fpr": 0.0612,
+                  "fpr_ratio": 0.903,
+                  "fpr_p_value": 0.4386,
+                  "tdr": 0.8718,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "India",
+                  "n": 2510,
+                  "legit_flagged": 157,
+                  "fpr": 0.0665,
+                  "fpr_ratio": 0.981,
+                  "fpr_p_value": 0.783,
+                  "tdr": 0.9195,
+                  "approval_air": 0.9789,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Nigeria",
+                  "n": 613,
+                  "legit_flagged": 38,
+                  "fpr": 0.06463,
+                  "fpr_ratio": 0.954,
+                  "fpr_p_value": 0.7555,
+                  "tdr": 0.92,
+                  "approval_air": 0.9985,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Singapore",
+                  "n": 1063,
+                  "legit_flagged": 71,
+                  "fpr": 0.06954,
+                  "fpr_ratio": 1.026,
+                  "fpr_p_value": 0.8142,
+                  "tdr": 0.881,
+                  "approval_air": 0.9962,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "UAE",
+                  "n": 762,
+                  "legit_flagged": 47,
+                  "fpr": 0.06456,
+                  "fpr_ratio": 0.953,
+                  "fpr_p_value": 0.7219,
+                  "tdr": 0.9412,
+                  "approval_air": 0.9939,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United Kingdom",
+                  "n": 2283,
+                  "legit_flagged": 152,
+                  "fpr": 0.07037,
+                  "fpr_ratio": 1.038,
+                  "fpr_p_value": 0.5954,
+                  "tdr": 0.8943,
+                  "approval_air": 0.9816,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United States",
+                  "n": 3330,
+                  "legit_flagged": 210,
+                  "fpr": 0.06641,
+                  "fpr_ratio": 0.98,
+                  "fpr_p_value": 0.7227,
+                  "tdr": 0.869,
+                  "approval_air": 0.9903,
+                  "fpr_q_value": 0.8659,
+                  "disparity_flag": false
+                }
+              ]
+            }
+          ],
+          "findings": [],
+          "status": "pass"
+        },
+        "calibration": {
+          "method": "False-positive-rate parity, two-proportion z-test with Benjamini\u2013Hochberg correction across all groups; approval adverse impact ratio",
+          "tests": 20,
+          "overall_fpr": 0.06188,
+          "overall_tdr": 0.8627,
+          "ratio_threshold": 1.25,
+          "alpha": 0.05,
+          "min_group_n": 200,
+          "attributes": [
+            {
+              "attribute": "customer_segment",
+              "groups": [
+                {
+                  "group": "Corporate",
+                  "n": 595,
+                  "legit_flagged": 41,
+                  "fpr": 0.07257,
+                  "fpr_ratio": 1.173,
+                  "fpr_p_value": 0.2719,
+                  "tdr": 0.8667,
+                  "approval_air": 0.9822,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Premium",
+                  "n": 1475,
+                  "legit_flagged": 84,
+                  "fpr": 0.06022,
+                  "fpr_ratio": 0.973,
+                  "fpr_p_value": 0.7737,
+                  "tdr": 0.8,
+                  "approval_air": 0.9958,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Private Banking",
+                  "n": 389,
+                  "legit_flagged": 30,
+                  "fpr": 0.08065,
+                  "fpr_ratio": 1.303,
+                  "fpr_p_value": 0.1228,
+                  "tdr": 0.7647,
+                  "approval_air": 0.9845,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Retail",
+                  "n": 3532,
+                  "legit_flagged": 199,
+                  "fpr": 0.05903,
+                  "fpr_ratio": 0.954,
+                  "fpr_p_value": 0.3453,
+                  "tdr": 0.882,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "SME",
+                  "n": 767,
+                  "legit_flagged": 50,
+                  "fpr": 0.06849,
+                  "fpr_ratio": 1.107,
+                  "fpr_p_value": 0.4337,
+                  "tdr": 0.8919,
+                  "approval_air": 0.9871,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Student",
+                  "n": 545,
+                  "legit_flagged": 28,
+                  "fpr": 0.05395,
+                  "fpr_ratio": 0.872,
+                  "fpr_p_value": 0.4363,
+                  "tdr": 0.9615,
+                  "approval_air": 0.9992,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "customer_age_band",
+              "groups": [
+                {
+                  "group": "18\u201325",
+                  "n": 932,
+                  "legit_flagged": 57,
+                  "fpr": 0.06477,
+                  "fpr_ratio": 1.047,
+                  "fpr_p_value": 0.7036,
+                  "tdr": 0.9038,
+                  "approval_air": 0.9748,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "26\u201335",
+                  "n": 2093,
+                  "legit_flagged": 123,
+                  "fpr": 0.06169,
+                  "fpr_ratio": 0.997,
+                  "fpr_p_value": 0.9663,
+                  "tdr": 0.8586,
+                  "approval_air": 0.9882,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "36\u201345",
+                  "n": 1855,
+                  "legit_flagged": 105,
+                  "fpr": 0.05949,
+                  "fpr_ratio": 0.961,
+                  "fpr_p_value": 0.6312,
+                  "tdr": 0.8667,
+                  "approval_air": 0.989,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "46\u201355",
+                  "n": 1324,
+                  "legit_flagged": 80,
+                  "fpr": 0.06324,
+                  "fpr_ratio": 1.022,
+                  "fpr_p_value": 0.8246,
+                  "tdr": 0.8814,
+                  "approval_air": 0.9879,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "56\u201365",
+                  "n": 767,
+                  "legit_flagged": 45,
+                  "fpr": 0.06106,
+                  "fpr_ratio": 0.987,
+                  "fpr_p_value": 0.9222,
+                  "tdr": 0.7667,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "65+",
+                  "n": 529,
+                  "legit_flagged": 32,
+                  "fpr": 0.06375,
+                  "fpr_ratio": 1.03,
+                  "fpr_p_value": 0.8572,
+                  "tdr": 0.8519,
+                  "approval_air": 0.9832,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                }
+              ]
+            },
+            {
+              "attribute": "country",
+              "groups": [
+                {
+                  "group": "Germany",
+                  "n": 727,
+                  "legit_flagged": 43,
+                  "fpr": 0.06277,
+                  "fpr_ratio": 1.014,
+                  "fpr_p_value": 0.9186,
+                  "tdr": 0.8095,
+                  "approval_air": 0.9724,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Hong Kong",
+                  "n": 484,
+                  "legit_flagged": 23,
+                  "fpr": 0.04957,
+                  "fpr_ratio": 0.801,
+                  "fpr_p_value": 0.2551,
+                  "tdr": 0.8,
+                  "approval_air": 1.0,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "India",
+                  "n": 1560,
+                  "legit_flagged": 95,
+                  "fpr": 0.06359,
+                  "fpr_ratio": 1.028,
+                  "fpr_p_value": 0.7579,
+                  "tdr": 0.7879,
+                  "approval_air": 0.9852,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Nigeria",
+                  "n": 343,
+                  "legit_flagged": 31,
+                  "fpr": 0.0948,
+                  "fpr_ratio": 1.532,
+                  "fpr_p_value": 0.0114,
+                  "tdr": 0.9375,
+                  "approval_air": 0.9418,
+                  "fpr_q_value": 0.228,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "Singapore",
+                  "n": 686,
+                  "legit_flagged": 43,
+                  "fpr": 0.06535,
+                  "fpr_ratio": 1.056,
+                  "fpr_p_value": 0.6982,
+                  "tdr": 0.8929,
+                  "approval_air": 0.9798,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "UAE",
+                  "n": 442,
+                  "legit_flagged": 25,
+                  "fpr": 0.05981,
+                  "fpr_ratio": 0.967,
+                  "fpr_p_value": 0.8563,
+                  "tdr": 0.9167,
+                  "approval_air": 0.972,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United Kingdom",
+                  "n": 1278,
+                  "legit_flagged": 69,
+                  "fpr": 0.05665,
+                  "fpr_ratio": 0.916,
+                  "fpr_p_value": 0.4057,
+                  "tdr": 0.9333,
+                  "approval_air": 0.9813,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                },
+                {
+                  "group": "United States",
+                  "n": 1980,
+                  "legit_flagged": 113,
+                  "fpr": 0.06014,
+                  "fpr_ratio": 0.972,
+                  "fpr_p_value": 0.7153,
+                  "tdr": 0.8713,
+                  "approval_air": 0.9772,
+                  "fpr_q_value": 0.9663,
+                  "disparity_flag": false
+                }
+              ]
+            }
+          ],
+          "findings": [],
+          "status": "pass"
+        }
+      }
+    }
+  },
+  "monitoring": {
+    "baseline_window": "calibration",
+    "baseline": {
+      "n": 7500,
+      "features": {
+        "amount_vs_hist_avg": {
+          "type": "numeric",
+          "edges": [
+            0.07886449741481268,
+            0.1632484334451548,
+            0.2637354547823669,
+            0.3767025096552618,
+            0.5055469330181908,
+            0.6765529974536794,
+            0.8939658135008504,
+            1.215564724696793,
+            1.796861251795463
+          ],
+          "dist": [
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.0
+          ]
+        },
+        "failed_attempt_count": {
+          "type": "numeric",
+          "edges": [
+            0.0,
+            1.0,
+            2.0
+          ],
+          "dist": [
+            0.0,
+            0.7568,
+            0.13706666666666667,
+            0.10613333333333333,
+            0.0
+          ]
+        },
+        "login_attempts": {
+          "type": "numeric",
+          "edges": [
+            1.0,
+            2.0,
+            3.0
+          ],
+          "dist": [
+            0.0,
+            0.6781333333333334,
+            0.14626666666666666,
+            0.1756,
+            0.0
+          ]
+        },
+        "txn_hour": {
+          "type": "numeric",
+          "edges": [
+            2.0,
+            4.0,
+            7.0,
+            9.0,
+            12.0,
+            14.0,
+            16.0,
+            19.0,
+            21.0
+          ],
+          "dist": [
+            0.08573333333333333,
+            0.08466666666666667,
+            0.1196,
+            0.0788,
+            0.12506666666666666,
+            0.08346666666666666,
+            0.082,
+            0.12693333333333334,
+            0.08586666666666666,
+            0.12786666666666666,
+            0.0
+          ]
+        },
+        "is_off_hours": {
+          "type": "numeric",
+          "edges": [
+            0.0,
+            1.0
+          ],
+          "dist": [
+            0.0,
+            0.6668,
+            0.3332,
+            0.0
+          ]
+        },
+        "is_weekend": {
+          "type": "numeric",
+          "edges": [
+            0.0,
+            1.0
+          ],
+          "dist": [
+            0.0,
+            0.7118666666666666,
+            0.28813333333333335,
+            0.0
+          ]
+        },
+        "is_debit": {
+          "type": "numeric",
+          "edges": [
+            0.0,
+            1.0
+          ],
+          "dist": [
+            0.0,
+            0.1664,
+            0.8336,
+            0.0
+          ]
+        },
+        "cust_txn_count_1h": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "cust_txn_count_24h": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "cust_txn_count_7d": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "cust_amount_usd_24h": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "cust_amount_usd_7d": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "secs_since_last_txn": {
+          "type": "numeric",
+          "edges": [
+            1019695.7000000002,
+            2131188.0,
+            3448459.3,
+            4821018.800000001,
+            6486861.0,
+            8477557.600000001,
+            11160463.200000005,
+            14765040.200000003,
+            19824340.1
+          ],
+          "dist": [
+            0.09586666666666667,
+            0.09586666666666667,
+            0.09586666666666667,
+            0.09573333333333334,
+            0.09586666666666667,
+            0.09586666666666667,
+            0.09573333333333334,
+            0.09586666666666667,
+            0.09586666666666667,
+            0.09586666666666667,
+            0.0416
+          ]
+        },
+        "device_new_for_customer": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            0.9584,
+            0.0416
+          ]
+        },
+        "ip_new_for_customer": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            0.9584,
+            0.0416
+          ]
+        },
+        "merchant_new_for_customer": {
+          "type": "numeric",
+          "edges": [
+            1.0
+          ],
+          "dist": [
+            0.0516,
+            0.9068,
+            0.0416
+          ]
+        },
+        "device_other_customer_txns": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "ip_other_customer_txns": {
+          "type": "numeric",
+          "edges": [
+            0.0
+          ],
+          "dist": [
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "channel": {
+          "type": "categorical",
+          "categories": [
+            "API/Open Banking",
+            "ATM",
+            "Branch",
+            "Call Centre",
+            "Internet Banking",
+            "Mobile Banking",
+            "POS Terminal",
+            "USSD"
+          ],
+          "dist": [
+            0.04253333333333333,
+            0.17906666666666668,
+            0.10386666666666666,
+            0.020933333333333335,
+            0.21493333333333334,
+            0.29986666666666667,
+            0.09933333333333333,
+            0.039466666666666664,
+            0.0,
+            0.0
+          ]
+        },
+        "authorization_method": {
+          "type": "categorical",
+          "categories": [
+            "Biometric",
+            "Contactless",
+            "OTP",
+            "PIN",
+            "Password",
+            "Signature",
+            "Token"
+          ],
+          "dist": [
+            0.2492,
+            0.038533333333333336,
+            0.19613333333333333,
+            0.30493333333333333,
+            0.12253333333333333,
+            0.020266666666666665,
+            0.0684,
+            0.0,
+            0.0
+          ]
+        },
+        "merchant_category": {
+          "type": "categorical",
+          "categories": [
+            "Auto & Transportation",
+            "Crypto Exchanges",
+            "Education",
+            "Electronics & Technology",
+            "Entertainment & Streaming",
+            "Financial Services / Money Transfer",
+            "Fuel & Petroleum",
+            "Gaming & Gambling",
+            "Government & Taxes",
+            "Grocery & Supermarkets",
+            "Healthcare & Pharmacy",
+            "Hotels & Accommodation",
+            "Insurance",
+            "Luxury Goods",
+            "Online Marketplaces",
+            "Real Estate",
+            "Restaurants & Food Delivery",
+            "Retail / General Merchandise",
+            "Travel & Airlines",
+            "Utilities & Telecom"
+          ],
+          "dist": [
+            0.031466666666666664,
+            0.0092,
+            0.020266666666666665,
+            0.07053333333333334,
+            0.017466666666666665,
+            0.0696,
+            0.0732,
+            0.017866666666666666,
+            0.009466666666666667,
+            0.11746666666666666,
+            0.06413333333333333,
+            0.040266666666666666,
+            0.009866666666666666,
+            0.020533333333333334,
+            0.058133333333333335,
+            0.0176,
+            0.09826666666666667,
+            0.1492,
+            0.0556,
+            0.04986666666666666,
+            0.0,
+            0.0
+          ]
+        },
+        "transaction_type": {
+          "type": "categorical",
+          "categories": [
+            "Card Not Present",
+            "Chargeback",
+            "Deposit",
+            "Fee Charge",
+            "Interest Credit",
+            "Payment",
+            "Purchase",
+            "Refund",
+            "Reversal",
+            "Transfer",
+            "Wire Transfer",
+            "Withdrawal"
+          ],
+          "dist": [
+            0.0188,
+            0.0204,
+            0.09813333333333334,
+            0.036,
+            0.020533333333333334,
+            0.09813333333333334,
+            0.28146666666666664,
+            0.047733333333333336,
+            0.028533333333333334,
+            0.1916,
+            0.0416,
+            0.11706666666666667,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "score": {
+        "edges": [
+          0.001462752978513033,
+          0.002133217198845353,
+          0.0028774149801264067,
+          0.0039056339045129363,
+          0.005325990247605229,
+          0.0072918218536978776,
+          0.010540633702584103,
+          0.01700207482175775,
+          0.03872567622057227
+        ],
+        "dist": [
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.0
+        ]
+      }
+    },
+    "plan": {
+      "population_stability": "Score PSI and per-feature CSI weekly; investigate >= 0.10, escalate >= 0.25",
+      "performance": "ROC-AUC, PR-AUC, VDR on labels older than the 90-day maturity window, monthly",
+      "calibration": "Recalibrate when OOT ECE exceeds 0.02 on matured labels",
+      "fairness": "Re-run false-positive-rate parity quarterly",
+      "revalidation": "Full independent revalidation annually or on material change"
+    }
+  },
+  "validation": {
+    "status": "passed",
+    "gates": [
+      {
+        "gate": "feature_lineage",
+        "passed": true,
+        "detail": "All model features trace to pre-authorisation fields"
+      },
+      {
+        "gate": "no_single_feature_leak",
+        "passed": true,
+        "detail": "Features above 0.97 single-feature AUC: none"
+      },
+      {
+        "gate": "oot_discrimination",
+        "passed": true,
+        "detail": "OOT ROC-AUC 0.9554 vs minimum 0.75"
+      },
+      {
+        "gate": "oot_calibration",
+        "passed": true,
+        "detail": "OOT ECE 0.00272 vs maximum 0.02"
+      },
+      {
+        "gate": "fairness",
+        "passed": true,
+        "detail": "0 false-positive-rate disparities significant on the pooled out-of-sample windows and present in each (2 on the non-gating watchlist)"
+      }
+    ],
+    "thresholds": {
+      "min_oot_roc_auc": 0.75,
+      "max_oot_ece": 0.02,
+      "max_feature_single_auc": 0.97
+    },
+    "remediation_log": [
+      {
+        "finding": "Fairness gate failed at the 10% alert-budget stress point: legitimate Student-segment transactions flagged 1.34x the overall rate (p=0.006).",
+        "root_cause": "SHAP gap analysis: amount_usd and amount_to_balance raised risk for small absolute amounts \u2014 the model learned that the low-amount region holds fraud, making absolute amount a proxy for the Student segment.",
+        "remediation": "Monotone-increasing constraints on amount_usd, log_amount_usd and amount_to_balance (a larger amount can never lower risk).",
+        "retest": "Student ratio at 10% budget fell to 1.12x; fairness gate passes; OOT ROC-AUC 0.9566 -> 0.9581.",
+        "superseded_model": "bti-v3-hgb-20260923160131",
+        "reassessment": "Re-tested under the pooled, corrected method (2026-09-24): the Student disparity was confined to the out-of-time window (1.34x there, 0.97x in the calibration window; pooled 1.20x, q=0.44), so it would now sit on the watchlist rather than fail the gate. The monotone constraints are kept on their own merits: a larger amount should never lower risk."
+      }
+    ]
+  },
+  "limitations": [
+    "Trained on synthetic data; performance must be re-established on the bank's own labelled history before production use.",
+    "FX amounts use indicative reference rates unless overridden with the bank's official rate feed.",
+    "The synthetic customer base has ~6 transactions per customer, so velocity features are sparse; their contribution will be larger on real transaction streams.",
+    "Labels are taken at face value; production labels need a maturity window (chargebacks arrive 30-120 days after the transaction) before performance is measured.",
+    "historical_average_transaction_amount is a profile field supplied by the source system and must be maintained point-in-time to avoid look-ahead."
+  ],
+  "provenance": {
+    "git_sha": "33a72b407c320cc020ec75a43cfe1784b100cf25",
+    "python": "3.11.15",
+    "sklearn": "1.9.0",
+    "pandas": "3.0.5",
+    "numpy": "2.4.6"
+  }
+}

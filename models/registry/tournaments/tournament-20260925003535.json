@@ -1,0 +1,203 @@
+{
+  "run_at": "2026-09-25T00:35:35.582275+00:00",
+  "developer": "Srijan Upadhyay",
+  "selection_rule": "Remediation: incumbent excluded; best passing candidate replaces it if non-inferior (within 0.005 calibration PR-AUC). Out-of-time window reported, never used to select.",
+  "remediation_finding": "amount_to_balance compares every customer with one global scale: legitimate Private Banking customers (typical payment 18.7% of balance vs 0.8% for others) are flagged 1.29x the overall rate at the 10% stress budget (pooled, q=0.13, above the norm in both windows; SHAP: amount_to_balance explains 0.21 of a 0.28 log-odds gap)",
+  "remediation_groups": [
+    "customer_segment=Private Banking"
+  ],
+  "tuned": false,
+  "entrants": [
+    {
+      "model_id": "bti-v3-xgb-r-20260923181450",
+      "incumbent": true,
+      "algorithm": "xgboost",
+      "feature_set": "core-relative",
+      "validation": "passed",
+      "failed_gates": [],
+      "calibration_pr_auc": 0.8519,
+      "calibration_roc_auc": 0.9419,
+      "oot_pr_auc": 0.8857,
+      "oot_roc_auc": 0.9556,
+      "oot_ks": 0.8449,
+      "oot_ece": 0.00305,
+      "tuned": false
+    },
+    {
+      "model_id": "bti-v3-xgb-rn-20260925003533",
+      "incumbent": false,
+      "algorithm": "xgboost",
+      "feature_set": "core-relative-nb",
+      "validation": "passed",
+      "failed_gates": [],
+      "calibration_pr_auc": 0.8518,
+      "calibration_roc_auc": 0.9408,
+      "oot_pr_auc": 0.8857,
+      "oot_roc_auc": 0.9563,
+      "oot_ks": 0.8443,
+      "oot_ece": 0.00274,
+      "tuned": false,
+      "remediation_check": {
+        "passed": true,
+        "checks": [
+          {
+            "group": "customer_segment=Private Banking",
+            "incumbent_worst_ratio": 1.287,
+            "candidate_worst_ratio": 1.129,
+            "finding_remains": false,
+            "passed": true
+          }
+        ]
+      }
+    },
+    {
+      "model_id": "bti-v3-xgb-ro-20260925003535",
+      "incumbent": false,
+      "algorithm": "xgboost",
+      "feature_set": "core-relative-own",
+      "validation": "passed",
+      "failed_gates": [],
+      "calibration_pr_auc": 0.8513,
+      "calibration_roc_auc": 0.9422,
+      "oot_pr_auc": 0.8864,
+      "oot_roc_auc": 0.9571,
+      "oot_ks": 0.8453,
+      "oot_ece": 0.00218,
+      "tuned": false,
+      "remediation_check": {
+        "passed": true,
+        "checks": [
+          {
+            "group": "customer_segment=Private Banking",
+            "incumbent_worst_ratio": 1.287,
+            "candidate_worst_ratio": 1.162,
+            "finding_remains": false,
+            "passed": true
+          }
+        ]
+      }
+    },
+    {
+      "model_id": "bti-v3-lgbm-ro-20260925003530",
+      "incumbent": false,
+      "algorithm": "lightgbm",
+      "feature_set": "core-relative-own",
+      "validation": "passed",
+      "failed_gates": [],
+      "calibration_pr_auc": 0.8509,
+      "calibration_roc_auc": 0.9411,
+      "oot_pr_auc": 0.8853,
+      "oot_roc_auc": 0.957,
+      "oot_ks": 0.8433,
+      "oot_ece": 0.00263,
+      "tuned": false,
+      "remediation_check": {
+        "passed": true,
+        "checks": [
+          {
+            "group": "customer_segment=Private Banking",
+            "incumbent_worst_ratio": 1.287,
+            "candidate_worst_ratio": 1.104,
+            "finding_remains": false,
+            "passed": true
+          }
+        ]
+      }
+    },
+    {
+      "model_id": "bti-v3-lgbm-rn-20260925003527",
+      "incumbent": false,
+      "algorithm": "lightgbm",
+      "feature_set": "core-relative-nb",
+      "validation": "passed",
+      "failed_gates": [],
+      "calibration_pr_auc": 0.8505,
+      "calibration_roc_auc": 0.9399,
+      "oot_pr_auc": 0.8839,
+      "oot_roc_auc": 0.9561,
+      "oot_ks": 0.8434,
+      "oot_ece": 0.0028,
+      "tuned": false,
+      "remediation_check": {
+        "passed": true,
+        "checks": [
+          {
+            "group": "customer_segment=Private Banking",
+            "incumbent_worst_ratio": 1.287,
+            "candidate_worst_ratio": 1.156,
+            "finding_remains": false,
+            "passed": true
+          }
+        ]
+      }
+    },
+    {
+      "model_id": "bti-v3-hgb-rn-20260925003518",
+      "incumbent": false,
+      "algorithm": "hgb",
+      "feature_set": "core-relative-nb",
+      "validation": "passed",
+      "failed_gates": [],
+      "calibration_pr_auc": 0.8492,
+      "calibration_roc_auc": 0.9398,
+      "oot_pr_auc": 0.8814,
+      "oot_roc_auc": 0.9554,
+      "oot_ks": 0.8419,
+      "oot_ece": 0.00272,
+      "tuned": false,
+      "remediation_check": {
+        "passed": true,
+        "checks": [
+          {
+            "group": "customer_segment=Private Banking",
+            "incumbent_worst_ratio": 1.287,
+            "candidate_worst_ratio": 1.076,
+            "finding_remains": false,
+            "passed": true
+          }
+        ]
+      }
+    },
+    {
+      "model_id": "bti-v3-hgb-ro-20260925003524",
+      "incumbent": false,
+      "algorithm": "hgb",
+      "feature_set": "core-relative-own",
+      "validation": "passed",
+      "failed_gates": [],
+      "calibration_pr_auc": 0.8484,
+      "calibration_roc_auc": 0.9411,
+      "oot_pr_auc": 0.8814,
+      "oot_roc_auc": 0.9564,
+      "oot_ks": 0.8412,
+      "oot_ece": 0.00264,
+      "tuned": false,
+      "remediation_check": {
+        "passed": true,
+        "checks": [
+          {
+            "group": "customer_segment=Private Banking",
+            "incumbent_worst_ratio": 1.287,
+            "candidate_worst_ratio": 0.994,
+            "finding_remains": false,
+            "passed": true
+          }
+        ]
+      }
+    }
+  ],
+  "skipped": [],
+  "decision": {
+    "outcome": "remediation_replacement",
+    "challenger": "bti-v3-xgb-rn-20260925003533",
+    "previous": "bti-v3-xgb-r-20260923181450",
+    "finding": "amount_to_balance compares every customer with one global scale: legitimate Private Banking customers (typical payment 18.7% of balance vs 0.8% for others) are flagged 1.29x the overall rate at the 10% stress budget (pooled, q=0.13, above the norm in both windows; SHAP: amount_to_balance explains 0.21 of a 0.28 log-odds gap)",
+    "reason": "bti-v3-xgb-rn-20260925003533 is non-inferior (calibration PR-AUC 0.8518 vs incumbent 0.8519, floor 0.8469) and passes every gate and the remediation check (the named groups improved and carry no finding)"
+  },
+  "rank_agreement": {
+    "calibration_winner": "bti-v3-xgb-rn-20260925003533",
+    "out_of_time_winner": "bti-v3-xgb-ro-20260925003535",
+    "agree": false
+  },
+  "seconds": 24.9
+}

@@ -66,6 +66,7 @@ MONOTONE_INCREASING = [
     "ip_new_for_customer", "cust_txn_count_1h", "cust_txn_count_24h", "cust_txn_count_7d",
     "amount_usd", "log_amount_usd", "amount_to_balance",
     "device_txn_count_24h", "amount_zscore_customer", "cust_near_threshold_7d", "hour_deviation",
+    "balance_share_vs_own",
 ]
 REMEDIATION_LOG = [
     {

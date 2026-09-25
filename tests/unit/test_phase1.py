@@ -171,3 +171,14 @@ def test_remediation_mode_excludes_incumbent_and_uses_non_inferiority(small_data
         assert registry.model_for_role("challenger") == r["decision"]["challenger"] != incumbent
         assert "Test finding" in registry.read_index()["history"][-1]["rationale"]
     assert r["remediation_finding"] == "Test finding"
+
+
+def test_balance_share_is_judged_against_the_customers_own_habit():
+    rows = _rows([("2024-01-01", "10:00:00", 100), ("2024-01-02", "10:00:00", 300), ("2024-01-03", "10:00:00", 800)])
+    f = build_features(rows)                                                 # balance 1,000 on every row
+    assert np.isnan(f["balance_share_vs_own"].iloc[0])                       # no history: unknown
+    assert f["balance_share_vs_own"].iloc[1] == pytest.approx(3.0)           # 0.3 vs own average 0.1
+    assert f["balance_share_vs_own"].iloc[2] == pytest.approx(4.0)           # 0.8 vs own average 0.2
+    assert "amount_to_balance" not in FEATURE_SETS["core-relative-nb"]
+    assert "balance_share_vs_own" in FEATURE_SETS["core-relative-own"]
+    assert "amount_to_balance" not in FEATURE_SETS["core-relative-own"]

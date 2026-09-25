@@ -19,7 +19,7 @@ only way to establish real lift over SAS.
 | # | Item | Status | Notes |
 |---|---|---|---|
 | 0.1 | Move `/score`, `/score/explain`, `/score/upload` and `/sas/enrich*` onto the v3 model | **Done** | One shared path (`bti/operations/scoring_service.py`): v3 score → expected-cost decision → shadow challenger → score log. Response shapes kept; `ml_lr_proba`, `ml_rf_proba`, `ml_iso_score` are now null; `risk_score` and post-event fields are accepted but ignored. |
-| 0.2 | Approve v3 as champion | **Pending** | Needs a named approver who is not the developer. Until then the model is provisional and cannot auto-decline on any endpoint. `python -m bti.modeling.promote --model bti-v3-xgb-r-20260923181450 --role champion --approver "<name, role>" --rationale "<validation reference>"` |
+| 0.2 | Approve v3 as champion | **Pending** | Needs a named approver who is not the developer. Until then the model is provisional and cannot auto-decline on any endpoint. `python -m bti.modeling.promote --model bti-v3-xgb-rn-20260925003533 --role champion --approver "<name, role>" --rationale "<validation reference>"` |
 | 0.3 | Scheduled PSI / CSI drift job with alerting | **Done** | Weekly (Mon 06:00 UTC, `BTI_DRIFT_CHECK_CRON`), live and shadow traffic, alerts via webhook/email at investigate/escalate, history in the audit log. `POST /governance/drift/run`, `GET /governance/drift/history`, `GET /governance/monitoring/schedule`. Enable the scheduler on one worker only. |
 | 0.4 | Latency and uptime reporting | **Done** | `GET /operations/service-metrics`: uptime, requests, 5xx rate and p50/p95/p99 per endpoint group; model scoring latency against the SLA from the score log. |
 
@@ -41,6 +41,7 @@ transactions (ROC-AUC 0.908)" — untrue, now corrected; IEEE-CIS style batches 
 | Feature definitions versioned; novelty fix (v2) | **Done** | v1 treated "no prior history" as "new device", raising false positives for thin-history and new-to-bank customers. v2 marks novelty unknown without history. Every model records its feature version and is always scored with it (incumbent scores verified bit-identical). |
 | Relative-amount feature sets | **Done** | `core-relative` / `extended-relative` drop absolute USD amount and balance, which track customer wealth (and so country and segment). Amounts are judged against the customer's own history; loss size is priced by the decision layer. |
 | Fairness method corrected | **Done** | See *Fairness: the German finding* below. |
+| Private Banking remediation | **Done** | See *Fairness: Private Banking* below. `balance_share_vs_own` added: amount-to-balance judged against the customer's own habit. |
 | Verified remediation | **Done** | `--remediation-groups customer_segment=Corporate`: a replacement must carry no finding for the named groups and a lower worst-case ratio than the incumbent. |
 | Post-registration notes | **Done** | Registered cards never change; re-assessments and corrections are appended to the registry and shown in the documentation pack. `python -m bti.modeling.reassess`. |
 
@@ -52,9 +53,12 @@ transactions (ROC-AUC 0.908)" — untrue, now corrected; IEEE-CIS style batches 
 2. *Remediation tournament, v2 features* — all six candidates passed every gate. `bti-v3-lgbm-20260923180905`
    (LightGBM, core, v2) replaced the incumbent as challenger under non-inferiority (calibration PR-AUC 0.8524 vs
    0.8507). Out-of-time: ROC-AUC 0.9551, PR-AUC 0.8856 — level with the incumbent (0.9581 / 0.8866) within noise.
-3. *Remediation tournament, relative-amount features* — **`bti-v3-xgb-r-20260923181450` (XGBoost, core-relative)
-   is the current challenger**: calibration PR-AUC 0.8519 vs 0.8524 (non-inferior), out-of-time ROC-AUC 0.9556,
-   PR-AUC 0.8857, ECE 0.003. Removing absolute amounts cost no accuracy.
+3. *Remediation tournament, relative-amount features* — `bti-v3-xgb-r-20260923181450` (XGBoost, core-relative)
+   took the challenger role: calibration PR-AUC 0.8519 vs 0.8524 (non-inferior), out-of-time ROC-AUC 0.9556,
+   PR-AUC 0.8857. Removing absolute amounts cost no accuracy.
+4. *Remediation tournament, Private Banking* — all six candidates passed every gate and the remediation check.
+   **`bti-v3-xgb-rn-20260925003533` (XGBoost, core-relative without `amount_to_balance`) is the current challenger**:
+   calibration PR-AUC 0.8518 vs 0.8519, out-of-time ROC-AUC 0.9563, PR-AUC 0.8857, ECE 0.003.
 
 Neither the algorithm swap nor the extended features materially improved accuracy on the synthetic data, whose fraud
 is generated from a few simple signals. Both are in place to be re-tested on bank data, where they are more likely
@@ -86,8 +90,40 @@ A signal that shows up in only one window goes on a non-gating **watchlist**, wh
 disparity: the absolute-amount models over-flag **Corporate and Private Banking** customers. The previous challenger
 `lgbm-20260923180905` shows 1.27× and 1.32× (q=0.03), elevated in both windows. The mechanism is absolute USD amount
 acting as a wealth proxy, which is the mechanism tournament 3 removed. The current challenger passes; Private Banking
-stays on its watchlist (pooled 1.29×, q=0.13). The corrections are recorded as append-only registry notes on every
+was left on the watchlist (pooled 1.29×, q=0.13) and has since been remediated (below). The corrections are recorded as append-only registry notes on every
 model. Six verdicts moved from review_required to pass, and two from pass to review_required.
+
+### Fairness: Private Banking (remediated)
+
+Private Banking was on the watchlist: 1.29× pooled at the 10% stress budget, above the norm in both windows, but
+q=0.13 after correcting for 21 groups. That is plausibly real, but with ~1,000 legitimate customers it can't be
+proven. A SHAP gap analysis found the cause:
+
+- **One feature explains most of the gap.** `amount_to_balance` explains +0.21 of the +0.28 log-odds gap between
+  legitimate Private Banking customers and everyone else.
+- **Why the feature separates them.** A typical Private Banking payment is 18.7% of the balance, against 0.8% for
+  other customers. The model learned that payments draining a large share of the balance look like account
+  takeover.
+- **How much is artefact.** The synthetic data scales Private Banking amounts but not their balances, so the size
+  of the gap is partly an artefact of the generator.
+- **Why it still matters.** The mechanism is real. On a real book it would hit any customer whose normal payments
+  are a large share of their balance, such as students or people who spend their salary down.
+
+Tournament 4 tested two fixes: dropping `amount_to_balance`, and replacing it with `balance_share_vs_own` (the same
+ratio relative to the customer's own average). Each fix was tried with all three algorithms. Every candidate
+lowered the Private Banking worst-case ratio, from 1.29× to between 0.99× and 1.16×, at no accuracy cost. The winner
+was chosen by the standing rule (calibration PR-AUC within 0.005 of the incumbent, all gates, verified
+improvement). It is the XGBoost model without the ratio: Private Banking 1.13× / 0.78× pooled at the 10% / 5%
+budgets, and it is off the watchlist.
+
+**Residual and trade-off:**
+
+- **Residual.** Private Banking is still 1.35× in the calibration window alone at 10%. Re-test it on real labels.
+- **Watchlist now.** The watchlist holds only single-window signals: Premium (calibration 1.43×, pooled 1.22×,
+  q=0.93) and Nigeria (calibration 1.53×, pooled 1.10×).
+- **Trade-off.** Without the raw ratio, a first-ever transaction that drains an account is no longer flagged by
+  that feature. On bank data, re-test account takeover of new customers with `core-relative-own` as the
+  alternative.
 
 **Still true for Germany.** Real German customer data is needed before a German deployment. That is the bank data
 onboarding track, not a model defect.

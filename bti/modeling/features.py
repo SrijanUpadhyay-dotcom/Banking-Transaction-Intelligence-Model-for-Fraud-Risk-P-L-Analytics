@@ -177,6 +177,15 @@ EXTENDED_FEATURES: List[FeatureSpec] = [
                 "Hours between this transaction and the customer's usual time of day"),
 ]
 
+# Balance share judged against the customer's own habits. amount_to_balance compares every customer
+# with one global scale, so customers whose normal payments are a large share of their balance
+# (Private Banking on the synthetic data; students and salary-to-spend customers on real books) are
+# pushed toward alerts. This version asks whether the share is unusual *for this customer*.
+BALANCE_FEATURES: List[FeatureSpec] = [
+    FeatureSpec("balance_share_vs_own", _N, _CUST + ("transaction_amount", "account_balance_before"),
+                "AMT_VS_BALANCE", "Amount-to-balance ratio relative to the customer's own average in the look-back"),
+]
+
 # Feed-dependent signals. They need data the synthetic dataset does not carry (transaction location,
 # payee keys, the bank's security-event log), so they are in no default feature set and training
 # refuses them unless the feed is actually populated (see FEEDS and feed_coverage).
@@ -225,7 +234,7 @@ SECURITY_LOOKBACK_S = 30 * 86_400
 NO_RECENT_EVENT_HOURS = 24.0 * 31
 
 MODEL_FEATURES: List[FeatureSpec] = CORE_FEATURES
-ALL_FEATURES: List[FeatureSpec] = CORE_FEATURES + EXTENDED_FEATURES + SIGNAL_FEATURES
+ALL_FEATURES: List[FeatureSpec] = CORE_FEATURES + EXTENDED_FEATURES + BALANCE_FEATURES + SIGNAL_FEATURES
 FEATURE_NAMES: List[str] = [f.name for f in CORE_FEATURES]
 EXTENDED_NAMES: List[str] = [f.name for f in CORE_FEATURES + EXTENDED_FEATURES]
 SIGNAL_NAMES: List[str] = [f.name for f in SIGNAL_FEATURES]
@@ -240,9 +249,14 @@ FEATURE_SETS: Dict[str, List[str]] = {
     "core-relative": [n for n in FEATURE_NAMES if n not in ABSOLUTE_AMOUNT_FEATURES],
     "extended-relative": [n for n in EXTENDED_NAMES if n not in ABSOLUTE_AMOUNT_FEATURES],
     "signals-relative": [n for n in EXTENDED_NAMES if n not in ABSOLUTE_AMOUNT_FEATURES] + SIGNAL_NAMES,
+    # Private Banking remediation: without the global amount-to-balance ratio, or with the customer-relative one.
+    "core-relative-nb": [n for n in FEATURE_NAMES if n not in ABSOLUTE_AMOUNT_FEATURES + ["amount_to_balance"]],
+    "core-relative-own": [("balance_share_vs_own" if n == "amount_to_balance" else n)
+                          for n in FEATURE_NAMES if n not in ABSOLUTE_AMOUNT_FEATURES],
 }
 FEATURE_SET_SUFFIX: Dict[str, str] = {"core": "", "extended": "-x", "core-relative": "-r", "extended-relative": "-xr",
-                                      "signals-relative": "-sr"}
+                                      "signals-relative": "-sr", "core-relative-nb": "-rn",
+                                      "core-relative-own": "-ro"}
 CATEGORICAL_FEATURES: List[str] = [f.name for f in ALL_FEATURES if f.kind is Kind.CATEGORICAL]
 NUMERIC_FEATURES: List[str] = [f.name for f in ALL_FEATURES if f.kind is Kind.NUMERIC]
 FEATURE_BY_NAME: Dict[str, FeatureSpec] = {f.name: f for f in ALL_FEATURES}
@@ -440,6 +454,12 @@ def build_features(df: pd.DataFrame, lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     usual = np.arctan2(s_sin, s_cos)
     gap = np.abs(np.angle(np.exp(1j * (angle - usual)))) * 24 / (2 * np.pi)
     out["hour_deviation"] = np.where(n_h >= 3, gap, np.nan)
+
+    share = out["amount_to_balance"].to_numpy(float)
+    n_share, s_share = _prior_window(cust, ts, lookback_s, np.nan_to_num(share))
+    with np.errstate(invalid="ignore", divide="ignore"):
+        own = share / np.maximum(s_share / n_share, 1e-6)
+    out["balance_share_vs_own"] = np.where((n_share >= 1) & ~np.isnan(share), np.clip(own, 0, 1000), np.nan)
 
     # ── Feed-dependent signals (unknown when the feed is absent) ─────────────
     lat = pd.to_numeric(df["latitude"], errors="coerce").to_numpy(float)

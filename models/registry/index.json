@@ -1,6 +1,6 @@
 {
   "champion": null,
-  "challenger": "bti-v3-xgb-r-20260923181450",
+  "challenger": "bti-v3-xgb-rn-20260925003533",
   "models": [
     {
       "model_id": "bti-v3-hgb-20260923160131",
@@ -127,6 +127,42 @@
       "registered_at": "2026-09-23T18:14:53.670004+00:00",
       "developer": "Srijan Upadhyay",
       "validation_status": "failed"
+    },
+    {
+      "model_id": "bti-v3-hgb-rn-20260925003518",
+      "registered_at": "2026-09-25T00:35:18.690043+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-hgb-ro-20260925003524",
+      "registered_at": "2026-09-25T00:35:24.186164+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-lgbm-rn-20260925003527",
+      "registered_at": "2026-09-25T00:35:27.451585+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-lgbm-ro-20260925003530",
+      "registered_at": "2026-09-25T00:35:30.348193+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-xgb-rn-20260925003533",
+      "registered_at": "2026-09-25T00:35:33.043504+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-xgb-ro-20260925003535",
+      "registered_at": "2026-09-25T00:35:35.576239+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
     }
   ],
   "history": [
@@ -177,6 +213,14 @@
       "previous": "bti-v3-lgbm-20260923180905",
       "approver": "bti.modeling.tournament",
       "rationale": "Remediation of finding: Absolute amount features act as a wealth and country proxy: legitimate German customers (median transaction 3x the book, equal fraud rate) flagged ~1.23x the norm at the 10% stress budget in every model (challenger bti-v3-lgbm-20260923180905: 1.228x, p=0.035). bti-v3-xgb-r-20260923181450 is non-inferior (calibration PR-AUC 0.8519 vs incumbent 0.8524, floor 0.8474) and passes every gate. Selected on the calibration window."
+    },
+    {
+      "at": "2026-09-25T00:35:35.580269+00:00",
+      "role": "challenger",
+      "model_id": "bti-v3-xgb-rn-20260925003533",
+      "previous": "bti-v3-xgb-r-20260923181450",
+      "approver": "bti.modeling.tournament",
+      "rationale": "Remediation of finding: amount_to_balance compares every customer with one global scale: legitimate Private Banking customers (typical payment 18.7% of balance vs 0.8% for others) are flagged 1.29x the overall rate at the 10% stress budget (pooled, q=0.13, above the norm in both windows; SHAP: amount_to_balance explains 0.21 of a 0.28 log-odds gap). bti-v3-xgb-rn-20260925003533 is non-inferior (calibration PR-AUC 0.8518 vs incumbent 0.8519, floor 0.8469) and passes every gate and the remediation check (the named groups improved and carry no finding). Selected on the calibration window."
     }
   ],
   "notes": [
