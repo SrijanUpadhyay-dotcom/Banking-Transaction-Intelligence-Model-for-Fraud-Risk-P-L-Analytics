@@ -33,7 +33,7 @@ import subprocess
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -85,7 +85,12 @@ REMEDIATION_LOG = [
                         "monotone constraints are kept on their own merits: a larger amount should never lower risk.",
     },
 ]
-GATES = {"min_oot_roc_auc": 0.75, "max_oot_ece": 0.02, "max_feature_single_auc": 0.97}
+GATES = {"min_oot_roc_auc": 0.75, "max_oot_ece": 0.02, "max_feature_single_auc": 0.97,
+         "max_missing_input_flip_rate": 0.01}
+# Source systems drop fields. Every numeric feature is masked on a share of extra copies of the fit rows, so
+# the trees learn what "unknown" means instead of routing a missing value down an arbitrary branch. Without
+# it, a missing profile average put 100% of genuine customers above p = 0.5 (found in the Phase 2 smoke run).
+MISSING_AUGMENT_SHARE = 0.05
 SEGMENT_COLUMNS = ["channel", "country", "customer_segment", "customer_age_band"]
 
 REGULATORY_MAPPING = [
@@ -210,6 +215,41 @@ def assess_fairness(data: TrainingData, p: np.ndarray) -> Dict:
                                {c: data.df[c] for c in attrs})
 
 
+def augment_missing(X: pd.DataFrame, y: np.ndarray, share: float = MISSING_AUGMENT_SHARE,
+                    seed: int = 0) -> Tuple[pd.DataFrame, np.ndarray]:
+    """Append, for each numeric feature, copies of `share` of the rows with that one feature set to missing."""
+    rng = np.random.default_rng(seed)
+    k = max(1, int(len(X) * share))
+    parts_X, parts_y = [X], [y]
+    for f in [c for c in X.columns if c not in CATEGORICAL_FEATURES]:
+        idx = rng.choice(len(X), k, replace=False)
+        masked = X.iloc[idx].copy()
+        masked[f] = np.nan
+        parts_X.append(masked)
+        parts_y.append(y[idx])
+    return pd.concat(parts_X, ignore_index=True), np.concatenate(parts_y)
+
+
+def missing_input_robustness(estimator, calibrator, X: pd.DataFrame, y: np.ndarray, decline_p: float = 0.5,
+                             sample: int = 2000, seed: int = 0) -> Dict:
+    """Share of genuine customers pushed to p >= decline_p when one numeric input is missing."""
+    rng = np.random.default_rng(seed)
+    genuine = np.flatnonzero(y == 0)
+    idx = rng.choice(genuine, min(sample, len(genuine)), replace=False)
+    Xs = X.iloc[idx]
+    base = float((calibrator.predict(estimator.predict_proba(Xs)[:, 1]) >= decline_p).mean())
+    rows = []
+    for f in [c for c in X.columns if c not in CATEGORICAL_FEATURES]:
+        masked = Xs.copy()
+        masked[f] = np.nan
+        share = float((calibrator.predict(estimator.predict_proba(masked)[:, 1]) >= decline_p).mean())
+        rows.append({"feature": f, "share_above_threshold_if_missing": round(share, 4),
+                     "increase": round(share - base, 4)})
+    rows.sort(key=lambda r: -r["increase"])
+    return {"decline_probability": decline_p, "genuine_sampled": int(len(idx)), "base_share": round(base, 4),
+            "max_increase": rows[0]["increase"] if rows else 0.0, "features": rows}
+
+
 def check_feeds(data: TrainingData, feature_set: str) -> None:
     """Refuse a feature set whose data feeds are absent or too thin in any window of the split."""
     for feed in feeds_required(FEATURE_SETS[feature_set]):
@@ -246,8 +286,8 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
                                      threshold=GATES["max_feature_single_auc"])
 
     monotone = [1 if n in MONOTONE_INCREASING else 0 for n in names]
-    estimator = algorithms.fit(algorithm, params, monotone, X[data.es_fit], y[data.es_fit],
-                               X[data.es_val], y[data.es_val])
+    X_fit, y_fit = augment_missing(X[data.es_fit], y[data.es_fit])
+    estimator = algorithms.fit(algorithm, params, monotone, X_fit, y_fit, X[data.es_val], y[data.es_val])
     raw = estimator.predict_proba(X)[:, 1]
     calibrator = PlattCalibrator().fit(raw[ca], y[ca])
     p = calibrator.predict(raw)
@@ -273,6 +313,7 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
                      for c in SEGMENT_COLUMNS if c in df.columns},
     }
     fairness = assess_fairness(data, p)
+    robustness = missing_input_robustness(estimator, calibrator, X[te], y[te])
 
     legacy = {}
     legacy_scores = _legacy_scores(df.loc[te])
@@ -298,6 +339,11 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
          "detail": f"{len(fairness['findings'])} false-positive-rate disparities significant on the pooled "
                    f"out-of-sample windows and present in each ({len(fairness['watchlist'])} on the "
                    f"non-gating watchlist)"},
+        {"gate": "missing_input_robustness",
+         "passed": robustness["max_increase"] <= GATES["max_missing_input_flip_rate"],
+         "detail": f"Worst single missing input pushes {robustness['max_increase']:.2%} more genuine customers to "
+                   f"p >= 0.5 ({robustness['features'][0]['feature'] if robustness['features'] else 'n/a'}); "
+                   f"maximum {GATES['max_missing_input_flip_rate']:.0%}"},
     ]
     status = "passed" if all(g["passed"] for g in gates) else "failed"
 
@@ -368,6 +414,9 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
         },
         "performance": {"metrics": metrics, **oot, "legacy_benchmark": legacy},
         "fairness": fairness,
+        "robustness": {"missing_inputs": robustness, "augmentation": {
+            "method": "single-feature missingness on extra copies of the fit rows",
+            "share_per_feature": MISSING_AUGMENT_SHARE}},
         "monitoring": {
             "baseline_window": "calibration",
             "baseline": build_baseline(features.loc[ca, names], p[ca], CATEGORICAL_FEATURES),
@@ -391,7 +440,9 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
                 "feature_names": names, "feeds": feeds_required(names), "lookback_days": data.lookback_days,
                 "algorithm": algorithm,
                 "feature_version": data.feature_version,
-                "reference_threshold": threshold, "model_id": model_id}
+                "reference_threshold": threshold, "model_id": model_id,
+                "train_missing_share": {c: round(float(X.loc[tr, c].isna().mean()), 4) for c in names
+                                        if c not in CATEGORICAL_FEATURES}}
 
     if register:
         registry.save_model(model_id, artifact, card)

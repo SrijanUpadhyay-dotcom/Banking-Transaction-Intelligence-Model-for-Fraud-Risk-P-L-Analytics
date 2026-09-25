@@ -182,3 +182,34 @@ def test_balance_share_is_judged_against_the_customers_own_habit():
     assert "amount_to_balance" not in FEATURE_SETS["core-relative-nb"]
     assert "balance_share_vs_own" in FEATURE_SETS["core-relative-own"]
     assert "amount_to_balance" not in FEATURE_SETS["core-relative-own"]
+
+
+def test_missingness_augmentation_teaches_trees_what_unknown_means():
+    from bti.modeling.calibration import PlattCalibrator
+    from bti.modeling.train import augment_missing, missing_input_robustness
+    rng = np.random.default_rng(4)
+    n = 12000
+    X = pd.DataFrame({"a": rng.random(n), "b": rng.random(n), "c": rng.random(n)})       # never missing
+    y = ((X["a"] > 0.97) | (X["b"] > 0.98) | (rng.random(n) < 0.01)).astype(int).to_numpy()   # ~6% fraud
+    Xa, ya = augment_missing(X.iloc[:9000], y[:9000], share=0.05)
+    assert len(Xa) == 9000 + 3 * 450 and Xa["a"].isna().sum() == 450 and ya.shape == (len(Xa),)
+    model = algorithms.fit("xgboost", algorithms.DEFAULT_PARAMS["xgboost"], [1, 1, 0], Xa, ya,
+                           X.iloc[9000:10000], y[9000:10000])
+    cal = PlattCalibrator().fit(model.predict_proba(X.iloc[9000:10000])[:, 1], y[9000:10000])
+    r = missing_input_robustness(model, cal, X.iloc[10000:], y[10000:], sample=1500)
+    assert r["max_increase"] <= 0.01 and {f["feature"] for f in r["features"]} == {"a", "b", "c"}
+
+
+def test_scoring_model_is_robust_to_a_missing_profile_average():
+    if not registry.read_index().get("challenger"):
+        pytest.skip("no registered model")
+    from bti.modeling.scorer import scorer
+    card = registry.load_card(registry.model_for_role("challenger"))
+    if "missing_input_robustness" not in {g["gate"] for g in card["validation"]["gates"]}:
+        pytest.skip("scoring model predates the missing-input gate")
+    txn = {"transaction_id": "M1", "customer_id": "C1", "transaction_date": "2025-01-10", "transaction_time": "10:00:00",
+           "transaction_amount": 90.0, "currency": "GBP", "channel": "Mobile Banking", "transaction_type": "Transfer",
+           "failed_attempt_count": 0, "debit_credit_flag": "Debit"}                    # no profile average, no logins
+    s = scorer.score(txn, history=pd.DataFrame(), role="challenger", explain=False)
+    assert s.fraud_probability < 0.5
+    assert any("scored as unknown" in n for n in s.notes)

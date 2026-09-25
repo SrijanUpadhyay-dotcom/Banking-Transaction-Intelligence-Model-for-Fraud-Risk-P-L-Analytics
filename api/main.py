@@ -55,6 +55,11 @@ async def lifespan(app: FastAPI):
     log.info("BTI API starting up", extra={"version": settings.app_version,
                                             "env": settings.environment})
     create_tables()
+    try:
+        from bti.operations.scoring_service import warm_up
+        log.info("Scoring models warmed up", extra={"ms": warm_up()})
+    except Exception:
+        log.exception("Model warm-up failed; the first requests may be slow")
     monitoring_scheduler.start()
     yield
     monitoring_scheduler.stop()

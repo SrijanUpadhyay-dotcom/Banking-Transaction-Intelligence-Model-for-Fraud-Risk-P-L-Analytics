@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Dict, Optional
 
 from sqlalchemy.orm import Session
 
@@ -43,6 +43,23 @@ def model_available() -> bool:
         return True
     except registry.RegistryError:
         return False
+
+
+def warm_up() -> Dict:
+    """Load the scoring models and run one score each, so the first live request is not a cold start."""
+    import time
+    out = {}
+    for role in ("champion", "challenger"):
+        model_id = registry.model_for_role(role)
+        if not model_id:
+            continue
+        t0 = time.perf_counter()
+        txn = prepare_transaction({"transaction_id": "WARM-UP", "customer_id": "WARM-UP", "transaction_amount": 10.0,
+                                   "currency": "USD", "channel": "Mobile Banking"})
+        scorer.score(txn, history=None, role=role, explain=True)
+        capacity_overrides(model_id)
+        out[model_id] = round((time.perf_counter() - t0) * 1000, 1)
+    return out
 
 
 def prepare_transaction(txn: dict) -> dict:

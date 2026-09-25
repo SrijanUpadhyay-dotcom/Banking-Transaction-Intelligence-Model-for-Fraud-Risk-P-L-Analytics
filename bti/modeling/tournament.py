@@ -66,6 +66,12 @@ def _summary(card: Dict, incumbent: bool = False) -> Dict:
     }
 
 
+def _fit_capacity(model_id: str, developer: str, data_path) -> None:
+    """A new challenger decides with its own capacity prices from its first score."""
+    from bti.operations.capacity import fit_live_policy
+    fit_live_policy(f"{developer} (tournament)", model_id, data_path=data_path)
+
+
 def worst_pooled_ratio(fairness: Dict, group: str) -> Optional[float]:
     """Highest pooled FPR ratio for `attribute=group` across operating points (None if never tested)."""
     attribute, name = group.split("=", 1)
@@ -154,6 +160,7 @@ def run_tournament(developer: str, algorithm_names: List[str], feature_sets: Lis
                 registry.assign_role(best["model_id"], "challenger", approver="bti.modeling.tournament",
                                      rationale=f"Remediation of finding: {remediation}. {decision['reason']}. "
                                                f"Selected on the calibration window.")
+                _fit_capacity(best["model_id"], developer, data_path)
         else:
             decision = {"outcome": "remediation_blocked", "challenger": incumbent_id, "finding": remediation,
                         "reason": f"Best fix {best['model_id']} ({best['calibration_pr_auc']}) is below the "
@@ -178,6 +185,7 @@ def run_tournament(developer: str, algorithm_names: List[str], feature_sets: Lis
             registry.assign_role(best["model_id"], "challenger", approver="bti.modeling.tournament",
                                  rationale=f"Tournament winner: {decision['reason']}. Selected on the calibration "
                                            f"window; out-of-time figures unused for selection.")
+            _fit_capacity(best["model_id"], developer, data_path)
 
     ranked_cal = [e["model_id"] for e in sorted(eligible, key=lambda e: -e["calibration_pr_auc"])]
     ranked_oot = [e["model_id"] for e in sorted(eligible, key=lambda e: -(e["oot_pr_auc"] or 0))]

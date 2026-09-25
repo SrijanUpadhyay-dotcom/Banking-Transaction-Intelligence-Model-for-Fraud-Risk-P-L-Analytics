@@ -1,6 +1,6 @@
 {
   "champion": null,
-  "challenger": "bti-v3-xgb-rn-20260925003533",
+  "challenger": "bti-v3-lgbm-rn-20260925011359",
   "models": [
     {
       "model_id": "bti-v3-hgb-20260923160131",
@@ -163,6 +163,42 @@
       "registered_at": "2026-09-25T00:35:35.576239+00:00",
       "developer": "Srijan Upadhyay",
       "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-hgb-rn-20260925011349",
+      "registered_at": "2026-09-25T01:13:49.817378+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-hgb-ro-20260925011356",
+      "registered_at": "2026-09-25T01:13:56.120915+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-lgbm-rn-20260925011359",
+      "registered_at": "2026-09-25T01:13:59.672536+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-lgbm-ro-20260925011403",
+      "registered_at": "2026-09-25T01:14:03.362698+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-xgb-rn-20260925011406",
+      "registered_at": "2026-09-25T01:14:06.299941+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    },
+    {
+      "model_id": "bti-v3-xgb-ro-20260925011409",
+      "registered_at": "2026-09-25T01:14:09.291272+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
     }
   ],
   "history": [
@@ -221,6 +257,14 @@
       "previous": "bti-v3-xgb-r-20260923181450",
       "approver": "bti.modeling.tournament",
       "rationale": "Remediation of finding: amount_to_balance compares every customer with one global scale: legitimate Private Banking customers (typical payment 18.7% of balance vs 0.8% for others) are flagged 1.29x the overall rate at the 10% stress budget (pooled, q=0.13, above the norm in both windows; SHAP: amount_to_balance explains 0.21 of a 0.28 log-odds gap). bti-v3-xgb-rn-20260925003533 is non-inferior (calibration PR-AUC 0.8518 vs incumbent 0.8519, floor 0.8469) and passes every gate and the remediation check (the named groups improved and carry no finding). Selected on the calibration window."
+    },
+    {
+      "at": "2026-09-25T01:14:09.295035+00:00",
+      "role": "challenger",
+      "model_id": "bti-v3-lgbm-rn-20260925011359",
+      "previous": "bti-v3-xgb-rn-20260925003533",
+      "approver": "bti.modeling.tournament",
+      "rationale": "Remediation of finding: Missing-input hazard: amount_vs_hist_avg and login_attempts were never missing in training, so a transaction without the customer profile average or login count was routed down an arbitrary tree branch; with either input missing, 100% of genuine customers scored above p=0.5 (incumbent bti-v3-xgb-rn-20260925003533, found in the Phase 2 live smoke run). bti-v3-lgbm-rn-20260925011359 is non-inferior (calibration PR-AUC 0.8506 vs incumbent 0.8518, floor 0.8468) and passes every gate. Selected on the calibration window."
     }
   ],
   "notes": [
@@ -1447,6 +1491,14 @@
       "author": "bti.modeling.reassess",
       "subject": "Finding under the corrected method",
       "detail": "Registered as passing fairness. Under the pooled, corrected method it has a gating disparity: legitimate Corporate customers flagged 1.27x and Private Banking 1.32x the overall rate at the 10% stress budget (q 0.03, above the overall rate in both windows). Mechanism: absolute USD amounts act as a wealth proxy. Already replaced as challenger by bti-v3-xgb-r-20260923181450, which removes those features.",
+      "data": {}
+    },
+    {
+      "at": "2026-09-25T01:14:32.875955+00:00",
+      "model_id": "bti-v3-xgb-rn-20260925003533",
+      "author": "bti.modeling.train (missing-input check)",
+      "subject": "Finding: missing-input hazard",
+      "detail": "amount_vs_hist_avg and login_attempts were never missing in training. With either input absent, 100% of a 2,000-customer genuine sample scored above p=0.5 (amount_vs_hist_avg +8.4 log-odds, login_attempts +6.8). Found in the Phase 2 live smoke run, where transactions without the profile average all scored 0.97. Replaced as challenger by bti-v3-lgbm-rn-20260925011359, trained with missingness augmentation and checked by the new missing_input_robustness gate (worst increase 0.05%).",
       "data": {}
     }
   ]

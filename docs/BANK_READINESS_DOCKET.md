@@ -19,7 +19,7 @@ only way to establish real lift over SAS.
 | # | Item | Status | Notes |
 |---|---|---|---|
 | 0.1 | Move `/score`, `/score/explain`, `/score/upload` and `/sas/enrich*` onto the v3 model | **Done** | One shared path (`bti/operations/scoring_service.py`): v3 score → expected-cost decision → shadow challenger → score log. Response shapes kept; `ml_lr_proba`, `ml_rf_proba`, `ml_iso_score` are now null; `risk_score` and post-event fields are accepted but ignored. |
-| 0.2 | Approve v3 as champion | **Pending** | Needs a named approver who is not the developer. Until then the model is provisional and cannot auto-decline on any endpoint. `python -m bti.modeling.promote --model bti-v3-xgb-rn-20260925003533 --role champion --approver "<name, role>" --rationale "<validation reference>"` |
+| 0.2 | Approve v3 as champion | **Pending** | Needs a named approver who is not the developer. Until then the model is provisional and cannot auto-decline on any endpoint. `python -m bti.modeling.promote --model bti-v3-lgbm-rn-20260925011359 --role champion --approver "<name, role>" --rationale "<validation reference>"` |
 | 0.3 | Scheduled PSI / CSI drift job with alerting | **Done** | Weekly (Mon 06:00 UTC, `BTI_DRIFT_CHECK_CRON`), live and shadow traffic, alerts via webhook/email at investigate/escalate, history in the audit log. `POST /governance/drift/run`, `GET /governance/drift/history`, `GET /governance/monitoring/schedule`. Enable the scheduler on one worker only. |
 | 0.4 | Latency and uptime reporting | **Done** | `GET /operations/service-metrics`: uptime, requests, 5xx rate and p50/p95/p99 per endpoint group; model scoring latency against the SLA from the score log. |
 
@@ -57,8 +57,12 @@ transactions (ROC-AUC 0.908)" — untrue, now corrected; IEEE-CIS style batches 
    took the challenger role: calibration PR-AUC 0.8519 vs 0.8524 (non-inferior), out-of-time ROC-AUC 0.9556,
    PR-AUC 0.8857. Removing absolute amounts cost no accuracy.
 4. *Remediation tournament, Private Banking* — all six candidates passed every gate and the remediation check.
-   **`bti-v3-xgb-rn-20260925003533` (XGBoost, core-relative without `amount_to_balance`) is the current challenger**:
+   `bti-v3-xgb-rn-20260925003533` (XGBoost, core-relative without `amount_to_balance`) took the challenger role:
    calibration PR-AUC 0.8518 vs 0.8519, out-of-time ROC-AUC 0.9563, PR-AUC 0.8857, ECE 0.003.
+5. *Remediation tournament, missing inputs* (Phase 2 smoke run) — all six candidates, trained with missingness
+   augmentation, passed every gate including the new missing-input gate. **`bti-v3-lgbm-rn-20260925011359`
+   (LightGBM, core-relative without `amount_to_balance`) is the current challenger**: calibration PR-AUC 0.8506,
+   out-of-time ROC-AUC 0.9557, PR-AUC 0.8845, ECE 0.003. Private Banking 1.13× / 0.93× pooled; fairness passes.
 
 Neither the algorithm swap nor the extended features materially improved accuracy on the synthetic data, whose fraud
 is generated from a few simple signals. Both are in place to be re-tested on bank data, where they are more likely
@@ -159,6 +163,7 @@ them (`FeedUnavailableError`) unless the feed covers at least 1% of every window
 | Automated parallel-run report | **Done** | `GET /parallel/report` and a weekly job (Mon 07:00 UTC) that stores to the audit log and alerts. See *How lift is measured* below. |
 | Randomised traffic splitter | **Done — blocked on champion approval** | See *Traffic split* below. An experiment can be proposed today but cannot start: live customer decisions are never handed to a provisional model. |
 | Fallback and reconciliation | **Done** | See *Fallback and reconciliation* below. |
+| Missing inputs handled safely | **Done** | Found in a live run of the API. `amount_vs_hist_avg` and `login_attempts` had never been missing in training, so a transaction without the customer's profile average or login count scored 0.97, and 100% of a genuine sample crossed p = 0.5. The fixes: models now train with single-feature missingness augmentation; a new `missing_input_robustness` gate fails any model where one missing input pushes more than 1% of genuine customers to p ≥ 0.5 (the new challenger's worst is 0.05%); and the API lists the inputs it scored as unknown. Models are warmed up at start-up: the cold first call took 437 ms and timed out to SAS. Live re-run: p99 51 ms, no fallbacks, sparse transactions approved at p 0.02. |
 | Capacity-constrained live decisions | **Done** | Found by the rehearsal: live decisions ignored analyst capacity and sent 20.6% of traffic to review. Capacity prices (review, step-up) are now fitted per model on the calibration window, stored with history, and used for every live and shadow decision. `python -m bti.operations.capacity`, `GET /operations/policy/capacity`. The current challenger holds review at 2.0% and step-up at 5.0% (out-of-time: 1.9% / 5.7%). While the model is provisional its declines become reviews, adding about 4% of traffic to review. |
 
 **How lift is measured.** The report compares BTI with SAS on the same transactions.
@@ -222,6 +227,8 @@ results. At equal intervention (1,491 transactions each):
 
 McNemar p < 0.001. This proves the machinery, not lift. BTI was trained on the same generator, and a
 five-rule stand-in is not SAS.
+
+**Running state.** BTI is a service the bank runs. When the API process starts, it warms the models and its scheduler holds three jobs: weekly drift, the weekly parallel-run report, and daily reconciliation. On 2026-09-25 a live run on a scratch database exercised every endpoint: SAS feed, router, pairing status, report, weekly job, experiment (correctly refused without a champion), reconciliation, capacity policy and authentication. It surfaced the two defects above, both fixed and re-verified. Nothing runs permanently in this development environment; deployment on the bank's infrastructure is the pilot step.
 
 **What the bank pilot needs:**
 

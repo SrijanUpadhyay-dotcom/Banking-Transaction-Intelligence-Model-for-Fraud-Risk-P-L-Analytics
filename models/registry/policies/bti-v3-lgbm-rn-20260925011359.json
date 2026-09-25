@@ -1,0 +1,51 @@
+{
+  "model_id": "bti-v3-lgbm-rn-20260925011359",
+  "history": [],
+  "current": {
+    "fitted_at": "2026-09-25T01:14:11.238579+00:00",
+    "fitted_by": "Srijan Upadhyay (tournament)",
+    "targets": {
+      "max_review_rate": 0.02,
+      "max_step_up_rate": 0.05
+    },
+    "overrides": {
+      "review_cost_usd": 281.24,
+      "step_up_friction_usd": 25.22
+    },
+    "base_cost_model": {
+      "loss_given_fraud": 0.75,
+      "decline_friction_usd": 15.0,
+      "attrition_rate_on_false_decline": 0.02,
+      "customer_annual_value_usd": 300.0,
+      "step_up_friction_usd": 3.0,
+      "step_up_catch_rate": 0.6,
+      "review_cost_usd": 8.0,
+      "review_friction_usd": 4.0,
+      "review_catch_rate": 0.9,
+      "min_decline_probability": 0.5
+    },
+    "fitted_on": "calibration window",
+    "data_sha256": "9e3e0ea0c9b1bc03d502898762c411180cb00f8e22f74fa3d84538106bf18abe",
+    "action_mix": {
+      "unconstrained_calibration": {
+        "APPROVE": 0.74493,
+        "STEP_UP": 0.07667,
+        "REVIEW": 0.14133,
+        "DECLINE": 0.03707
+      },
+      "calibration": {
+        "APPROVE": 0.8924,
+        "STEP_UP": 0.05013,
+        "REVIEW": 0.02013,
+        "DECLINE": 0.03733
+      },
+      "out_of_time": {
+        "APPROVE": 0.88336,
+        "STEP_UP": 0.05736,
+        "REVIEW": 0.0188,
+        "DECLINE": 0.04048
+      }
+    },
+    "note": "Fitted with the default loss-given-fraud; jurisdictions with a different loss-given-fraud land slightly above or below the targets. Provisional models downgrade declines to reviews, which adds to review volume."
+  }
+}

@@ -2,28 +2,28 @@
   "incumbent": "RULES-STAND-IN",
   "paired_transactions": 12500,
   "operational": {
-    "decision_agreement": 0.823,
-    "intervention_agreement": 0.8542,
+    "decision_agreement": 0.8233,
+    "intervention_agreement": 0.8546,
     "agreement_matrix": {
       "rows": "BTI",
       "columns": "RULES-STAND-IN",
       "counts": {
         "APPROVE": {
-          "APPROVE": 10089,
-          "STEP_UP": 657,
-          "REVIEW": 225,
+          "APPROVE": 10084,
+          "STEP_UP": 649,
+          "REVIEW": 223,
           "DECLINE": 21
         },
         "STEP_UP": {
-          "APPROVE": 653,
-          "STEP_UP": 37,
+          "APPROVE": 651,
+          "STEP_UP": 44,
           "REVIEW": 53,
           "DECLINE": 2
         },
         "REVIEW": {
-          "APPROVE": 267,
-          "STEP_UP": 82,
-          "REVIEW": 161,
+          "APPROVE": 274,
+          "STEP_UP": 83,
+          "REVIEW": 163,
           "DECLINE": 253
         },
         "DECLINE": {
@@ -35,9 +35,9 @@
       }
     },
     "bti_action_rates": {
-      "APPROVE": 0.87936,
-      "STEP_UP": 0.0596,
-      "REVIEW": 0.06104,
+      "APPROVE": 0.87816,
+      "STEP_UP": 0.06,
+      "REVIEW": 0.06184,
       "DECLINE": 0.0
     },
     "incumbent_action_rates": {
@@ -71,52 +71,52 @@
     },
     "bti": {
       "interventions": 1491,
-      "tdr": 0.90354,
-      "vdr": 0.9889,
-      "fraud_value_caught_usd": 19803970.34,
-      "genuine_intervened": 929,
-      "hit_rate": 0.37693
+      "tdr": 0.90675,
+      "vdr": 0.9874,
+      "fraud_value_caught_usd": 19773805.52,
+      "genuine_intervened": 927,
+      "hit_rate": 0.37827
     },
-    "tdr_difference": 0.1334,
-    "vdr_difference": 0.0542,
-    "incremental_fraud_value_usd": 1086213.47,
+    "tdr_difference": 0.1366,
+    "vdr_difference": 0.0527,
+    "incremental_fraud_value_usd": 1056048.65,
     "reps": 500,
     "tdr_difference_ci95": [
-      0.1079,
-      0.1628
+      0.1089,
+      0.1636
     ],
     "vdr_difference_ci95": [
-      0.0233,
-      0.0946
+      0.0236,
+      0.0935
     ]
   },
   "fraud_overlap": {
-    "caught_by_both": 473,
-    "bti_only": 89,
-    "rules-stand-in_only": 6,
-    "missed_by_both": 54,
-    "bti_only_value_usd": 1097735.71,
-    "rules-stand-in_only_value_usd": 11522.23,
+    "caught_by_both": 474,
+    "bti_only": 90,
+    "rules-stand-in_only": 5,
+    "missed_by_both": 53,
+    "bti_only_value_usd": 1060974.64,
+    "rules-stand-in_only_value_usd": 4925.99,
     "mcnemar_p_value": 0.0
   },
   "customer_friction": {
-    "genuine_disturbed_by_bti_only": 783,
-    "genuine_disturbed_by_rules-stand-in_only": 866
+    "genuine_disturbed_by_bti_only": 777,
+    "genuine_disturbed_by_rules-stand-in_only": 862
   },
   "at_actual_decisions": {
     "bti": {
-      "interventions": 1508,
-      "intervention_rate": 0.12064,
-      "fraud_caught": 522,
-      "tdr": 0.83923,
+      "interventions": 1523,
+      "intervention_rate": 0.12184,
+      "fraud_caught": 524,
+      "tdr": 0.84244,
       "vdr": 0.9963,
-      "fraud_value_caught_usd": 19951700.41,
-      "fraud_value_missed_usd": 74744.82,
-      "genuine_intervened": 986,
-      "genuine_intervention_rate": 0.08301,
+      "fraud_value_caught_usd": 19951803.55,
+      "fraud_value_missed_usd": 74641.68,
+      "genuine_intervened": 999,
+      "genuine_intervention_rate": 0.08411,
       "false_decline_rate": 0.0,
-      "hit_rate": 0.34615,
-      "false_positive_ratio": 1.89
+      "hit_rate": 0.34406,
+      "false_positive_ratio": 1.91
     },
     "incumbent": {
       "interventions": 1491,
@@ -134,11 +134,11 @@
     }
   },
   "notice": "Rehearsal on synthetic data against a simple rules stand-in, not SAS. BTI was trained on the same generator, so its advantage here is expected and is not evidence of lift over any real incumbent.",
-  "bti_model": "bti-v3-xgb-rn-20260925003533",
+  "bti_model": "bti-v3-lgbm-rn-20260925011359",
   "bti_provisional": true,
   "bti_capacity_policy": {
-    "review_cost_usd": 291.74,
-    "step_up_friction_usd": 26.71
+    "review_cost_usd": 281.24,
+    "step_up_friction_usd": 25.22
   },
   "window": "synthetic out-of-time test window (last 25% by time)"
 }

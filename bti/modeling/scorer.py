@@ -175,6 +175,11 @@ class V3Scorer:
             notes.append("No champion approved yet — scored by the challenger model; treat as provisional.")
         if db_session is None and history is not None and history.empty:
             notes.append("No transaction history supplied — velocity and novelty features are uninformed.")
+        never_missing = [c for c, share in art.get("train_missing_share", {}).items()
+                         if share < 0.001 and c in feats.columns and pd.isna(feats[c].iloc[0])]
+        if never_missing:
+            notes.append(f"Inputs not supplied and scored as unknown: {', '.join(never_missing)}. Send the source "
+                         f"fields for a fully informed score.")
         for feed in art.get("feeds", []):
             if not feats[FEEDS[feed]["features"]].notna().any(axis=1).iloc[0]:
                 notes.append(f"The model uses the {feed.replace('_', ' ')} feed, but it gave no signal for this "
