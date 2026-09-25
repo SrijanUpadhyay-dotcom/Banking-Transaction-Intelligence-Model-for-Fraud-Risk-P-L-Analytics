@@ -60,6 +60,13 @@ class DecideRequest(BaseModel):
     cost_overrides: Optional[Dict[str, float]] = None
 
 
+class CapacityFitRequest(BaseModel):
+    fitted_by: str
+    model_id: Optional[str] = None
+    max_review_rate: Optional[float] = Field(None, gt=0, le=0.5, description="Analyst capacity, share of traffic")
+    max_step_up_rate: Optional[float] = Field(None, gt=0, le=0.5, description="Customer-challenge budget")
+
+
 class BacktestRequest(BaseModel):
     max_review_rate: Optional[float] = Field(0.01, gt=0, le=1, description="Analyst capacity as share of traffic")
     max_step_up_rate: Optional[float] = Field(0.05, gt=0, le=1, description="Customer challenge budget")
@@ -152,3 +159,25 @@ def policy_backtest(body: BacktestRequest):
                              reference_threshold=card["methodology"]["reference_threshold"])
     return {"model_id": model_id, "window": "out_of_time_test", "max_review_rate": body.max_review_rate,
             "max_step_up_rate": body.max_step_up_rate, **result}
+
+
+@router.get("/policy/capacity")
+def capacity_policy(model_id: Optional[str] = None):
+    """The capacity policy (review and step-up shadow prices) the scoring model decides with."""
+    from bti.modeling import registry
+    from bti.operations.capacity import load_policy
+    model_id = model_id or registry.model_for_role("champion") or registry.model_for_role("challenger")
+    policy = load_policy(model_id) if model_id else None
+    if policy is None:
+        raise HTTPException(status_code=404, detail=f"No capacity policy fitted for {model_id}")
+    return policy
+
+
+@router.post("/policy/capacity/fit", dependencies=[Depends(require_api_key)])
+def capacity_fit(body: CapacityFitRequest):
+    """Refit the live capacity policy on the model's calibration window."""
+    from bti.operations.capacity import fit_live_policy
+    try:
+        return fit_live_policy(body.fitted_by, body.model_id, body.max_review_rate, body.max_step_up_rate)
+    except (ValueError, LookupError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))

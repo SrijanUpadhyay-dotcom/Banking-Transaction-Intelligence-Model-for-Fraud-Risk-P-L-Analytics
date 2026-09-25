@@ -153,12 +153,82 @@ them (`FeedUnavailableError`) unless the feed covers at least 1% of every window
 
 ## Phase 2 — Run alongside SAS
 
-| Item | Status | Scope |
+| Item | Status | Notes |
 |---|---|---|
-| SAS score and decision ingestion | New | Batch and API adapters keyed on transaction ID. |
-| Automated parallel-run report | New | Weekly incremental value detection at equal intervention rate, false declines, latency, drift. |
-| Randomised traffic splitter | New | 5–10% of decisions to BTI with a significance test. |
-| Fallback and reconciliation | New | SAS answers on BTI timeout; daily reconciliation of both decision logs. |
+| SAS score and decision ingestion | **Done** | `POST /parallel/incumbent/decisions` (JSON), `POST /parallel/incumbent/upload` (CSV / Excel / Parquet with a column map), `python -m bti.parallel.incumbent --file …`. Vendor codes are mapped to APPROVE / STEP_UP / REVIEW / DECLINE: common codes are built in, and the bank adds its own under `parallel_run.decision_map`. Unknown codes are rejected row by row, never guessed. Records are append-only and the latest per transaction wins. `GET /parallel/incumbent/status` shows how well the two streams pair. |
+| Automated parallel-run report | **Done** | `GET /parallel/report` and a weekly job (Mon 07:00 UTC) that stores to the audit log and alerts. See *How lift is measured* below. |
+| Randomised traffic splitter | **Done — blocked on champion approval** | See *Traffic split* below. An experiment can be proposed today but cannot start: live customer decisions are never handed to a provisional model. |
+| Fallback and reconciliation | **Done** | See *Fallback and reconciliation* below. |
+| Capacity-constrained live decisions | **Done** | Found by the rehearsal: live decisions ignored analyst capacity and sent 20.6% of traffic to review. Capacity prices (review, step-up) are now fitted per model on the calibration window, stored with history, and used for every live and shadow decision. `python -m bti.operations.capacity`, `GET /operations/policy/capacity`. The current challenger holds review at 2.0% and step-up at 5.0% (out-of-time: 1.9% / 5.7%). While the model is provisional its declines become reviews, adding about 4% of traffic to review. |
+
+**How lift is measured.** The report compares BTI with SAS on the same transactions.
+
+- **The headline: equal intervention rate.** BTI's riskiest transactions, taken in the same number SAS
+  intervened on, are compared with SAS's interventions on fraud caught (count and value) and on genuine
+  customers disturbed. This removes the easy win of intervening more.
+- **Significance.** McNemar's test on the frauds one system caught and the other missed, plus bootstrap 95%
+  intervals on the detection-rate difference.
+- **Verdict.** "BTI detects more" requires p < 0.05 and an interval above zero. At least 30 matured frauds
+  are required first.
+- **Also reported.** Decision agreement matrix, action rates, both systems at their actual decisions (false
+  declines, hit rate), and latency for both.
+- **Label maturity.** Only labels past the 90-day maturity window count.
+- **Weekly views.** The job produces the last 7 days (operations), the cohort that matured this week
+  (outcomes), and the total to date.
+- **Alerts.** It alerts when SAS detects significantly more, when pairing falls below 95%, or when BTI's p99
+  latency breaks the SLA.
+
+**Traffic split.**
+
+- **Assignment.** A salted hash of the customer puts each customer in the BTI arm with probability
+  `bti_share`. It is deterministic and reproducible, and each customer always gets the same system.
+- **Governance.**
+  - One person proposes and a different approver starts it (four-eyes).
+  - The share is capped at 10% (`parallel_run.max_bti_share`).
+  - An approved champion must exist.
+  - Only one experiment runs at a time, and stopping is immediate.
+- **Analysis.** `GET /parallel/experiments/{id}/report` compares arms on matured outcomes: fraud loss in
+  basis points of value, detection, false declines, and customer friction.
+- **Statistics.**
+  - Confidence intervals come from a bootstrap that resamples customers, because the customer is the unit of
+    randomisation.
+  - A sample-ratio-mismatch check invalidates a broken split.
+  - The minimum detectable difference is reported.
+
+**Fallback and reconciliation.** The bank's switch calls `POST /parallel/decide` with the transaction and
+SAS's decision.
+
+- **Routing.** BTI scores every call within a time budget (`parallel_run.bti_timeout_ms`, default 150 ms). In
+  the BTI arm BTI's decision applies; otherwise SAS's does.
+- **Fallback.** On a timeout or error, SAS's decision applies and the fallback is logged. Measured router
+  latency on this container: p50 85 ms, p99 124 ms.
+- **Daily reconciliation** (02:30 UTC; `POST /parallel/reconcile/run`) flags five kinds of break:
+  - transactions routed but missing from the SAS feed
+  - transactions SAS decided that BTI never scored
+  - duplicate routings
+  - a decision sent with the request that differs from SAS's own log
+  - enforcement mismatches, where the bank executed a decision no system chose (critical)
+
+  The fallback rate is reported alongside.
+
+**Rehearsal on synthetic data (not SAS).** `python -m bti.parallel.simulate` runs the full report with a
+simple pre-authorisation rules engine standing in for the incumbent. Its thresholds were fixed before any
+results. At equal intervention (1,491 transactions each):
+
+| | Detection rate (TDR) | Value detection rate (VDR) | Genuine customers disturbed |
+|---|---|---|---|
+| BTI | 0.904 | 0.989 | 929 |
+| Rules stand-in | 0.770 | 0.935 | 1,012 |
+
+McNemar p < 0.001. This proves the machinery, not lift. BTI was trained on the same generator, and a
+five-rule stand-in is not SAS.
+
+**What the bank pilot needs:**
+
+- two to four weeks of SAS decisions (with executed decisions, if the switch logs them) alongside BTI
+  scoring of the same traffic
+- confirmed outcomes 90 days on
+- an approved champion before any traffic split
 
 ## Phase 3 — SR 11-7 completion
 

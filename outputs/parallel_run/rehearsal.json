@@ -1,0 +1,144 @@
+{
+  "incumbent": "RULES-STAND-IN",
+  "paired_transactions": 12500,
+  "operational": {
+    "decision_agreement": 0.823,
+    "intervention_agreement": 0.8542,
+    "agreement_matrix": {
+      "rows": "BTI",
+      "columns": "RULES-STAND-IN",
+      "counts": {
+        "APPROVE": {
+          "APPROVE": 10089,
+          "STEP_UP": 657,
+          "REVIEW": 225,
+          "DECLINE": 21
+        },
+        "STEP_UP": {
+          "APPROVE": 653,
+          "STEP_UP": 37,
+          "REVIEW": 53,
+          "DECLINE": 2
+        },
+        "REVIEW": {
+          "APPROVE": 267,
+          "STEP_UP": 82,
+          "REVIEW": 161,
+          "DECLINE": 253
+        },
+        "DECLINE": {
+          "APPROVE": 0,
+          "STEP_UP": 0,
+          "REVIEW": 0,
+          "DECLINE": 0
+        }
+      }
+    },
+    "bti_action_rates": {
+      "APPROVE": 0.87936,
+      "STEP_UP": 0.0596,
+      "REVIEW": 0.06104,
+      "DECLINE": 0.0
+    },
+    "incumbent_action_rates": {
+      "APPROVE": 0.88072,
+      "STEP_UP": 0.06208,
+      "REVIEW": 0.03512,
+      "DECLINE": 0.02208
+    }
+  },
+  "latency": {
+    "bti": null,
+    "incumbent": null
+  },
+  "labels": {
+    "mature": 12500,
+    "immature": 0,
+    "fraud": 622,
+    "genuine": 11878
+  },
+  "status": "ok",
+  "verdict": "bti_detects_more",
+  "at_equal_intervention_rate": {
+    "definition": "BTI's 1491 highest-probability transactions vs the 1491 RULES-STAND-IN intervened on (matured, paired)",
+    "incumbent": {
+      "interventions": 1491,
+      "tdr": 0.7701,
+      "vdr": 0.9347,
+      "fraud_value_caught_usd": 18717756.87,
+      "genuine_intervened": 1012,
+      "hit_rate": 0.32126
+    },
+    "bti": {
+      "interventions": 1491,
+      "tdr": 0.90354,
+      "vdr": 0.9889,
+      "fraud_value_caught_usd": 19803970.34,
+      "genuine_intervened": 929,
+      "hit_rate": 0.37693
+    },
+    "tdr_difference": 0.1334,
+    "vdr_difference": 0.0542,
+    "incremental_fraud_value_usd": 1086213.47,
+    "reps": 500,
+    "tdr_difference_ci95": [
+      0.1079,
+      0.1628
+    ],
+    "vdr_difference_ci95": [
+      0.0233,
+      0.0946
+    ]
+  },
+  "fraud_overlap": {
+    "caught_by_both": 473,
+    "bti_only": 89,
+    "rules-stand-in_only": 6,
+    "missed_by_both": 54,
+    "bti_only_value_usd": 1097735.71,
+    "rules-stand-in_only_value_usd": 11522.23,
+    "mcnemar_p_value": 0.0
+  },
+  "customer_friction": {
+    "genuine_disturbed_by_bti_only": 783,
+    "genuine_disturbed_by_rules-stand-in_only": 866
+  },
+  "at_actual_decisions": {
+    "bti": {
+      "interventions": 1508,
+      "intervention_rate": 0.12064,
+      "fraud_caught": 522,
+      "tdr": 0.83923,
+      "vdr": 0.9963,
+      "fraud_value_caught_usd": 19951700.41,
+      "fraud_value_missed_usd": 74744.82,
+      "genuine_intervened": 986,
+      "genuine_intervention_rate": 0.08301,
+      "false_decline_rate": 0.0,
+      "hit_rate": 0.34615,
+      "false_positive_ratio": 1.89
+    },
+    "incumbent": {
+      "interventions": 1491,
+      "intervention_rate": 0.11928,
+      "fraud_caught": 479,
+      "tdr": 0.7701,
+      "vdr": 0.9347,
+      "fraud_value_caught_usd": 18717756.87,
+      "fraud_value_missed_usd": 1308688.36,
+      "genuine_intervened": 1012,
+      "genuine_intervention_rate": 0.0852,
+      "false_decline_rate": 0.00152,
+      "hit_rate": 0.32126,
+      "false_positive_ratio": 2.11
+    }
+  },
+  "notice": "Rehearsal on synthetic data against a simple rules stand-in, not SAS. BTI was trained on the same generator, so its advantage here is expected and is not evidence of lift over any real incumbent.",
+  "bti_model": "bti-v3-xgb-rn-20260925003533",
+  "bti_provisional": true,
+  "bti_capacity_policy": {
+    "review_cost_usd": 291.74,
+    "step_up_friction_usd": 26.71
+  },
+  "window": "synthetic out-of-time test window (last 25% by time)"
+}

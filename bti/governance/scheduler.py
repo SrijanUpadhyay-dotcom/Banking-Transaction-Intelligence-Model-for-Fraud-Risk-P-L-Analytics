@@ -1,5 +1,6 @@
 """
-In-process monitoring scheduler (weekly drift check by default).
+In-process monitoring scheduler: weekly drift check, weekly parallel-run report
+against the incumbent, and daily reconciliation of the two decision logs.
 
 With several API workers, enable it on exactly one of them
 (BTI_MONITORING_SCHEDULER_ENABLED=false elsewhere), or run the job from an
@@ -19,19 +20,35 @@ from bti.logging_config import get_logger
 log = get_logger("governance.scheduler")
 
 JOB_ID = "weekly_drift_check"
+PARALLEL_JOB_ID = "weekly_parallel_run_report"
+RECONCILE_JOB_ID = "daily_reconciliation"
 _scheduler: Optional[BackgroundScheduler] = None
 
 
-def _drift_job() -> None:
+def _run(name: str, fn) -> None:
     from bti.database.connection import SessionLocal
-    from bti.governance.drift_job import run_drift_check
     db = SessionLocal()
     try:
-        run_drift_check(db)
+        fn(db)
     except Exception:
-        log.exception("Scheduled drift check failed")
+        log.exception(f"Scheduled {name} failed")
     finally:
         db.close()
+
+
+def _drift_job() -> None:
+    from bti.governance.drift_job import run_drift_check
+    _run("drift check", run_drift_check)
+
+
+def _parallel_job() -> None:
+    from bti.parallel.report import run_weekly_report
+    _run("parallel-run report", run_weekly_report)
+
+
+def _reconcile_job() -> None:
+    from bti.parallel.reconcile import reconcile
+    _run("reconciliation", reconcile)
 
 
 def start() -> Optional[BackgroundScheduler]:
@@ -40,8 +57,11 @@ def start() -> Optional[BackgroundScheduler]:
     if not settings.monitoring_scheduler_enabled or _scheduler is not None:
         return _scheduler
     _scheduler = BackgroundScheduler(timezone="UTC", daemon=True)
-    _scheduler.add_job(_drift_job, CronTrigger.from_crontab(settings.drift_check_cron, timezone="UTC"),
-                       id=JOB_ID, max_instances=1, coalesce=True, misfire_grace_time=3600)
+    for fn, cron, job_id in ((_drift_job, settings.drift_check_cron, JOB_ID),
+                             (_parallel_job, settings.parallel_report_cron, PARALLEL_JOB_ID),
+                             (_reconcile_job, settings.reconciliation_cron, RECONCILE_JOB_ID)):
+        _scheduler.add_job(fn, CronTrigger.from_crontab(cron, timezone="UTC"), id=job_id, max_instances=1,
+                           coalesce=True, misfire_grace_time=3600)
     _scheduler.start()
     log.info("Monitoring scheduler started", extra={"cron": settings.drift_check_cron})
     return _scheduler
@@ -56,11 +76,18 @@ def stop() -> None:
 
 def status() -> dict:
     settings = get_settings()
-    job = _scheduler.get_job(JOB_ID) if _scheduler else None
+    def next_run(job_id):
+        job = _scheduler.get_job(job_id) if _scheduler else None
+        return job.next_run_time.isoformat() if job and job.next_run_time else None
     return {
         "enabled": settings.monitoring_scheduler_enabled,
         "running": _scheduler is not None,
         "cron_utc": settings.drift_check_cron,
         "window_days": settings.drift_window_days,
-        "next_run": job.next_run_time.isoformat() if job and job.next_run_time else None,
+        "next_run": next_run(JOB_ID),
+        "jobs": {
+            JOB_ID: {"cron_utc": settings.drift_check_cron, "next_run": next_run(JOB_ID)},
+            PARALLEL_JOB_ID: {"cron_utc": settings.parallel_report_cron, "next_run": next_run(PARALLEL_JOB_ID)},
+            RECONCILE_JOB_ID: {"cron_utc": settings.reconciliation_cron, "next_run": next_run(RECONCILE_JOB_ID)},
+        },
     }

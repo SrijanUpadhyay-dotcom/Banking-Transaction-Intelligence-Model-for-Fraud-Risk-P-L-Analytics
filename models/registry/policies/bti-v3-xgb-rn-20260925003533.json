@@ -1,0 +1,51 @@
+{
+  "model_id": "bti-v3-xgb-rn-20260925003533",
+  "history": [],
+  "current": {
+    "fitted_at": "2026-09-25T00:51:42.774582+00:00",
+    "fitted_by": "Srijan Upadhyay",
+    "targets": {
+      "max_review_rate": 0.02,
+      "max_step_up_rate": 0.05
+    },
+    "overrides": {
+      "review_cost_usd": 291.74,
+      "step_up_friction_usd": 26.71
+    },
+    "base_cost_model": {
+      "loss_given_fraud": 0.75,
+      "decline_friction_usd": 15.0,
+      "attrition_rate_on_false_decline": 0.02,
+      "customer_annual_value_usd": 300.0,
+      "step_up_friction_usd": 3.0,
+      "step_up_catch_rate": 0.6,
+      "review_cost_usd": 8.0,
+      "review_friction_usd": 4.0,
+      "review_catch_rate": 0.9,
+      "min_decline_probability": 0.5
+    },
+    "fitted_on": "calibration window",
+    "data_sha256": "9e3e0ea0c9b1bc03d502898762c411180cb00f8e22f74fa3d84538106bf18abe",
+    "action_mix": {
+      "unconstrained_calibration": {
+        "APPROVE": 0.73867,
+        "STEP_UP": 0.07947,
+        "REVIEW": 0.14547,
+        "DECLINE": 0.0364
+      },
+      "calibration": {
+        "APPROVE": 0.8932,
+        "STEP_UP": 0.05,
+        "REVIEW": 0.02,
+        "DECLINE": 0.0368
+      },
+      "out_of_time": {
+        "APPROVE": 0.88384,
+        "STEP_UP": 0.05704,
+        "REVIEW": 0.0188,
+        "DECLINE": 0.04032
+      }
+    },
+    "note": "Fitted with the default loss-given-fraud; jurisdictions with a different loss-given-fraud land slightly above or below the targets. Provisional models downgrade declines to reviews, which adds to review volume."
+  }
+}

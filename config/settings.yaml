@@ -87,3 +87,21 @@ audit:
   enabled: true
   log_path: "logs/audit.jsonl"
   retention_days: 365
+
+# Live decision capacity: analyst review and customer step-up budgets as shares of traffic.
+# Fitted per model with `python -m bti.operations.capacity`; set from the bank's own capacity.
+decisioning:
+  max_review_rate: 0.02
+  max_step_up_rate: 0.05
+
+# Phase 2 — run alongside the incumbent fraud platform
+parallel_run:
+  incumbent_system: "SAS"
+  # Vendor decision codes → APPROVE / STEP_UP / REVIEW / DECLINE. Common codes are built in
+  # (GET /api/v1/parallel/incumbent/decision-map); add the bank's own here. Unknown codes are rejected.
+  decision_map: {}
+  max_bti_share: 0.10            # cap on the share of live decisions an experiment may route to BTI
+  bti_timeout_ms: 150            # router falls back to the incumbent's decision beyond this
+  report_cron: "0 7 * * mon"     # weekly parallel-run report (UTC)
+  reconciliation_cron: "30 2 * * *"   # daily reconciliation of the previous UTC day
+  break_rate_alert: 0.001        # alert when reconciliation breaks exceed 0.1% of transactions

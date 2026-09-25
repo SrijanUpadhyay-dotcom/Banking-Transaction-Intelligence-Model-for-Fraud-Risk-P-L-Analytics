@@ -173,6 +173,12 @@ class PipelineOrchestrator:
                                     settings.pipeline_feature_sets, tune=False, data_path=data_path)
             results["stages"]["v3_model"] = (f"OK ({round(time.time() - t0, 1)}s) — "
                                              f"{report['decision']['outcome']}: {report['decision']['challenger']}")
+            challenger = report["decision"].get("challenger")
+            if challenger:
+                from bti.operations.capacity import fit_live_policy, load_policy
+                if load_policy(challenger) is None:
+                    fit_live_policy(f"{settings.model_developer or getpass.getuser()} (pipeline)", challenger,
+                                    data_path=data_path)
         summary = rescore_history(data_path)
         results["stages"]["v3_rescore"] = f"OK — {summary['updated_in_db']} rows with {summary['model_id']}"
 

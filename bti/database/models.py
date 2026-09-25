@@ -253,6 +253,78 @@ class SecurityEvent(Base):
     __table_args__ = (Index("ix_security_event_customer_time", "customer_id", "event_time"),)
 
 
+class IncumbentDecision(Base):
+    """
+    Scores and decisions from the incumbent fraud platform (e.g. SAS) for the same
+    transactions BTI sees. Append-only; the latest record per transaction wins.
+    `decision` is normalised to APPROVE / STEP_UP / REVIEW / DECLINE; the vendor's
+    own code is kept in `raw_decision`. `executed_decision` is what the bank's
+    switch actually did, when the feed carries it (used by reconciliation).
+    """
+    __tablename__ = "incumbent_decisions"
+
+    id                = Column(Integer, primary_key=True, autoincrement=True)
+    transaction_id    = Column(String(50), nullable=False, index=True)
+    system            = Column(String(30), nullable=False, default="SAS")
+    customer_id       = Column(String(50), index=True)
+    score             = Column(Float)
+    decision          = Column(String(20), nullable=False, index=True)
+    raw_decision      = Column(String(60))
+    executed_decision = Column(String(20))
+    decided_at        = Column(DateTime, nullable=False, index=True)
+    latency_ms        = Column(Float)
+    amount            = Column(Float)
+    currency          = Column(String(5))
+    rule_ids          = Column(JSON)
+    batch_id          = Column(String(40), index=True)
+    received_at       = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class TrafficExperiment(Base):
+    """
+    Randomised split of live decisions between the incumbent and BTI. Proposed by
+    one person, started by a different approver (four-eyes), capped in share.
+    """
+    __tablename__ = "traffic_experiments"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    name        = Column(String(80), nullable=False, unique=True)
+    bti_share   = Column(Float, nullable=False)
+    unit        = Column(String(20), nullable=False, default="customer")
+    salt        = Column(String(40), nullable=False)
+    status      = Column(String(20), nullable=False, default="proposed", index=True)
+    model_id    = Column(String(64))
+    proposed_by = Column(String(100), nullable=False)
+    rationale   = Column(Text)
+    approved_by = Column(String(100))
+    created_at  = Column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at  = Column(DateTime)
+    stopped_at  = Column(DateTime)
+    stopped_by  = Column(String(100))
+    stop_reason = Column(Text)
+
+
+class RoutedDecision(Base):
+    """Every decision that passed through the parallel-run router, with both systems' answers."""
+    __tablename__ = "routed_decisions"
+
+    id                 = Column(Integer, primary_key=True, autoincrement=True)
+    experiment_id      = Column(Integer, index=True)
+    transaction_id     = Column(String(50), nullable=False, index=True)
+    customer_id        = Column(String(50), index=True)
+    arm                = Column(String(10), nullable=False, index=True)     # bti | control | none
+    bti_model_id       = Column(String(64))
+    bti_probability    = Column(Float)
+    bti_decision       = Column(String(20))
+    bti_latency_ms     = Column(Float)
+    incumbent_decision = Column(String(20))
+    effective_decision = Column(String(20))
+    decided_by         = Column(String(20), nullable=False)                 # BTI | INCUMBENT | NONE
+    fallback_reason    = Column(String(40))
+    amount_usd         = Column(Float)
+    routed_at          = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
 class ModelRegistry(Base):
     """Versioned ML model metadata — tracks which model version scored a transaction."""
     __tablename__ = "model_registry"

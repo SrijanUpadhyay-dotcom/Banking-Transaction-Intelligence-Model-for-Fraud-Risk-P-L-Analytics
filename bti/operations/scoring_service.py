@@ -22,6 +22,7 @@ from bti.logging_config import get_logger
 from bti.modeling import registry
 from bti.modeling.fx import to_usd
 from bti.modeling.scorer import V3Score, scorer
+from bti.operations.capacity import capacity_overrides
 from bti.operations.decisioning import Decision, decide
 
 log = get_logger("operations.scoring_service")
@@ -76,8 +77,12 @@ def score_and_decide(txn: dict, db: Optional[Session] = None, explain: bool = Tr
     policy = policy_for(txn.get("country"))
     amount_usd = to_usd(float(txn.get("transaction_amount") or 0), txn["currency"])
     live = scorer.score(txn, db_session=db, explain=explain)
+    capacity = capacity_overrides(live.model_id)
     decision = decide(live.fraud_probability, amount_usd, policy, txn.get("channel"), txn.get("transaction_type"),
-                      provisional_model=live.provisional)
+                      provisional_model=live.provisional, cost_overrides=capacity)
+    if capacity is None:
+        decision.guardrails_applied.append("No capacity policy fitted for this model: review and step-up volumes "
+                                           "are unconstrained (python -m bti.operations.capacity)")
     iso = policy.iso2 if policy else None
 
     shadow = None
@@ -85,7 +90,8 @@ def score_and_decide(txn: dict, db: Optional[Session] = None, explain: bool = Tr
     if challenger_id and challenger_id != live.model_id:
         sh = scorer.score(txn, db_session=db, role="challenger", explain=False)
         sh_decision = decide(sh.fraud_probability, amount_usd, policy, txn.get("channel"),
-                             txn.get("transaction_type"), provisional_model=True)
+                             txn.get("transaction_type"), provisional_model=True,
+                             cost_overrides=capacity_overrides(sh.model_id))
         shadow = {"model_id": sh.model_id, "fraud_probability": sh.fraud_probability, "decision": sh_decision.action}
         if db is not None and log_scores:
             _log(db, sh, txn, sh_decision, iso, amount_usd, shadow=True)

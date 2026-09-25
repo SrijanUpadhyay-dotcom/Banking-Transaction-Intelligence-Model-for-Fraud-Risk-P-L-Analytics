@@ -102,6 +102,20 @@ class Settings(BaseSettings):
     drift_window_days: int = _yaml.get("monitoring", {}).get("drift_window_days", 7)
     scoring_latency_sla_ms: float = _yaml.get("monitoring", {}).get("scoring_latency_sla_ms", 100.0)
 
+    # Live decision capacity (fitted per model by bti.operations.capacity)
+    max_review_rate: float = _yaml.get("decisioning", {}).get("max_review_rate", 0.02)
+    max_step_up_rate: float = _yaml.get("decisioning", {}).get("max_step_up_rate", 0.05)
+
+    # Parallel run alongside the incumbent platform (Phase 2)
+    incumbent_system: str = _yaml.get("parallel_run", {}).get("incumbent_system", "SAS")
+    incumbent_decision_map: dict = _yaml.get("parallel_run", {}).get("decision_map", {})
+    parallel_max_bti_share: float = _yaml.get("parallel_run", {}).get("max_bti_share", 0.10)
+    parallel_bti_timeout_ms: float = Field(default=_yaml.get("parallel_run", {}).get("bti_timeout_ms", 150.0),
+                                           alias="BTI_PARALLEL_TIMEOUT_MS")
+    parallel_report_cron: str = _yaml.get("parallel_run", {}).get("report_cron", "0 7 * * mon")
+    reconciliation_cron: str = _yaml.get("parallel_run", {}).get("reconciliation_cron", "30 2 * * *")
+    reconciliation_break_rate_alert: float = _yaml.get("parallel_run", {}).get("break_rate_alert", 0.001)
+
     # Audit
     audit_enabled: bool = Field(default=True, alias="BTI_AUDIT_ENABLED")
     audit_log_path: str = str(BASE_DIR / "logs" / "audit.jsonl")
