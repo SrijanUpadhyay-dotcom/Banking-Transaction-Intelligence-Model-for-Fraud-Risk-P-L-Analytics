@@ -21,7 +21,15 @@ def create_tables() -> None:
     log.info("Creating database tables...")
     Base.metadata.create_all(bind=engine)
     added = add_missing_columns()
-    log.info("Tables created successfully", extra={"columns_added": added})
+    from bti.governance.audit_chain import install_guards, seal_legacy
+    db = SessionLocal()
+    try:
+        sealed = seal_legacy(db)
+    finally:
+        db.close()
+    guards = install_guards(engine)
+    log.info("Tables created successfully", extra={"columns_added": added, "legacy_audit_rows_sealed": sealed,
+                                                   "audit_guards": guards})
 
 
 def add_missing_columns(bind=None) -> list:

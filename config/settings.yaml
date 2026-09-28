@@ -86,7 +86,13 @@ api:
 audit:
   enabled: true
   log_path: "logs/audit.jsonl"
-  retention_days: 365
+  # Seven years: the longest common record-keeping period across the target jurisdictions
+  # (e.g. UK and EU AML record-keeping is five years after the relationship ends). Confirm with Compliance.
+  retention_days: 2555
+  # Sealed daily segments. In production point this at write-once storage (S3 Object Lock in
+  # compliance mode, Azure immutable blob storage, or a WORM appliance).
+  archive_dir: "audit_archive"
+  archive_cron: "0 3 * * *"
 
 # Live decision capacity: analyst review and customer step-up budgets as shares of traffic.
 # Fitted per model with `python -m bti.operations.capacity`; set from the bank's own capacity.
@@ -105,3 +111,12 @@ parallel_run:
   report_cron: "0 7 * * mon"     # weekly parallel-run report (UTC)
   reconciliation_cron: "30 2 * * *"   # daily reconciliation of the previous UTC day
   break_rate_alert: 0.001        # alert when reconciliation breaks exceed 0.1% of transactions
+
+# Model monitoring and governance schedules (UTC). Run the scheduler on exactly one worker.
+monitoring:
+  scheduler_enabled: true
+  drift_check_cron: "0 6 * * mon"
+  drift_window_days: 7
+  scoring_latency_sla_ms: 100
+  outcomes_cron: "0 8 1 1,4,7,10 *"      # quarterly outcomes analysis on matured labels
+  governance_check_cron: "0 8 * * mon"   # reviews due/overdue and findings past due date

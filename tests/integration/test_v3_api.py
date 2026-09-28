@@ -149,6 +149,18 @@ class TestGovernance:
                                     json={"role": "champion", "approver": developer,
                                           "rationale": "Developer approving own model"})
         assert self_approved.status_code == 409
+        unvalidated = client.post(f"/api/v1/governance/models/{passed}/promote", headers=KEY,
+                                  json={"role": "champion", "approver": "risk.officer",
+                                        "rationale": "No validation sign-off yet"})
+        assert unvalidated.status_code == 409 and "independent_signoff" in unvalidated.json()["detail"]
+        own = client.post("/api/v1/governance/signoffs", headers=KEY, json={
+            "model_id": passed, "validator": developer, "decision": "approve", "scope": "Self-validation attempt"})
+        assert own.status_code == 409
+        signed = client.post("/api/v1/governance/signoffs", headers=KEY, json={
+            "model_id": passed, "validator": "model.validator", "validator_role": "Model Risk Management",
+            "decision": "approve", "scope": "Independent validation of the v3 model: data, method, outcomes"})
+        assert signed.status_code == 201
+        assert client.get(f"/api/v1/governance/models/{passed}/readiness").json()["ready"] is True
         ok = client.post(f"/api/v1/governance/models/{passed}/promote", headers=KEY,
                          json={"role": "champion", "approver": "risk.officer",
                                "rationale": "Independent validation completed"})

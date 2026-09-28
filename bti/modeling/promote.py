@@ -1,7 +1,9 @@
 """
 Assign a registered model to champion or challenger from the command line.
 Applies the same controls as POST /api/v1/governance/models/{id}/promote:
-passed validation for champion, approver ≠ developer, written rationale.
+for champion, passed automated gates, an in-date approving sign-off from an
+independent validator, no open high-severity findings, approver ≠ developer,
+and a written rationale.
 
 Usage:
   python -m bti.modeling.promote --list
@@ -13,6 +15,13 @@ import argparse
 import sys
 
 from bti.modeling import registry
+
+
+def _session():
+    from bti.database.connection import SessionLocal
+    from bti.database.init_db import create_tables
+    create_tables()
+    return SessionLocal()
 
 
 def main() -> int:
@@ -32,11 +41,22 @@ def main() -> int:
         return 0
     if not args.approver or not args.rationale:
         parser.error("--approver and --rationale are required to change a role")
+    from bti.database.models import AuditLog
+    from bti.governance.validation import ValidationError, assert_ready_for_champion
+    db = _session()
     try:
+        registry.load_card(args.model)
+        if args.role == "champion":
+            registry.check_four_eyes(args.model, args.approver)
+            assert_ready_for_champion(db, args.model)
         event = registry.assign_role(args.model, args.role, args.approver, args.rationale)
-    except registry.RegistryError as exc:
+        db.add(AuditLog(event_type="MODEL_ROLE_ASSIGNED", payload=event))
+        db.commit()
+    except (registry.RegistryError, ValidationError) as exc:
         print(f"Refused: {exc}", file=sys.stderr)
         return 1
+    finally:
+        db.close()
     print(f"{args.model} is now {args.role} (previous: {event['previous']}), approved by {event['approver']}")
     print("Running API workers pick this up on the next request; POST /api/v1/score/reload-models clears caches.")
     return 0

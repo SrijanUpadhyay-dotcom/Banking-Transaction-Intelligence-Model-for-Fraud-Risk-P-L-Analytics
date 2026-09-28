@@ -100,6 +100,8 @@ class Settings(BaseSettings):
     drift_check_cron: str = Field(default=_yaml.get("monitoring", {}).get("drift_check_cron", "0 6 * * mon"),
                                   alias="BTI_DRIFT_CHECK_CRON")
     drift_window_days: int = _yaml.get("monitoring", {}).get("drift_window_days", 7)
+    outcomes_cron: str = _yaml.get("monitoring", {}).get("outcomes_cron", "0 8 1 1,4,7,10 *")
+    governance_check_cron: str = _yaml.get("monitoring", {}).get("governance_check_cron", "0 8 * * mon")
     scoring_latency_sla_ms: float = _yaml.get("monitoring", {}).get("scoring_latency_sla_ms", 100.0)
 
     # Live decision capacity (fitted per model by bti.operations.capacity)
@@ -119,6 +121,10 @@ class Settings(BaseSettings):
     # Audit
     audit_enabled: bool = Field(default=True, alias="BTI_AUDIT_ENABLED")
     audit_log_path: str = str(BASE_DIR / "logs" / "audit.jsonl")
+    audit_archive_dir: str = Field(default=str(BASE_DIR / _yaml.get("audit", {}).get("archive_dir", "audit_archive")),
+                                   alias="BTI_AUDIT_ARCHIVE_DIR")
+    audit_retention_days: int = _yaml.get("audit", {}).get("retention_days", 2555)
+    audit_archive_cron: str = _yaml.get("audit", {}).get("archive_cron", "0 3 * * *")
 
     model_config = {
         "env_file": str(BASE_DIR / ".env"),

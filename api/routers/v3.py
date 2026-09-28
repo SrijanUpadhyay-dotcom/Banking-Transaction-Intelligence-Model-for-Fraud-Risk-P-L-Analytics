@@ -56,6 +56,8 @@ class V3Transaction(BaseModel):
                                                                         "happened (terminal, device GPS or IP geo)")
     longitude: Optional[float] = Field(None, ge=-180, le=180)
     payee_id: Optional[str] = Field(None, description="Payee feed: beneficiary account key (tokenised is fine)")
+    customer_segment: Optional[str] = Field(None, description="Fairness monitoring only — never a model input")
+    customer_age_band: Optional[str] = Field(None, description="Fairness monitoring only — never a model input")
 
     model_config = {"extra": "ignore"}
 

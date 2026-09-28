@@ -183,6 +183,20 @@ class AuditLog(Base):
     payload        = Column(JSON)
     source_ip      = Column(String(50))
     user_agent     = Column(String(200))
+    # Tamper evidence (bti.governance.audit_chain): each row hashes the previous row's hash.
+    seq            = Column(Integer, index=True)
+    prev_hash      = Column(String(64))
+    row_hash       = Column(String(64))
+
+
+class AuditChainHead(Base):
+    """Single row holding the latest sequence number and hash of the audit chain."""
+    __tablename__ = "audit_chain_head"
+
+    id         = Column(Integer, primary_key=True)
+    seq        = Column(Integer, nullable=False, default=0)
+    head_hash  = Column(String(64), nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class ScoreLog(Base):
@@ -208,6 +222,8 @@ class ScoreLog(Base):
     features          = Column(JSON)
     guardrails        = Column(JSON)
     latency_ms        = Column(Float)
+    # Segment, age band and country for fairness monitoring on matured outcomes — never model inputs.
+    monitoring_attributes = Column(JSON)
     scored_at         = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     __table_args__ = (Index("ix_score_log_model_time", "model_id", "scored_at"),)
@@ -325,6 +341,69 @@ class RoutedDecision(Base):
     routed_at          = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
+class ModelInventoryEntry(Base):
+    """Model inventory (SR 11-7): one row per registered model, synced from the registry."""
+    __tablename__ = "model_inventory"
+
+    model_id          = Column(String(64), primary_key=True)
+    model_family      = Column(String(100))
+    algorithm         = Column(String(30))
+    feature_set       = Column(String(40))
+    developer         = Column(String(100))
+    business_owner    = Column(String(100))
+    risk_tier         = Column(String(10), nullable=False, default="Tier 1")
+    role              = Column(String(20))                   # champion | challenger | none
+    lifecycle         = Column(String(30), nullable=False)   # in_use | shadow_challenger | registered | superseded
+    validation_status = Column(String(20))                   # automated gates: passed | failed
+    last_signoff      = Column(String(40))
+    last_validator    = Column(String(100))
+    last_validated_at = Column(DateTime)
+    next_review_due   = Column(DateTime)
+    registered_at     = Column(DateTime)
+    updated_at        = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ValidationFinding(Base):
+    """Findings tracker: issues raised by validation, development, monitoring or audit, to closure."""
+    __tablename__ = "validation_findings"
+
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    model_id     = Column(String(64), nullable=False, index=True)
+    title        = Column(String(200), nullable=False)
+    severity     = Column(String(10), nullable=False, index=True)    # high | medium | low
+    category     = Column(String(30), nullable=False)
+    source       = Column(String(30), nullable=False)
+    description  = Column(Text, nullable=False)
+    raised_by    = Column(String(100), nullable=False)
+    raised_at    = Column(DateTime, default=datetime.utcnow, nullable=False)
+    owner        = Column(String(100), nullable=False)
+    due_date     = Column(DateTime, nullable=False)
+    status       = Column(String(20), nullable=False, default="open", index=True)
+    resolution   = Column(Text)
+    evidence     = Column(JSON)
+    closed_by    = Column(String(100))
+    closed_at    = Column(DateTime)
+    accepted_by  = Column(String(100))
+    accepted_until = Column(DateTime)
+    updated_at   = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ValidationSignoff(Base):
+    """Independent validation sign-off. Append-only; the latest in-date sign-off governs promotion."""
+    __tablename__ = "validation_signoffs"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    model_id       = Column(String(64), nullable=False, index=True)
+    validator      = Column(String(100), nullable=False)
+    validator_role = Column(String(100))
+    decision       = Column(String(30), nullable=False)          # approve | approve_with_conditions | reject
+    scope          = Column(Text, nullable=False)
+    conditions     = Column(Text)
+    evidence       = Column(JSON)
+    signed_at      = Column(DateTime, default=datetime.utcnow, nullable=False)
+    valid_until    = Column(DateTime, nullable=False)
+
+
 class ModelRegistry(Base):
     """Versioned ML model metadata — tracks which model version scored a transaction."""
     __tablename__ = "model_registry"
@@ -343,3 +422,7 @@ class ModelRegistry(Base):
     is_active     = Column(Boolean, default=False, index=True)
     notes         = Column(Text)
     created_at    = Column(DateTime, default=datetime.utcnow)
+
+
+# Hash-chain every audit row on insert (the listener lives with the rest of the audit controls).
+import bti.governance.audit_chain  # noqa: E402,F401

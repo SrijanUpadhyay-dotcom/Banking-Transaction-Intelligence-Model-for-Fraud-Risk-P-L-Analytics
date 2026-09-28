@@ -108,6 +108,12 @@ def model_for_role(role: str) -> Optional[str]:
     return read_index().get(role)
 
 
+def check_four_eyes(model_id: str, approver: str) -> None:
+    developer = load_card(model_id).get("ownership", {}).get("developer")
+    if developer and approver and approver.strip().lower() == str(developer).strip().lower():
+        raise RegistryError("Four-eyes principle: the approver must differ from the model developer")
+
+
 def assign_role(model_id: str, role: str, approver: str, rationale: str) -> Dict:
     """Assign a model to a role. Champion promotion requires passed validation and four-eyes."""
     if role not in ROLES:

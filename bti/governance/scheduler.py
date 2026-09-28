@@ -22,6 +22,9 @@ log = get_logger("governance.scheduler")
 JOB_ID = "weekly_drift_check"
 PARALLEL_JOB_ID = "weekly_parallel_run_report"
 RECONCILE_JOB_ID = "daily_reconciliation"
+ARCHIVE_JOB_ID = "daily_audit_archive"
+OUTCOMES_JOB_ID = "quarterly_outcomes_analysis"
+GOVERNANCE_JOB_ID = "weekly_governance_check"
 _scheduler: Optional[BackgroundScheduler] = None
 
 
@@ -51,6 +54,21 @@ def _reconcile_job() -> None:
     _run("reconciliation", reconcile)
 
 
+def _archive_job() -> None:
+    from bti.governance.audit_chain import archive_day
+    _run("audit archive", archive_day)
+
+
+def _outcomes_job() -> None:
+    from bti.governance.outcomes import run_quarterly
+    _run("outcomes analysis", run_quarterly)
+
+
+def _governance_job() -> None:
+    from bti.governance.validation import run_governance_check
+    _run("governance check", run_governance_check)
+
+
 def start() -> Optional[BackgroundScheduler]:
     global _scheduler
     settings = get_settings()
@@ -59,7 +77,10 @@ def start() -> Optional[BackgroundScheduler]:
     _scheduler = BackgroundScheduler(timezone="UTC", daemon=True)
     for fn, cron, job_id in ((_drift_job, settings.drift_check_cron, JOB_ID),
                              (_parallel_job, settings.parallel_report_cron, PARALLEL_JOB_ID),
-                             (_reconcile_job, settings.reconciliation_cron, RECONCILE_JOB_ID)):
+                             (_reconcile_job, settings.reconciliation_cron, RECONCILE_JOB_ID),
+                             (_archive_job, settings.audit_archive_cron, ARCHIVE_JOB_ID),
+                             (_outcomes_job, settings.outcomes_cron, OUTCOMES_JOB_ID),
+                             (_governance_job, settings.governance_check_cron, GOVERNANCE_JOB_ID)):
         _scheduler.add_job(fn, CronTrigger.from_crontab(cron, timezone="UTC"), id=job_id, max_instances=1,
                            coalesce=True, misfire_grace_time=3600)
     _scheduler.start()
@@ -89,5 +110,8 @@ def status() -> dict:
             JOB_ID: {"cron_utc": settings.drift_check_cron, "next_run": next_run(JOB_ID)},
             PARALLEL_JOB_ID: {"cron_utc": settings.parallel_report_cron, "next_run": next_run(PARALLEL_JOB_ID)},
             RECONCILE_JOB_ID: {"cron_utc": settings.reconciliation_cron, "next_run": next_run(RECONCILE_JOB_ID)},
+            ARCHIVE_JOB_ID: {"cron_utc": settings.audit_archive_cron, "next_run": next_run(ARCHIVE_JOB_ID)},
+            OUTCOMES_JOB_ID: {"cron_utc": settings.outcomes_cron, "next_run": next_run(OUTCOMES_JOB_ID)},
+            GOVERNANCE_JOB_ID: {"cron_utc": settings.governance_check_cron, "next_run": next_run(GOVERNANCE_JOB_ID)},
         },
     }

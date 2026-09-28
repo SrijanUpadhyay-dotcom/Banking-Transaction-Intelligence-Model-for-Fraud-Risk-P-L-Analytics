@@ -1,0 +1,723 @@
+{
+  "model_id": "bti-v3-lgbm-rn-20260925011359",
+  "generated_at": "2026-09-28T14:51:53.086711+00:00",
+  "window": "out-of-time (last 25% by time)",
+  "data_sha256": "9e3e0ea0c9b1bc03d502898762c411180cb00f8e22f74fa3d84538106bf18abe",
+  "benchmarks": {
+    "model": {
+      "roc_auc": 0.9557,
+      "pr_auc": 0.8845,
+      "ece": 0.00277,
+      "at_2pct_budget": {
+        "alert_rate": 0.022,
+        "tdr": 0.4421,
+        "genuine_flag_rate": 0.0,
+        "precision": 1.0
+      },
+      "at_10pct_budget": {
+        "alert_rate": 0.10912,
+        "tdr": 0.8987,
+        "genuine_flag_rate": 0.06777,
+        "precision": 0.4098
+      },
+      "reps": 500,
+      "roc_auc_ci95": [
+        0.9435,
+        0.9672
+      ],
+      "pr_auc_ci95": [
+        0.8611,
+        0.9063
+      ]
+    },
+    "logistic_regression": {
+      "roc_auc": 0.9532,
+      "pr_auc": 0.8801,
+      "at_2pct_budget": {
+        "alert_rate": 0.02192,
+        "tdr": 0.4405,
+        "genuine_flag_rate": 0.0,
+        "precision": 1.0
+      },
+      "specification": "median imputation with missing indicators, standardised, L2 C=1"
+    },
+    "rules_stand_in": {
+      "roc_auc": 0.9021,
+      "pr_auc": 0.6863,
+      "specification": "bti.parallel.simulate.rules_stand_in (pre-authorisation rules)"
+    },
+    "alternatives_considered": [
+      {
+        "model_id": "bti-v3-xgb-x-20260923180914",
+        "validation": "passed",
+        "feature_set": "extended",
+        "oot_roc_auc": 0.9565,
+        "oot_pr_auc": 0.8877
+      },
+      {
+        "model_id": "bti-v3-lgbm-x-20260923180908",
+        "validation": "passed",
+        "feature_set": "extended",
+        "oot_roc_auc": 0.9563,
+        "oot_pr_auc": 0.8876
+      },
+      {
+        "model_id": "bti-v3-hgb-20260923160131",
+        "validation": "failed",
+        "feature_set": null,
+        "oot_roc_auc": 0.9566,
+        "oot_pr_auc": 0.8874
+      },
+      {
+        "model_id": "bti-v3-xgb-x-20260923180523",
+        "validation": "failed",
+        "feature_set": "extended",
+        "oot_roc_auc": 0.9559,
+        "oot_pr_auc": 0.8874
+      },
+      {
+        "model_id": "bti-v3-lgbm-x-20260923180404",
+        "validation": "passed",
+        "feature_set": "extended",
+        "oot_roc_auc": 0.9562,
+        "oot_pr_auc": 0.8867
+      },
+      {
+        "model_id": "bti-v3-hgb-20260923160241",
+        "validation": "passed",
+        "feature_set": null,
+        "oot_roc_auc": 0.9581,
+        "oot_pr_auc": 0.8866
+      },
+      {
+        "model_id": "bti-v3-hgb-20260923175252",
+        "validation": "passed",
+        "feature_set": null,
+        "oot_roc_auc": 0.9581,
+        "oot_pr_auc": 0.8866
+      },
+      {
+        "model_id": "bti-v3-lgbm-xr-20260923181447",
+        "validation": "passed",
+        "feature_set": "extended-relative",
+        "oot_roc_auc": 0.9562,
+        "oot_pr_auc": 0.8865
+      },
+      {
+        "model_id": "bti-v3-xgb-xr-20260923181453",
+        "validation": "failed",
+        "feature_set": "extended-relative",
+        "oot_roc_auc": 0.9554,
+        "oot_pr_auc": 0.8865
+      },
+      {
+        "model_id": "bti-v3-xgb-ro-20260925003535",
+        "validation": "passed",
+        "feature_set": "core-relative-own",
+        "oot_roc_auc": 0.9571,
+        "oot_pr_auc": 0.8864
+      },
+      {
+        "model_id": "bti-v3-lgbm-20260923180324",
+        "validation": "failed",
+        "feature_set": "core",
+        "oot_roc_auc": 0.9554,
+        "oot_pr_auc": 0.886
+      },
+      {
+        "model_id": "bti-v3-xgb-20260923180911",
+        "validation": "passed",
+        "feature_set": "core",
+        "oot_roc_auc": 0.9546,
+        "oot_pr_auc": 0.8859
+      }
+    ],
+    "passed_alternatives_with_higher_oot_pr_auc": [
+      "bti-v3-xgb-x-20260923180914",
+      "bti-v3-lgbm-x-20260923180908",
+      "bti-v3-lgbm-x-20260923180404",
+      "bti-v3-hgb-20260923160241",
+      "bti-v3-hgb-20260923175252",
+      "bti-v3-lgbm-xr-20260923181447",
+      "bti-v3-xgb-ro-20260925003535",
+      "bti-v3-xgb-20260923180911",
+      "bti-v3-xgb-r-20260923181450",
+      "bti-v3-xgb-rn-20260925003533",
+      "bti-v3-lgbm-20260923180905",
+      "bti-v3-lgbm-ro-20260925003530",
+      "bti-v3-xgb-rn-20260925011406",
+      "bti-v3-hgb-x-20260923180244",
+      "bti-v3-xgb-ro-20260925011409",
+      "bti-v3-lgbm-ro-20260925011403",
+      "bti-v3-lgbm-r-20260923181444"
+    ],
+    "note": "Alternatives were selected on the calibration window, so a higher out-of-time figure among them is expected by chance; differences inside the bootstrap interval are noise."
+  },
+  "temporal_stability": [
+    {
+      "month": "2024-07",
+      "n": 2030,
+      "fraud": 102,
+      "roc_auc": 0.9792,
+      "pr_auc": 0.9182,
+      "ece": 0.00415,
+      "alert_rate_2pct_threshold": 0.02217
+    },
+    {
+      "month": "2024-08",
+      "n": 2103,
+      "fraud": 110,
+      "roc_auc": 0.9206,
+      "pr_auc": 0.8143,
+      "ece": 0.00525,
+      "alert_rate_2pct_threshold": 0.0195
+    },
+    {
+      "month": "2024-09",
+      "n": 2072,
+      "fraud": 93,
+      "roc_auc": 0.9472,
+      "pr_auc": 0.8803,
+      "ece": 0.00687,
+      "alert_rate_2pct_threshold": 0.01979
+    },
+    {
+      "month": "2024-10",
+      "n": 2105,
+      "fraud": 94,
+      "roc_auc": 0.9575,
+      "pr_auc": 0.8971,
+      "ece": 0.00574,
+      "alert_rate_2pct_threshold": 0.0209
+    },
+    {
+      "month": "2024-11",
+      "n": 2109,
+      "fraud": 114,
+      "roc_auc": 0.9687,
+      "pr_auc": 0.9069,
+      "ece": 0.00288,
+      "alert_rate_2pct_threshold": 0.02371
+    },
+    {
+      "month": "2024-12",
+      "n": 2081,
+      "fraud": 109,
+      "roc_auc": 0.9617,
+      "pr_auc": 0.8937,
+      "ece": 0.00529,
+      "alert_rate_2pct_threshold": 0.02595
+    }
+  ],
+  "sensitivity": {
+    "sample": 3000,
+    "perturbation": "\u00b11 training-window standard deviation",
+    "features": [
+      {
+        "feature": "amount_vs_hist_avg",
+        "plus_1sd": {
+          "mean_abs_change": 0.10099,
+          "flips_at_2pct_threshold": 0.007,
+          "flips_at_10pct_threshold": 0.77767
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.01319,
+          "flips_at_2pct_threshold": 0.00433,
+          "flips_at_10pct_threshold": 0.05833
+        },
+        "max_flip_rate": 0.77767
+      },
+      {
+        "feature": "ip_new_for_customer",
+        "plus_1sd": {
+          "mean_abs_change": 0.04684,
+          "flips_at_2pct_threshold": 0.001,
+          "flips_at_10pct_threshold": 0.38867
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.0,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "max_flip_rate": 0.38867
+      },
+      {
+        "feature": "device_new_for_customer",
+        "plus_1sd": {
+          "mean_abs_change": 0.03261,
+          "flips_at_2pct_threshold": 0.001,
+          "flips_at_10pct_threshold": 0.231
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.0,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "max_flip_rate": 0.231
+      },
+      {
+        "feature": "login_attempts",
+        "plus_1sd": {
+          "mean_abs_change": 0.02543,
+          "flips_at_2pct_threshold": 0.00233,
+          "flips_at_10pct_threshold": 0.032
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.00237,
+          "flips_at_2pct_threshold": 0.00133,
+          "flips_at_10pct_threshold": 0.004
+        },
+        "max_flip_rate": 0.032
+      },
+      {
+        "feature": "cust_amount_usd_7d",
+        "plus_1sd": {
+          "mean_abs_change": 0.00382,
+          "flips_at_2pct_threshold": 0.001,
+          "flips_at_10pct_threshold": 0.01833
+        },
+        "minus_1sd": {
+          "mean_abs_change": 7e-05,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.00067
+        },
+        "max_flip_rate": 0.01833
+      },
+      {
+        "feature": "secs_since_last_txn",
+        "plus_1sd": {
+          "mean_abs_change": 0.00245,
+          "flips_at_2pct_threshold": 0.00067,
+          "flips_at_10pct_threshold": 0.014
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.00208,
+          "flips_at_2pct_threshold": 0.00033,
+          "flips_at_10pct_threshold": 0.01267
+        },
+        "max_flip_rate": 0.014
+      },
+      {
+        "feature": "txn_hour",
+        "plus_1sd": {
+          "mean_abs_change": 0.00098,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.00333
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.001,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.00333
+        },
+        "max_flip_rate": 0.00333
+      },
+      {
+        "feature": "is_weekend",
+        "plus_1sd": {
+          "mean_abs_change": 0.00089,
+          "flips_at_2pct_threshold": 0.00033,
+          "flips_at_10pct_threshold": 0.005
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.0,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "max_flip_rate": 0.005
+      },
+      {
+        "feature": "is_off_hours",
+        "plus_1sd": {
+          "mean_abs_change": 0.00036,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.00033
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.0,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "max_flip_rate": 0.00033
+      },
+      {
+        "feature": "failed_attempt_count",
+        "plus_1sd": {
+          "mean_abs_change": 0.00013,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.00067
+        },
+        "minus_1sd": {
+          "mean_abs_change": 4e-05,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.00033
+        },
+        "max_flip_rate": 0.00067
+      },
+      {
+        "feature": "device_other_customer_txns",
+        "plus_1sd": {
+          "mean_abs_change": 0.00012,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.0,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "max_flip_rate": 0.0
+      },
+      {
+        "feature": "is_debit",
+        "plus_1sd": {
+          "mean_abs_change": 5e-05,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.00033
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.0,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "max_flip_rate": 0.00033
+      },
+      {
+        "feature": "cust_txn_count_1h",
+        "plus_1sd": {
+          "mean_abs_change": 4e-05,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.00033
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.0,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "max_flip_rate": 0.00033
+      },
+      {
+        "feature": "merchant_new_for_customer",
+        "plus_1sd": {
+          "mean_abs_change": 4e-05,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.0,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "max_flip_rate": 0.0
+      },
+      {
+        "feature": "cust_txn_count_24h",
+        "plus_1sd": {
+          "mean_abs_change": 3e-05,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.0,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "max_flip_rate": 0.0
+      },
+      {
+        "feature": "cust_txn_count_7d",
+        "plus_1sd": {
+          "mean_abs_change": 2e-05,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.0,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "max_flip_rate": 0.0
+      },
+      {
+        "feature": "cust_amount_usd_24h",
+        "plus_1sd": {
+          "mean_abs_change": 0.0,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.0,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "max_flip_rate": 0.0
+      },
+      {
+        "feature": "ip_other_customer_txns",
+        "plus_1sd": {
+          "mean_abs_change": 0.0,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "minus_1sd": {
+          "mean_abs_change": 0.0,
+          "flips_at_2pct_threshold": 0.0,
+          "flips_at_10pct_threshold": 0.0
+        },
+        "max_flip_rate": 0.0
+      }
+    ]
+  },
+  "monotonicity": {
+    "all_monotone": true,
+    "features": [
+      {
+        "feature": "amount_vs_hist_avg",
+        "grid_points": 25,
+        "max_decrease": 0.0,
+        "monotone": true
+      },
+      {
+        "feature": "failed_attempt_count",
+        "grid_points": 5,
+        "max_decrease": 0.0,
+        "monotone": true
+      },
+      {
+        "feature": "login_attempts",
+        "grid_points": 5,
+        "max_decrease": 0.0,
+        "monotone": true
+      },
+      {
+        "feature": "cust_txn_count_1h",
+        "grid_points": 1,
+        "max_decrease": 0.0,
+        "monotone": true
+      },
+      {
+        "feature": "cust_txn_count_24h",
+        "grid_points": 1,
+        "max_decrease": 0.0,
+        "monotone": true
+      },
+      {
+        "feature": "cust_txn_count_7d",
+        "grid_points": 2,
+        "max_decrease": 0.0,
+        "monotone": true
+      },
+      {
+        "feature": "device_new_for_customer",
+        "grid_points": 2,
+        "max_decrease": 0.0,
+        "monotone": true
+      },
+      {
+        "feature": "ip_new_for_customer",
+        "grid_points": 2,
+        "max_decrease": 0.0,
+        "monotone": true
+      }
+    ]
+  },
+  "stress": [
+    {
+      "scenario": "baseline",
+      "description": "Out-of-time window as observed",
+      "at_2pct_threshold": {
+        "alert_rate": 0.022,
+        "tdr": 0.4421,
+        "genuine_flag_rate": 0.0,
+        "precision": 1.0
+      },
+      "at_10pct_threshold": {
+        "alert_rate": 0.10912,
+        "tdr": 0.8987,
+        "genuine_flag_rate": 0.06777,
+        "precision": 0.4098
+      },
+      "mean_probability": 0.0514,
+      "roc_auc": 0.9557
+    },
+    {
+      "scenario": "inflation_fx_shock",
+      "description": "Amounts, balances and profile averages all +50% (price level / FX move)",
+      "at_2pct_threshold": {
+        "alert_rate": 0.022,
+        "tdr": 0.4421,
+        "genuine_flag_rate": 0.0,
+        "precision": 1.0
+      },
+      "at_10pct_threshold": {
+        "alert_rate": 0.10936,
+        "tdr": 0.8987,
+        "genuine_flag_rate": 0.06802,
+        "precision": 0.4089
+      },
+      "mean_probability": 0.05142,
+      "roc_auc": 0.9556,
+      "flags": []
+    },
+    {
+      "scenario": "spending_spike",
+      "description": "Every transaction amount doubled, profiles unchanged",
+      "at_2pct_threshold": {
+        "alert_rate": 0.02496,
+        "tdr": 0.5,
+        "genuine_flag_rate": 8e-05,
+        "precision": 0.9968
+      },
+      "at_10pct_threshold": {
+        "alert_rate": 0.28296,
+        "tdr": 0.9357,
+        "genuine_flag_rate": 0.24878,
+        "precision": 0.1645
+      },
+      "mean_probability": 0.10203,
+      "roc_auc": 0.9542,
+      "flags": []
+    },
+    {
+      "scenario": "missing_profile_data",
+      "description": "30% of transactions arrive without profile average, balance and login count",
+      "at_2pct_threshold": {
+        "alert_rate": 0.01512,
+        "tdr": 0.3039,
+        "genuine_flag_rate": 0.0,
+        "precision": 1.0
+      },
+      "at_10pct_threshold": {
+        "alert_rate": 0.15832,
+        "tdr": 0.8408,
+        "genuine_flag_rate": 0.12258,
+        "precision": 0.2643
+      },
+      "mean_probability": 0.05192,
+      "roc_auc": 0.9278,
+      "flags": [
+        "detection 44.2% \u2192 30.4%",
+        "ROC-AUC 0.9557 \u2192 0.9278"
+      ]
+    },
+    {
+      "scenario": "new_to_bank_surge",
+      "description": "30% of out-of-time customers arrive with no history",
+      "at_2pct_threshold": {
+        "alert_rate": 0.02072,
+        "tdr": 0.4164,
+        "genuine_flag_rate": 0.0,
+        "precision": 1.0
+      },
+      "at_10pct_threshold": {
+        "alert_rate": 0.11648,
+        "tdr": 0.8971,
+        "genuine_flag_rate": 0.0756,
+        "precision": 0.3832
+      },
+      "mean_probability": 0.0521,
+      "roc_auc": 0.9547,
+      "flags": []
+    },
+    {
+      "scenario": "channel_shift",
+      "description": "30% of branch and ATM transactions move to mobile banking",
+      "at_2pct_threshold": {
+        "alert_rate": 0.022,
+        "tdr": 0.4421,
+        "genuine_flag_rate": 0.0,
+        "precision": 1.0
+      },
+      "at_10pct_threshold": {
+        "alert_rate": 0.10976,
+        "tdr": 0.8987,
+        "genuine_flag_rate": 0.06845,
+        "precision": 0.4074
+      },
+      "mean_probability": 0.0515,
+      "roc_auc": 0.9558,
+      "flags": []
+    },
+    {
+      "scenario": "velocity_surge",
+      "description": "Every customer shows +3 transactions in the prior hour, +5 in 24h, +8 in 7d (bot or account-testing wave)",
+      "at_2pct_threshold": {
+        "alert_rate": 0.022,
+        "tdr": 0.4421,
+        "genuine_flag_rate": 0.0,
+        "precision": 1.0
+      },
+      "at_10pct_threshold": {
+        "alert_rate": 0.10936,
+        "tdr": 0.8987,
+        "genuine_flag_rate": 0.06802,
+        "precision": 0.4089
+      },
+      "mean_probability": 0.05149,
+      "roc_auc": 0.9557,
+      "flags": []
+    },
+    {
+      "scenario": "fraud_prior_doubled",
+      "description": "Fraud twice as common, same patterns (reweighted): tests whether calibrated probabilities track a prior shift",
+      "at_2pct_threshold": {
+        "alert_rate": 0.022,
+        "tdr": 0.4421,
+        "genuine_flag_rate": 0.0,
+        "precision": 1.0
+      },
+      "at_10pct_threshold": {
+        "alert_rate": 0.10912,
+        "tdr": 0.8987,
+        "genuine_flag_rate": 0.06777,
+        "precision": 0.4098
+      },
+      "mean_probability": 0.0514,
+      "roc_auc": 0.9557,
+      "observed_fraud_rate": 0.0948,
+      "mean_probability_weighted": 0.08559,
+      "flags": []
+    }
+  ],
+  "summary": {
+    "beats_logistic_regression_pr_auc": true,
+    "pr_auc_gain_vs_logistic": 0.0044,
+    "pr_auc_gain_vs_rules": 0.1982,
+    "monotonicity_holds": true,
+    "most_sensitive_feature": "amount_vs_hist_avg",
+    "stress_scenarios_flagged": [
+      "missing_profile_data"
+    ]
+  },
+  "proposed_findings": [
+    {
+      "title": "Gain over the logistic-regression benchmark is within noise",
+      "severity": "low",
+      "category": "methodology",
+      "description": "Out-of-time PR-AUC 0.8845 vs 0.8801 for a logistic regression on the same features (model 95% CI [0.8611, 0.9063]). The added complexity is not yet justified by accuracy; re-benchmark on bank data."
+    },
+    {
+      "title": "Decisions concentrated on one input: amount_vs_hist_avg",
+      "severity": "medium",
+      "category": "data",
+      "description": "A one-standard-deviation rise in amount_vs_hist_avg flips 78% of decisions at the 10% alert-budget threshold. Its source field must be defined and maintained point-in-time exactly as in training; a change in how the bank computes it moves decisions."
+    },
+    {
+      "title": "Velocity features carry no weight",
+      "severity": "medium",
+      "category": "methodology",
+      "description": "Transaction-velocity features change the probability by less than 0.001 at \u00b11 SD, and the velocity-surge stress scenario changes no decision. The model would not react to a card-testing or bot burst. Synthetic customers average ~6 transactions, so velocity was uninformative in training; re-test on bank data and keep velocity rules in the incumbent until then."
+    },
+    {
+      "title": "Stress scenario degrades performance: missing_profile_data",
+      "severity": "medium",
+      "category": "robustness",
+      "description": "30% of transactions arrive without profile average, balance and login count: detection 44.2% \u2192 30.4%; ROC-AUC 0.9557 \u2192 0.9278 at the 2% alert-budget threshold."
+    },
+    {
+      "title": "Probabilities do not follow a shift in the fraud rate",
+      "severity": "low",
+      "category": "monitoring",
+      "description": "With fraud twice as common, mean probability is 8.56% against an observed 9.48%. Quarterly outcomes analysis must trigger recalibration when calibration drifts."
+    }
+  ]
+}

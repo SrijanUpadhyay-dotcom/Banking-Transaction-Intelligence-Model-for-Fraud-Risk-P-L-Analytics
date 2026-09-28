@@ -27,6 +27,9 @@ from bti.operations.decisioning import Decision, decide
 
 log = get_logger("operations.scoring_service")
 
+# Recorded with each score for fairness monitoring on matured outcomes; excluded from the model by lineage.
+MONITORING_ATTRIBUTES = ("customer_segment", "customer_age_band", "country")
+
 
 @dataclass
 class ScoredDecision:
@@ -84,6 +87,7 @@ def _log(db: Session, s: V3Score, txn: dict, decision: Decision, jurisdiction: O
         decision=decision.action, jurisdiction=jurisdiction, amount_usd=amount_usd,
         reason_codes=[{k: r[k] for k in ("code", "rank", "share_of_risk")} for r in s.reason_codes],
         features=s.features, guardrails=decision.guardrails_applied, latency_ms=s.latency_ms,
+        monitoring_attributes={k: txn[k] for k in MONITORING_ATTRIBUTES if txn.get(k)} or None,
         scored_at=datetime.utcnow(),
     ))
 

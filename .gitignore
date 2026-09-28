@@ -30,3 +30,4 @@ Thumbs.db
 # Runtime logs — keep the directory, ignore log files
 logs/*.log
 logs/*.jsonl
+audit_archive/

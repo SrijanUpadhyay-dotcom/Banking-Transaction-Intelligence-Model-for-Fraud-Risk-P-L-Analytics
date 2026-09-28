@@ -53,10 +53,22 @@ def test_promote_cli_refuses_self_approval(tmp_path, monkeypatch, capsys):
                                                  "validation": {"status": "passed"}})
     argv = ["promote", "--model", "m-ok", "--role", "champion", "--approver", "dev.one",
             "--rationale", "Self approval attempt"]
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from bti.database.models import Base
+    from bti.governance.validation import record_signoff
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    monkeypatch.setattr(promote, "_session", Session)
     monkeypatch.setattr(sys, "argv", argv)
     assert promote.main() == 1
     assert "Four-eyes" in capsys.readouterr().err
     monkeypatch.setattr(sys, "argv", argv[:6] + ["risk.officer", "--rationale", "Independent validation done"])
+    assert promote.main() == 1                                                 # no validation sign-off yet
+    assert "independent_signoff" in capsys.readouterr().err
+    record_signoff(Session(), "m-ok", "model.validator", "approve", "Full independent validation of m-ok")
     assert promote.main() == 0
     assert registry.model_for_role("champion") == "m-ok"
     registry.clear_cache()

@@ -1,12 +1,13 @@
 """
 Render a registry card as a model documentation pack structured for
-SR 11-7 / PRA SS1/23 review. Sign-off fields are left for the bank's model
-owner and independent validator.
+SR 11-7 / PRA SS1/23 review. Sections 13–15 carry the validation evidence:
+benchmarking, sensitivity and stress tests; outcomes analysis on matured
+labels; and the independent validation record (sign-offs, findings, readiness).
 """
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 def _pct(x) -> str:
@@ -23,7 +24,7 @@ def _table(headers: List[str], rows: List[List]) -> str:
     return "\n".join(out)
 
 
-def render_model_card(card: Dict, index: Dict) -> str:
+def render_model_card(card: Dict, index: Dict, validation: Optional[Dict] = None) -> str:
     mid = card["model_id"]
     perf = card["performance"]
     oot = perf["metrics"]["out_of_time"]
@@ -171,6 +172,78 @@ def render_model_card(card: Dict, index: Dict) -> str:
     s.append(_table(["When", "Role", "Approver", "Rationale"],
                     [[h["at"], h["role"], h["approver"], h["rationale"]] for h in history]) if history
              else "_No role assignments yet._")
+    s.append("")
+    s.extend(_validation_sections(validation or {}))
     s.append(f"\n\n---\nProvenance: git `{card['provenance'].get('git_sha')}`, Python {card['provenance']['python']}, "
              f"scikit-learn {card['provenance']['sklearn']}, pandas {card['provenance']['pandas']}.")
     return "\n".join(s) + "\n"
+
+
+def _validation_sections(v: Dict) -> List[str]:
+    s: List[str] = []
+    s.append("## 13. Benchmarking, sensitivity and stress testing\n")
+    b = v.get("benchmark")
+    if not b:
+        s.append("_No benchmark report yet: POST /governance/models/{id}/benchmark._\n")
+    else:
+        bm = b["benchmarks"]
+        s.append(f"Out-of-time window; generated {b['generated_at'][:19]}.\n")
+        s.append(_table(["Model", "ROC-AUC", "PR-AUC", "Detail"], [
+            ["This model", bm["model"]["roc_auc"], bm["model"]["pr_auc"],
+             f"PR-AUC 95% CI {bm['model']['pr_auc_ci95']}"],
+            ["Logistic regression", bm["logistic_regression"]["roc_auc"], bm["logistic_regression"]["pr_auc"],
+             bm["logistic_regression"]["specification"]],
+            ["Rules stand-in", bm["rules_stand_in"]["roc_auc"], bm["rules_stand_in"]["pr_auc"],
+             "pre-authorisation rules"],
+        ]))
+        s.append(f"\n{bm['note']}\n")
+        s.append("**Temporal stability (out-of-time months):**\n")
+        s.append(_table(["Month", "n", "Fraud", "ROC-AUC", "PR-AUC", "ECE"],
+                        [[m["month"], m["n"], m["fraud"], m["roc_auc"], m["pr_auc"], m["ece"]]
+                         for m in b["temporal_stability"]]))
+        s.append("\n**Sensitivity (±1 SD, top features):**\n")
+        s.append(_table(["Feature", "Mean |Δp| (+1 SD)", "Decision flips at 10% budget (+1 SD)"],
+                        [[f["feature"], f["plus_1sd"]["mean_abs_change"], _pct(f["plus_1sd"]["flips_at_10pct_threshold"])]
+                         for f in b["sensitivity"]["features"][:8]]))
+        s.append(f"\n**Monotonicity:** {'holds for every constrained feature' if b['monotonicity']['all_monotone'] else 'VIOLATED'}"
+                 f" ({len(b['monotonicity']['features'])} features swept).\n")
+        s.append("**Stress scenarios (2% alert-budget threshold fixed on the calibration window):**\n")
+        s.append(_table(["Scenario", "Alert rate", "Detection", "ROC-AUC", "Flags"],
+                        [[r["scenario"], _pct(r["at_2pct_threshold"]["alert_rate"]),
+                          _pct(r["at_2pct_threshold"]["tdr"]), r.get("roc_auc", "—"), "; ".join(r.get("flags", [])) or "—"]
+                         for r in b["stress"]]))
+        s.append("")
+    s.append("## 14. Outcomes analysis on matured labels\n")
+    o = v.get("outcomes")
+    if not o:
+        s.append("_No outcomes analysis on matured production labels yet (quarterly; needs 90-day-old outcomes)._\n")
+    else:
+        live, dev = o.get("live", {}), o.get("development_out_of_time", {})
+        s.append(f"Latest run: {o.get('window', '')}; {o.get('matured', 0)} matured transactions, {o.get('fraud', 0)} frauds; "
+                 f"status {o.get('status')}.\n")
+        if o.get("status") == "ok":
+            s.append(_table(["Metric", "Live (matured)", "Development"],
+                            [[k, live.get(k), dev.get(k)] for k in ("roc_auc", "pr_auc", "ks", "ece")]))
+            s.append("\n" + ("\n".join(f"- **{f['severity']}**: {f['title']} — {f['detail']}" for f in o.get("flags", []))
+                             or "No degradation beyond tolerance.") + "\n")
+    s.append("## 15. Independent validation\n")
+    r = v.get("readiness")
+    if r:
+        s.append(f"**Ready for champion:** {'YES' if r['ready'] else 'NO'}\n")
+        s.append(_table(["Check", "Result", "Detail"],
+                        [[c["check"], "PASS" if c["passed"] else "FAIL", c["detail"]] for c in r["checks"]]))
+        if r.get("conditions"):
+            s.append(f"\n**Conditions of approval:** {r['conditions']}")
+        s.append("")
+    signoffs = v.get("signoffs") or []
+    s.append("**Sign-offs:**\n")
+    s.append(_table(["Signed", "Validator", "Role", "Decision", "Valid until", "Scope"],
+                    [[x["signed_at"][:10], x["validator"], x.get("validator_role") or "—", x["decision"],
+                      x["valid_until"][:10], x["scope"]] for x in signoffs]) if signoffs else "_None recorded._")
+    findings = v.get("findings") or []
+    s.append("\n**Findings:**\n")
+    s.append(_table(["#", "Severity", "Status", "Title", "Owner", "Due", "Source"],
+                    [[f["id"], f["severity"], f["status"] + (" (overdue)" if f.get("overdue") else ""), f["title"],
+                      f["owner"], f["due_date"][:10], f["source"]] for f in findings]) if findings else "_None recorded._")
+    s.append("")
+    return s

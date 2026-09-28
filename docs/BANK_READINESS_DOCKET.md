@@ -239,13 +239,97 @@ five-rule stand-in is not SAS.
 
 ## Phase 3 — SR 11-7 completion
 
-| Item | Status | Scope |
+| Item | Status | Notes |
 |---|---|---|
-| Documentation pack | Done | `GET /governance/models/{id}/documentation`. |
-| Benchmarking and sensitivity analysis | New | Challenger comparison, perturbation and stress tests in the pack. |
-| Outcomes analysis on matured labels | Extend | Add live calibration and the pooled fairness assessment on matured labels, quarterly; re-test watchlist groups (Private Banking) and, before a German deployment, German customers. |
-| Validation workflow | New | Findings tracker, sign-off records, annual review schedule, model inventory in the database. |
-| Immutable audit storage | Extend | Append-only (WORM) storage and retention policy. |
+| Documentation pack | **Done** | `GET /governance/models/{id}/documentation`. New sections: 13 benchmarking, sensitivity and stress; 14 outcomes on matured labels; 15 independent validation (readiness, sign-offs, findings). |
+| Benchmarking and sensitivity analysis | **Done** | `python -m bti.governance.benchmarking`, `POST/GET /governance/models/{id}/benchmark`. All on the out-of-time window. Stored under `models/registry/validation/<model>/`. See the results below. |
+| Outcomes analysis on matured labels | **Done** | Quarterly job (1 Jan / Apr / Jul / Oct), `GET /governance/outcomes`, `POST /governance/outcomes/run`. See *Outcomes analysis* below. |
+| Validation workflow | **Done** | Model inventory, findings tracker, independent sign-offs, review schedule and the champion gate. See *Validation workflow* below. |
+| Immutable audit storage | **Done** | Hash chain, database guards, sealed daily archive and retention. See *Audit storage* below. |
+
+**Benchmarking, sensitivity and stress testing.** The report covers:
+
+- a logistic regression on the same features
+- all alternatives registered on the same data
+- the rules stand-in
+- bootstrap intervals and month-by-month stability
+- ±1 SD sensitivity with decision flips
+- monotonicity sweeps
+- seven stress scenarios: inflation / FX, spending spike, missing profile data, new-to-bank surge, channel shift,
+  velocity surge, and a doubled fraud prior
+
+It proposes findings from its own evidence.
+
+**Outcomes analysis.** Live discrimination and calibration are compared with development: a decile table, ECE,
+and calibration-in-the-large.
+
+- **Fairness.** The pooled, corrected fairness test runs with the two halves of the quarter as the two windows,
+  and development-watchlist groups are re-tested.
+- **Data it relies on.** Segment, age band and country are recorded with each score for this purpose only; they
+  are never model inputs.
+- **Findings.** Degradation raises findings automatically, without duplicating an open one.
+
+**Validation workflow.**
+
+- **Tables.** `model_inventory` (synced from the registry, with lifecycle and next review), `validation_findings`
+  and `validation_signoffs`.
+- **Separation of roles.**
+  - The developer cannot sign off their own model.
+  - A finding's owner cannot close it, and closing needs evidence.
+  - Risk acceptance needs someone other than both the owner and the developer. For high severity it is limited
+    to 180 days.
+- **Approval.** An approval is blocked while a high-severity finding is open, or if automated gates failed.
+- **Periodic review.** A sign-off is valid for a year (Tier 1). A weekly governance check alerts on reviews due
+  within 30 days or overdue, and on findings past their due date.
+- **Champion gate.** `POST /governance/models/{id}/promote` and `python -m bti.modeling.promote` require all
+  of the following:
+  - passed automated gates
+  - an in-date approving sign-off from a validator other than the developer
+  - no open high-severity finding
+  - an approver other than the developer
+
+  `GET /governance/models/{id}/readiness` shows what is missing.
+- **Seeding.** `python -m bti.governance.validation seed` raises the developer's known limitations plus the
+  benchmark's proposed findings.
+
+**Audit storage.**
+
+- **Hash chain.** Every `audit_logs` row carries a sequence number and a SHA-256 over its content and the
+  previous row's hash, assigned under a lock on the chain head.
+- **Database guards.** Triggers on SQLite and PostgreSQL reject UPDATE and DELETE on sealed rows. Rows from
+  before the chain are sealed once at start-up.
+- **Verification.** `GET /governance/audit/verify` pinpoints the first altered, removed or reordered row, or a
+  truncated tail. In testing it caught an edit made after the trigger had been dropped by a DBA-level user.
+- **Daily archive.** Sealed daily segments are written as read-only JSONL plus a manifest (file SHA-256 and chain
+  position); the job runs at 03:00 UTC. `GET /governance/audit/archive/{day}/verify` re-checks a segment
+  against the database.
+- **Retention.** Seven years (`audit.retention_days`, confirm with Compliance). Expired segments are reported,
+  never deleted by code.
+- **Production.** Put `audit.archive_dir` on write-once storage (S3 Object Lock in compliance mode, Azure
+  immutable blobs, or a WORM appliance). A local read-only directory is tamper-evident, not tamper-proof.
+
+**Validation results for the current challenger** (`bti-v3-lgbm-rn-20260925011359`, synthetic data,
+out-of-time):
+
+| Benchmark | ROC-AUC | PR-AUC |
+|---|---|---|
+| This model | 0.9557 | 0.8845 (95% CI 0.861–0.906) |
+| Logistic regression, same features | 0.9532 | 0.8801 |
+| Rules stand-in | 0.9021 | 0.6863 |
+
+- **Monotonicity:** holds for every constrained feature.
+- **Stress:** only missing profile data degrades performance. Detection falls from 44% to 30% at the 2% budget.
+  Alerts drop rather than rise, so the failure is safe.
+- **Findings raised:** 11 in the tracker.
+  - **High (1):** synthetic-data-only evidence.
+  - **Medium (6):** new-customer balance-draining gap; German data; illustrative cost figures; decisions
+    concentrated on `amount_vs_hist_avg` (+1 SD flips 78% of decisions at the 10% budget); velocity features
+    carrying no weight (a card-testing burst changes no decision); missing profile data.
+  - **Low (4):** Private Banking residual; unvalidated feeds; gain over logistic regression within noise;
+    probabilities not following a prior shift.
+- **What this means for approval.** The high finding blocks champion approval, as it should. Closing it needs
+  bank data. The alternative is a time-limited risk acceptance by someone other than the developer, for example a
+  model risk committee accepting a limited pilot.
 
 ## Phase 4 — Feedback loop and continuous learning
 
