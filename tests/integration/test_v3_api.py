@@ -259,3 +259,28 @@ class TestFeeds:
         assert r.status_code == 200, r.text
         bad = client.post("/api/v1/v3/score", headers=KEY, json=_txn(901, latitude=123.0))
         assert bad.status_code == 422
+
+
+class TestCaseLoop:
+    def test_review_decision_opens_a_case_whose_disposition_becomes_a_label(self, client):
+        r = client.post("/api/v1/v3/score", json=_txn(300, transaction_amount=2400.0, device_id="DEV-NEW-7",
+                                                         ip_location="45.1.1.9", login_attempts=7,
+                                                         transaction_time="03:20:00"))
+        action = r.json()["decision"]["action"]
+        assert action in ("REVIEW", "DECLINE"), r.json()["decision"]
+        open_cases = client.get("/api/v1/cases", params={"status": "open"}).json()["cases"]
+        case = next(c for c in open_cases if c["transaction_id"] == "V3-0300")
+        assert case["source"] == f"live_{action.lower()}" and case["queue"] == "urgent" and case["reason_codes"]
+        nxt = client.post("/api/v1/cases/next", headers=KEY, json={"analyst": "analyst.two"}).json()["case"]
+        assert nxt["queue"] == "urgent" and nxt["status"] == "assigned"          # most urgent first
+        taken = client.post(f"/api/v1/cases/{case['id']}/assign", headers=KEY, json={"analyst": "analyst.one"}).json()
+        assert taken["assigned_to"] == "analyst.one" and taken["status"] == "assigned"
+        closed = client.post(f"/api/v1/cases/{case['id']}/disposition", headers=KEY, json={
+            "disposition": "confirmed_fraud", "analyst": "analyst.one", "fraud_type": "Account Takeover"})
+        assert closed.status_code == 200 and closed.json()["label_written"] is True
+        status = client.get("/api/v1/operations/labels/status").json()
+        assert status["labels_by_source"].get("INVESTIGATOR_CONFIRMED", 0) >= 1
+        queues = client.get("/api/v1/cases/queues").json()["queues"]
+        assert queues["urgent"]["dispositions"].get("confirmed_fraud", 0) >= 1
+        triggers = client.get("/api/v1/operations/retraining/triggers").json()
+        assert triggers["new_labels_since_last"] >= 1

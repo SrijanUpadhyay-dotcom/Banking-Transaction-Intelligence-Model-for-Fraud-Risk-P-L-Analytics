@@ -88,6 +88,7 @@ def _log(db: Session, s: V3Score, txn: dict, decision: Decision, jurisdiction: O
         reason_codes=[{k: r[k] for k in ("code", "rank", "share_of_risk")} for r in s.reason_codes],
         features=s.features, guardrails=decision.guardrails_applied, latency_ms=s.latency_ms,
         monitoring_attributes={k: txn[k] for k in MONITORING_ATTRIBUTES if txn.get(k)} or None,
+        model_probability=s.model_probability, calibration_overlay=s.calibration_overlay,
         scored_at=datetime.utcnow(),
     ))
 
@@ -120,6 +121,14 @@ def score_and_decide(txn: dict, db: Optional[Session] = None, explain: bool = Tr
     if db is not None and log_scores:
         try:
             _log(db, live, txn, decision, iso, amount_usd, shadow=False)
+            if decision.action in ("REVIEW", "DECLINE"):
+                # Declines need a disposition too: no money moves, so no chargeback will ever label them.
+                from bti.operations.cases import open_case
+                open_case(db, live.transaction_id, f"live_{decision.action.lower()}", customer_id=txn.get("customer_id"),
+                          model_id=live.model_id, fraud_probability=live.fraud_probability, amount_usd=amount_usd,
+                          decision=decision.action,
+                          reason_codes=[{k: r[k] for k in ("code", "analyst_text")} for r in live.reason_codes],
+                          commit=False)
             db.commit()
         except Exception as exc:
             db.rollback()

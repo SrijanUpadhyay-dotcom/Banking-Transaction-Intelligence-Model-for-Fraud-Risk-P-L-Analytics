@@ -66,6 +66,27 @@ def _summary(card: Dict, incumbent: bool = False) -> Dict:
     }
 
 
+def _incumbent_on(data, incumbent_id: str) -> Dict:
+    """
+    The incumbent's summary on this tournament's split. When the data changed since the incumbent was trained,
+    it is re-scored on the new calibration and out-of-time windows so every entrant is judged on the same rows.
+    """
+    card = registry.load_card(incumbent_id)
+    summary = _summary(card, incumbent=True)
+    if card.get("data", {}).get("sha256") == data.sha256:
+        return summary
+    from bti.modeling.metrics import classification_metrics
+    from bti.modeling.reassess import model_probabilities
+    version = registry.load_artifact(incumbent_id).get("feature_version", 1)
+    d = data if version == data.feature_version else prepare(data.path, feature_version=version)
+    p = model_probabilities(incumbent_id, d)
+    cal, oot = classification_metrics(d.y[d.ca], p[d.ca]), classification_metrics(d.y[d.te], p[d.te])
+    summary.update({"calibration_pr_auc": cal.get("pr_auc"), "calibration_roc_auc": cal.get("roc_auc"),
+                    "oot_pr_auc": oot.get("pr_auc"), "oot_roc_auc": oot.get("roc_auc"), "oot_ks": oot.get("ks"),
+                    "oot_ece": oot.get("ece"), "re_evaluated_on_new_data": True})
+    return summary
+
+
 def _fit_capacity(model_id: str, developer: str, data_path) -> None:
     """A new challenger decides with its own capacity prices from its first score."""
     from bti.operations.capacity import fit_live_policy
@@ -104,7 +125,7 @@ def run_tournament(developer: str, algorithm_names: List[str], feature_sets: Lis
     skipped: List[Dict] = []
     cards: Dict[str, Dict] = {}
     if incumbent_id:
-        entrants.append(_summary(registry.load_card(incumbent_id), incumbent=True))
+        entrants.append(_incumbent_on(data, incumbent_id))
     remediation_groups = list(remediation_groups or [])
     if remediation_groups and not remediation:
         raise ValueError("remediation_groups needs a remediation finding")

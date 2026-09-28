@@ -25,6 +25,9 @@ RECONCILE_JOB_ID = "daily_reconciliation"
 ARCHIVE_JOB_ID = "daily_audit_archive"
 OUTCOMES_JOB_ID = "quarterly_outcomes_analysis"
 GOVERNANCE_JOB_ID = "weekly_governance_check"
+CASE_SLA_JOB_ID = "case_sla_check"
+RETRAIN_JOB_ID = "daily_retraining_check"
+RECALIBRATION_JOB_ID = "daily_recalibration"
 _scheduler: Optional[BackgroundScheduler] = None
 
 
@@ -69,6 +72,28 @@ def _governance_job() -> None:
     _run("governance check", run_governance_check)
 
 
+def _case_sla_job() -> None:
+    from bti.operations.cases import check_sla
+    _run("case SLA check", check_sla)
+
+
+def _retrain_job() -> None:
+    from bti.modeling.retrain import run_retraining
+    _run("retraining check", run_retraining)
+
+
+def _recalibration_job() -> None:
+    from bti.modeling import registry
+    from bti.modeling.recalibration import recalibrate
+
+    def both(db):
+        for role in ("champion", "challenger"):
+            model_id = registry.model_for_role(role)
+            if model_id:
+                recalibrate(db, model_id)
+    _run("recalibration", both)
+
+
 def start() -> Optional[BackgroundScheduler]:
     global _scheduler
     settings = get_settings()
@@ -80,7 +105,10 @@ def start() -> Optional[BackgroundScheduler]:
                              (_reconcile_job, settings.reconciliation_cron, RECONCILE_JOB_ID),
                              (_archive_job, settings.audit_archive_cron, ARCHIVE_JOB_ID),
                              (_outcomes_job, settings.outcomes_cron, OUTCOMES_JOB_ID),
-                             (_governance_job, settings.governance_check_cron, GOVERNANCE_JOB_ID)):
+                             (_governance_job, settings.governance_check_cron, GOVERNANCE_JOB_ID),
+                             (_case_sla_job, settings.case_sla_check_cron, CASE_SLA_JOB_ID),
+                             (_retrain_job, settings.retrain_check_cron, RETRAIN_JOB_ID),
+                             (_recalibration_job, settings.recalibration_cron, RECALIBRATION_JOB_ID)):
         _scheduler.add_job(fn, CronTrigger.from_crontab(cron, timezone="UTC"), id=job_id, max_instances=1,
                            coalesce=True, misfire_grace_time=3600)
     _scheduler.start()
@@ -113,5 +141,8 @@ def status() -> dict:
             ARCHIVE_JOB_ID: {"cron_utc": settings.audit_archive_cron, "next_run": next_run(ARCHIVE_JOB_ID)},
             OUTCOMES_JOB_ID: {"cron_utc": settings.outcomes_cron, "next_run": next_run(OUTCOMES_JOB_ID)},
             GOVERNANCE_JOB_ID: {"cron_utc": settings.governance_check_cron, "next_run": next_run(GOVERNANCE_JOB_ID)},
+            CASE_SLA_JOB_ID: {"cron_utc": settings.case_sla_check_cron, "next_run": next_run(CASE_SLA_JOB_ID)},
+            RETRAIN_JOB_ID: {"cron_utc": settings.retrain_check_cron, "next_run": next_run(RETRAIN_JOB_ID)},
+            RECALIBRATION_JOB_ID: {"cron_utc": settings.recalibration_cron, "next_run": next_run(RECALIBRATION_JOB_ID)},
         },
     }

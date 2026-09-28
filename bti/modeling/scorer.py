@@ -23,6 +23,7 @@ from scipy.special import expit
 from bti.governance.reason_codes import principal_reasons
 from bti.logging_config import get_logger
 from bti.modeling import algorithms, registry
+from bti.modeling.recalibration import apply_overlay, overlay_version
 from bti.modeling.features import FEATURE_NAMES, FEEDS, build_features, event_timestamps, to_model_matrix
 
 log = get_logger("modeling.scorer")
@@ -53,6 +54,8 @@ class V3Score:
     notes: List[str] = field(default_factory=list)
     contributions: Dict[str, float] = field(default_factory=dict)   # SHAP, log-odds, every feature
     base_probability: Optional[float] = None                         # calibrated probability at the SHAP baseline
+    model_probability: Optional[float] = None                        # before any recalibration overlay
+    calibration_overlay: Optional[int] = None                        # active overlay version, if any
 
 
 def risk_band(p: float) -> str:
@@ -154,7 +157,8 @@ class V3Scorer:
         X = to_model_matrix(feats, art["encodings"], names)
 
         raw = float(art["estimator"].predict_proba(X)[0, 1])
-        p = float(art["calibrator"].predict(np.array([raw]))[0])
+        p_model = float(art["calibrator"].predict(np.array([raw]))[0])
+        p = float(apply_overlay(model_id, p_model))
 
         values = {c: (None if pd.isna(v) else (round(float(v), 4) if isinstance(v, (int, float, np.number))
                                                 else str(v)))
@@ -168,7 +172,8 @@ class V3Scorer:
             contributions = {f: round(float(v), 6) for f, v in zip(names, sv[0])}
             reasons = principal_reasons(contributions, values)
             base_raw = float(expit(algorithms.shap_base(explainer)))
-            base_probability = round(float(art["calibrator"].predict(np.array([base_raw]))[0]), 6)
+            base_probability = round(float(apply_overlay(
+                model_id, float(art["calibrator"].predict(np.array([base_raw]))[0]))), 6)
 
         notes = []
         if provisional:
@@ -200,6 +205,8 @@ class V3Scorer:
             notes=notes,
             contributions=contributions,
             base_probability=base_probability,
+            model_probability=round(p_model, 6),
+            calibration_overlay=overlay_version(model_id),
         )
 
     def score_frame(self, df: pd.DataFrame, role: str = "champion",
@@ -210,7 +217,7 @@ class V3Scorer:
         feats = build_features(df, lookback_days=art["lookback_days"], feature_version=art.get("feature_version", 1),
                                security_events=security_events)
         X = to_model_matrix(feats, art["encodings"], art.get("feature_names", FEATURE_NAMES))
-        p = art["calibrator"].predict(art["estimator"].predict_proba(X)[:, 1])
+        p = apply_overlay(model_id, art["calibrator"].predict(art["estimator"].predict_proba(X)[:, 1]))
         out = feats.copy()
         out["fraud_probability"] = p
         out["score"] = np.round(p * 1000).astype(int)

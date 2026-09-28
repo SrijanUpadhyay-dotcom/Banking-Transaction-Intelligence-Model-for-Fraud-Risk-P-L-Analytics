@@ -120,3 +120,27 @@ monitoring:
   scoring_latency_sla_ms: 100
   outcomes_cron: "0 8 1 1,4,7,10 *"      # quarterly outcomes analysis on matured labels
   governance_check_cron: "0 8 * * mon"   # reviews due/overdue and findings past due date
+
+# v3 model training (pipeline, retraining). Relative-amount sets: the absolute-amount sets failed fairness.
+modeling:
+  developer: ""                  # set to the named developer of record
+  algorithms: ["hgb", "lightgbm", "xgboost"]
+  feature_sets: ["core-relative-nb", "core-relative-own"]
+
+# Phase 4 — continuous learning. Winners become shadow challengers only; promotion stays human.
+retraining:
+  interval_days: 30              # scheduled retraining
+  min_interval_days: 7           # never more often than this, whatever the trigger
+  min_new_labels: 500            # confirmed labels since the last retraining that trigger one
+  label_maturity_days: 90        # unlabelled transactions younger than this are left out of training
+  check_cron: "0 4 * * *"
+  recalibration_cron: "0 5 * * *"
+
+# Investigation queues (first matching queue wins), SLAs in minutes
+cases:
+  queues:
+    urgent: {sla_minutes: 60, min_probability: 0.8, min_expected_loss_usd: 1000}
+    high_value: {sla_minutes: 120, min_amount_usd: 10000}
+    standard: {sla_minutes: 480}
+  checker_threshold_usd: 10000   # clearing a case this large as genuine needs a second reviewer
+  sla_check_cron: "*/15 * * * *"

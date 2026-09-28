@@ -41,7 +41,7 @@ from bti.governance import scheduler as monitoring_scheduler
 from api import metrics
 from api.routers import (
     transactions, alerts, analytics, pipeline, scoring, graph, copilot, sas, v3, governance, operations,
-    parallel,
+    parallel, cases,
 )
 
 settings = get_settings()
@@ -152,6 +152,7 @@ app.include_router(v3.router,     prefix=API_PREFIX)
 app.include_router(governance.router, prefix=API_PREFIX)
 app.include_router(operations.router, prefix=API_PREFIX)
 app.include_router(parallel.router, prefix=API_PREFIX)
+app.include_router(cases.router, prefix=API_PREFIX)
 
 
 if __name__ == "__main__":

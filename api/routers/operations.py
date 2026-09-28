@@ -181,3 +181,51 @@ def capacity_fit(body: CapacityFitRequest):
         return fit_live_policy(body.fitted_by, body.model_id, body.max_review_rate, body.max_step_up_rate)
     except (ValueError, LookupError) as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+
+
+
+# ── Continuous learning ──────────────────────────────────────────────────────
+
+class RecalibrationRollback(BaseModel):
+    model_id: str
+    actor: str
+    reason: str = Field(..., min_length=10)
+
+
+@router.get("/retraining/triggers")
+def retraining_triggers(db: Session = Depends(get_db)):
+    """Why (or why not) retraining would run now: schedule, drift, performance findings, new labels."""
+    from bti.modeling.retrain import retraining_triggers as triggers
+    return triggers(db)
+
+
+@router.post("/retraining/run", dependencies=[Depends(require_api_key)])
+def retraining_run(force: bool = False, notify: bool = True, db: Session = Depends(get_db)):
+    """Retrain on the latest extract with confirmed labels applied. A winner becomes a shadow challenger only."""
+    from bti.modeling.retrain import run_retraining
+    return run_retraining(db, force=force, notify=notify)
+
+
+@router.get("/recalibration")
+def recalibration_state(model_id: Optional[str] = None):
+    """The active recalibration overlay (and history) for a model."""
+    from bti.modeling.recalibration import load_overlay
+    model_id = model_id or registry.model_for_role("champion") or registry.model_for_role("challenger")
+    return load_overlay(model_id) or {"model_id": model_id, "current": None, "history": []}
+
+
+@router.post("/recalibration/run", dependencies=[Depends(require_api_key)])
+def recalibration_run(model_id: Optional[str] = None, apply: bool = True, window_days: int = Query(90, ge=14, le=365),
+                      db: Session = Depends(get_db)):
+    """Fit a bounded, rank-preserving overlay on matured labels; applied only if it passes every limit."""
+    from bti.modeling.recalibration import recalibrate
+    return recalibrate(db, model_id, window_days=window_days, apply=apply)
+
+
+@router.post("/recalibration/rollback", dependencies=[Depends(require_api_key)])
+def recalibration_rollback(body: RecalibrationRollback, db: Session = Depends(get_db)):
+    from bti.modeling.recalibration import rollback
+    try:
+        return rollback(db, body.model_id, body.actor, body.reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))

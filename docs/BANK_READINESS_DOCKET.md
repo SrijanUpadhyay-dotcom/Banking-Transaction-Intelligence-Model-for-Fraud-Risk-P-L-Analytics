@@ -333,12 +333,71 @@ out-of-time):
 
 ## Phase 4 — Feedback loop and continuous learning
 
-| Item | Status | Scope |
+| Item | Status | Notes |
 |---|---|---|
-| Confirmed-label feedback loop | Done | `POST /operations/labels`, 90-day maturity rule. |
-| Case management feeding labels | New | Queues with SLAs; dispositions become labels automatically. |
-| Continuous retraining | New | Scheduled and drift-triggered; new models auto-register as shadow challengers, promotion stays human. Per-event weight updates are not recommended — each is a model change a validator must approve. |
-| Bounded daily recalibration | New | Refit calibration on matured labels within limits, logged as a minor change. |
+| Confirmed-label feedback loop | **Done** | `POST /operations/labels`, 90-day maturity rule. |
+| Case management feeding labels | **Done** | `/api/v1/cases`. See *Case management* below. |
+| Continuous retraining | **Done** | `python -m bti.modeling.retrain`, `GET /operations/retraining/triggers`, `POST /operations/retraining/run`. See *Continuous retraining* below. |
+| Bounded daily recalibration | **Done** | `POST /operations/recalibration/run`, `/rollback`; daily job. See *Recalibration* below. |
+
+**Case management.**
+
+- **Which transactions open a case.** Every live REVIEW or DECLINE decision opens one, once per transaction, as
+  do manual referrals such as a customer asking for human review of a decline. Declines must open cases: no money
+  moves, so no chargeback will ever label them, and without a disposition the model learns nothing from its own
+  declines.
+- **Queues (`cases.queues`).**
+  - `urgent`: probability ≥ 0.8 or expected loss ≥ $1,000; 60-minute SLA.
+  - `high_value`: amount ≥ $10,000; 120-minute SLA.
+  - `standard`: everything else; 8-hour SLA.
+
+  Analysts pull the next case by queue, then expected loss, then age.
+- **Dispositions become labels automatically.** `confirmed_fraud` records INVESTIGATOR_CONFIRMED and
+  `confirmed_genuine` records INVESTIGATOR_CLEARED. Inconclusive and unreachable write no label and are left to
+  the maturity rule. A later chargeback still overrides.
+- **Maker-checker.** Clearing a case of $10,000 or more as genuine needs a second reviewer.
+- **SLA and metrics.** An SLA check runs every 15 minutes and alerts once per breached case.
+  `GET /cases/queues` reports open, breached, time to close, SLA attainment and fraud-confirmation rate per queue.
+
+**Continuous retraining.**
+
+- **When it runs.** A daily check retrains at most every 7 days, and only on one of these triggers:
+  - the schedule (30 days)
+  - an escalated drift check
+  - a performance finding from outcomes analysis
+  - 500 or more new confirmed labels
+- **The extract.** It is the bank's latest extract with confirmed labels applied (the latest wins).
+  Transactions younger than the 90-day maturity window are dropped unless explicitly labelled, so unreported
+  fraud is not learned as genuine.
+- **Selection.** The tournament now re-scores the incumbent on the new split, so every entrant is judged on the
+  same rows. Before this fix, a data change compared candidates with the incumbent's old figures.
+- **What a winner becomes.** A shadow challenger only. Champion promotion stays behind independent sign-off and
+  four-eyes approval. Per-event online weight updates are deliberately not done.
+- **Settings.** `modeling.feature_sets` now defaults to the relative-amount sets, because the absolute-amount
+  sets failed fairness.
+
+**Recalibration.**
+
+- **The overlay.** A rank-preserving overlay p′ = sigmoid(α·logit(p) + β) on the model's own probability is fitted
+  on matured labels. Ranking, reason codes and SHAP are unchanged.
+- **Acceptance.** A candidate is accepted only if all of these hold:
+  - it has at least 100 frauds and 1,000 genuine transactions
+  - it lowers holdout ECE against both the current overlay and none
+  - α is in [0.67, 1.5] and |β| ≤ 1: a bigger shift is a retraining problem
+  - it changes at most 5% of decisions at the decline line and the reference threshold
+- **Record keeping.** Overlays are versioned per model and applied by the scorer. Each score logs the model's
+  pre-overlay probability and the overlay version, so a refit never compounds. Each change is logged as a minor
+  change (audit chain plus registry note), and rollback is one call.
+
+**Live run** (2026-09-28, copies of the database and registry). Nine scheduled jobs were registered.
+
+- **Case loop.** A risky transfer (p 0.999) went to REVIEW and opened an urgent case with a 60-minute SLA.
+  An analyst pulled it and confirmed fraud, which wrote an INVESTIGATOR_CONFIRMED label. The queue then showed
+  100% SLA attainment.
+- **Recalibration.** Correctly refused: no matured labels yet.
+- **Forced retraining.** The extract dropped 6,224 immature transactions. The incumbent, re-scored on the same
+  split, held its place: the best candidate was 0.8542 against 0.8529, short of the 0.005 margin. The
+  7-day guard then blocked a re-run, and the audit chain was intact.
 
 ## Phase 5 — Decision economics and rules
 

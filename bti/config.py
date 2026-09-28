@@ -108,6 +108,23 @@ class Settings(BaseSettings):
     max_review_rate: float = _yaml.get("decisioning", {}).get("max_review_rate", 0.02)
     max_step_up_rate: float = _yaml.get("decisioning", {}).get("max_step_up_rate", 0.05)
 
+    # Continuous retraining and recalibration (Phase 4)
+    retrain_interval_days: int = _yaml.get("retraining", {}).get("interval_days", 30)
+    retrain_min_interval_days: int = _yaml.get("retraining", {}).get("min_interval_days", 7)
+    retrain_min_new_labels: int = _yaml.get("retraining", {}).get("min_new_labels", 500)
+    retrain_check_cron: str = _yaml.get("retraining", {}).get("check_cron", "0 4 * * *")
+    retrain_label_maturity_days: int = _yaml.get("retraining", {}).get("label_maturity_days", 90)
+    recalibration_cron: str = _yaml.get("retraining", {}).get("recalibration_cron", "0 5 * * *")
+
+    # Case management (Phase 4): queues, SLAs in minutes, maker-checker threshold for clearing high-value cases
+    case_queues: dict = _yaml.get("cases", {}).get("queues", {
+        "urgent": {"sla_minutes": 60, "min_probability": 0.8, "min_expected_loss_usd": 1000},
+        "high_value": {"sla_minutes": 120, "min_amount_usd": 10000},
+        "standard": {"sla_minutes": 480},
+    })
+    case_checker_threshold_usd: float = _yaml.get("cases", {}).get("checker_threshold_usd", 10000.0)
+    case_sla_check_cron: str = _yaml.get("cases", {}).get("sla_check_cron", "*/15 * * * *")
+
     # Parallel run alongside the incumbent platform (Phase 2)
     incumbent_system: str = _yaml.get("parallel_run", {}).get("incumbent_system", "SAS")
     incumbent_decision_map: dict = _yaml.get("parallel_run", {}).get("decision_map", {})

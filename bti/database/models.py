@@ -222,6 +222,8 @@ class ScoreLog(Base):
     features          = Column(JSON)
     guardrails        = Column(JSON)
     latency_ms        = Column(Float)
+    model_probability = Column(Float)        # before any recalibration overlay (bti.modeling.recalibration)
+    calibration_overlay = Column(Integer)     # overlay version applied, if any
     # Segment, age band and country for fairness monitoring on matured outcomes — never model inputs.
     monitoring_attributes = Column(JSON)
     scored_at         = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
@@ -402,6 +404,41 @@ class ValidationSignoff(Base):
     evidence       = Column(JSON)
     signed_at      = Column(DateTime, default=datetime.utcnow, nullable=False)
     valid_until    = Column(DateTime, nullable=False)
+
+
+class FraudCase(Base):
+    """
+    Investigation case for a live decision that needs a human (REVIEW), or a
+    manual referral. Queued with an SLA; the analyst's disposition becomes a
+    confirmed label automatically.
+    """
+    __tablename__ = "fraud_cases"
+
+    id                = Column(Integer, primary_key=True, autoincrement=True)
+    transaction_id    = Column(String(50), nullable=False, index=True)
+    customer_id       = Column(String(50), index=True)
+    queue             = Column(String(30), nullable=False, index=True)
+    priority_score    = Column(Float, nullable=False, default=0.0)     # expected loss, USD
+    source            = Column(String(40), nullable=False)
+    model_id          = Column(String(64))
+    fraud_probability = Column(Float)
+    amount_usd        = Column(Float)
+    decision          = Column(String(20))
+    reason_codes      = Column(JSON)
+    status            = Column(String(20), nullable=False, default="open", index=True)
+    assigned_to       = Column(String(100), index=True)
+    created_at        = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    sla_due_at        = Column(DateTime, nullable=False, index=True)
+    assigned_at       = Column(DateTime)
+    closed_at         = Column(DateTime)
+    disposition       = Column(String(30))
+    disposition_by    = Column(String(100))
+    checked_by        = Column(String(100))
+    disposition_notes = Column(Text)
+    fraud_type        = Column(String(100))
+    loss_amount       = Column(Float)
+    label_written     = Column(Boolean, default=False)
+    breach_alerted_at = Column(DateTime)
 
 
 class ModelRegistry(Base):
