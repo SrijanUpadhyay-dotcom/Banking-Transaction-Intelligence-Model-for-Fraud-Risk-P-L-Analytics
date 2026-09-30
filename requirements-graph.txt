@@ -1,0 +1,3 @@
+# Optional: temporal GraphSAGE features (graph_sage_score). Everything else in BTI runs without it.
+# The CPU build is enough; install from PyPI or the bank's mirror.
+torch>=2.3

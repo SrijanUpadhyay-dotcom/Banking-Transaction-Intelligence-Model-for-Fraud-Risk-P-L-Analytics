@@ -155,6 +155,16 @@ class V3Scorer:
         feats = build_features(frame, lookback_days=art["lookback_days"],
                                feature_version=art.get("feature_version", 1),
                                security_events=security_events).iloc[[-1]]
+        graph_note = None
+        if (art.get("graph") or {}).get("uses_graph"):
+            from bti.graph.snapshot import live_features
+            live = live_features(model_id, txn)
+            if live is None:
+                graph_note = "No graph snapshot yet: network features are unknown (run the nightly graph snapshot)."
+            else:
+                for col, value in live.items():
+                    if col in feats.columns:
+                        feats[col] = np.nan if value is None else float(value)
         X = to_model_matrix(feats, art["encodings"], names)
 
         raw = float(art["estimator"].predict_proba(X)[0, 1])
@@ -181,6 +191,8 @@ class V3Scorer:
             notes.append("No champion approved yet — scored by the challenger model; treat as provisional.")
         if db_session is None and history is not None and history.empty:
             notes.append("No transaction history supplied — velocity and novelty features are uninformed.")
+        if graph_note:
+            notes.append(graph_note)
         never_missing = [c for c, share in art.get("train_missing_share", {}).items()
                          if share < 0.001 and c in feats.columns and pd.isna(feats[c].iloc[0])]
         if never_missing:

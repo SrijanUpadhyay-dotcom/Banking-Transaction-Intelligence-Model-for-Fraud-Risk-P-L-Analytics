@@ -515,15 +515,83 @@ one checks the actual decisions.
 
 ## Phase 6 — Graph intelligence (GNN)
 
-Needs PyTorch, which cannot be installed in the current environment — requires a network-policy
-change or a separate training environment.
+PyTorch 2.14 (CPU) installs from PyPI. Only `download.pytorch.org` is blocked by the network policy. It is optional
+(`requirements-graph.txt`), and only `graph_sage_score` needs it.
 
-| Item | Status | Scope |
+| Item | Status | Notes |
 |---|---|---|
-| Temporal entity graph | New | Point-in-time, so embeddings never see future links. |
-| Graph embeddings without deep learning | New | Spectral / random-walk embeddings first. |
-| GraphSAGE / temporal GNN | New | Inductive; mules and rings. |
-| Synthetic ring generator | New | Current data has almost no shared devices. |
+| Temporal entity graph | **Done** | `bti.graph.temporal`; see *Entity graph* below. |
+| Graph embeddings without deep learning | **Done** | `bti.graph.learned`; see *Learned graph features* below. |
+| GraphSAGE / temporal GNN | **Done — optional** | `bti.graph.learned`; see *Learned graph features* below. |
+| Synthetic ring generator | **Done** | `bti.graph.synthetic_rings`; see *Synthetic rings* below. |
+| Live serving | **Done** | `bti.graph.snapshot`; see *Live serving* below. |
+
+**Entity graph.**
+
+- **Links.** Customers are linked through shared devices and IPs.
+- **Point-in-time rules.** Transactions are processed day by day, with incremental union-find. Each
+  transaction's features use the state at the start of its day and only fraud confirmed before that day, so
+  its own outcome is never visible.
+- **Features.** Seven features:
+  - network size
+  - confirmed fraud in the network
+  - customers sharing this device or IP
+  - confirmed fraud among them
+  - payee senders
+  - confirmed frauds paid to the payee
+  - the payee's fraud share: a mule receives from a few senders, many later confirmed; a biller receives from
+    thousands
+- **Why payees don't merge components.** Payees stay out of the components; otherwise a popular biller joins
+  its customers into one meaningless cluster.
+- **Lineage.** A new source, "fraud confirmations made before the day", is allowed. The raw confirmation time is
+  blocked like any label field.
+
+**Learned graph features.**
+
+- **Snapshots.** Weekly, point-in-time.
+- **Spectral embedding.** Randomised SVD of the linked subgraph. The feature is a rotation-invariant similarity to
+  confirmed fraudsters.
+- **Temporal GraphSAGE.** Pure PyTorch, a bipartite mean aggregator, predicting "fraud in the next 30 days". It is
+  trained on training-window snapshots with two-fold temporal cross-fitting inside that window, and applied
+  inductively later. Its weights travel in the model artifact.
+
+**Synthetic rings.**
+
+- **What is injected.** Mule accounts sharing devices and IPs, victims paying mule payees with their own devices
+  and typical amounts, cash-out through shared devices, and realistic confirmation delays.
+- **Payees.** Every payment in the data gets a payee, including shared billers, so payee presence cannot give the
+  rings away.
+- **Purpose.** Capability testing only. The base data has almost no network: 50 devices shared by 2 customers,
+  and no shared IPs.
+
+**Live serving.** A nightly snapshot rebuilds the graph from transaction history with the same code as
+training. Label confirmation times come from the labels table. The scorer looks the transaction up at scoring
+time, a one-day lag in both training and serving. `GET /operations/graph/status`,
+`POST /operations/graph/snapshot`; 12 scheduled jobs. A `graph-relative` model scored live from the snapshot at
+82 ms p50 (95 ms p95) warm.
+
+**Capability test** (`python -m bti.graph.capability`, LightGBM, out-of-time, 15 injected rings = 19% of fraud):
+
+| Data | Feature set | OOT PR-AUC | Ring frauds caught @2% / @5% budget |
+|---|---|---|---|
+| with synthetic rings | `core-relative-nb` | 0.8774 | 37.9% / 81.8% |
+| with synthetic rings | `graph-relative` | 0.8910 | 42.4% / 90.9% |
+| with synthetic rings | `graph-full-relative` | 0.8902 | 42.4% / 92.4% |
+| original | `core-relative-nb` | 0.8845 | — |
+| original | `graph-relative` | 0.8847 | — |
+| original | `graph-full-relative` | 0.8828 | — |
+
+**Reading.**
+
+- **The simple point-in-time graph features carry the value.** Ring detection at the 5% budget rises from 81.8% to
+  90.9%, and there is no change on data without rings.
+- **Spectral and GraphSAGE add almost nothing on top here.** One more ring fraud, and PR-AUC slightly lower, within
+  noise. The rings are only uncovered after they finish, so there is little confirmed fraud for learned methods to
+  propagate from.
+- **Defaults.** `graph-relative` is added to the tournament sets. It wins only if it beats the incumbent by the
+  standing margin. GraphSAGE stays available for a bank's real graph, which is far denser.
+- **Caveats.** These are capability results on synthetic rings: 66 ring frauds out-of-time, so treat the size as
+  rough. They are not lift on a real book.
 
 ## Phase 7 — Streaming and scale
 

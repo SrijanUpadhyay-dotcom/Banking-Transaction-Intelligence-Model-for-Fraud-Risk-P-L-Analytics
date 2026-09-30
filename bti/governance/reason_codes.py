@@ -102,6 +102,14 @@ REASON_CODES: Dict[str, Dict[str, str]] = {
         "analyst": "Payee recently paid by many other customers (possible mule account)",
         "customer": "The account you are paying",
     },
+    "NETWORK_LINK": {
+        "analyst": "Linked through shared devices or IPs to other customers, some with confirmed fraud (possible ring)",
+        "customer": "The device or network used for this transaction",
+    },
+    "MULE_PAYEE": {
+        "analyst": "Payee has received payments later confirmed as fraud from several customers (possible mule account)",
+        "customer": "The account you are paying",
+    },
     "SECURITY_EVENT": {
         "analyst": "Recent password reset, SIM swap, contact-detail change or new device enrolment",
         "customer": "Recent changes to your account security settings",

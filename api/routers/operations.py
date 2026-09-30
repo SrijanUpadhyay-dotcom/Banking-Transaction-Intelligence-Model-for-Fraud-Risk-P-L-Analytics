@@ -260,3 +260,20 @@ def cost_backtest(model_id: Optional[str] = None):
     decision fairness, and a recommendation."""
     from bti.operations.cost_model import backtest
     return backtest(model_id)
+
+
+
+# ── Graph intelligence ───────────────────────────────────────────────────────
+
+@router.get("/graph/status")
+def graph_status():
+    """The live graph snapshot: when it was built, how much history, which models' learned scores it carries."""
+    from bti.graph.snapshot import status
+    return status()
+
+
+@router.post("/graph/snapshot", dependencies=[Depends(require_api_key)])
+def graph_snapshot(db: Session = Depends(get_db)):
+    """Rebuild the point-in-time entity graph from transaction history and confirmed labels (runs nightly)."""
+    from bti.graph.snapshot import build_snapshot
+    return build_snapshot(db)

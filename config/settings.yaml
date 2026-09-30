@@ -134,7 +134,7 @@ monitoring:
 modeling:
   developer: ""                  # set to the named developer of record
   algorithms: ["hgb", "lightgbm", "xgboost"]
-  feature_sets: ["core-relative-nb", "core-relative-own"]
+  feature_sets: ["core-relative-nb", "core-relative-own", "graph-relative"]
 
 # Phase 4 — continuous learning. Winners become shadow challengers only; promotion stays human.
 retraining:
@@ -164,3 +164,9 @@ stepup:
   auto_issue: false              # issue a challenge automatically on STEP_UP decisions
   methods: {"Card Not Present": "3ds", "Mobile Banking": "push", "Internet Banking": "sms_otp", "API/Open Banking": "sms_otp"}
   expiry_cron: "*/5 * * * *"
+
+# Phase 6 — graph intelligence. Graph features use the state at the start of the transaction's day, built nightly.
+graph:
+  label_delay_days: 30           # assumed fraud-confirmation delay where the data has no confirmation time
+  snapshot_path: "data/graph/snapshot.joblib"
+  snapshot_cron: "15 0 * * *"

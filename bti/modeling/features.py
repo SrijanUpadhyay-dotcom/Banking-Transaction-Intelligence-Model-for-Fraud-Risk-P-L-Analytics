@@ -56,6 +56,11 @@ SOURCE_FIELDS: Dict[str, SourceField] = {f.name: f for f in [
     SourceField("security_event_time", _A.PRE_AUTH, "When a password reset, SIM swap, contact-detail change or "
                                                     "device enrolment was logged (security-event feed)"),
     SourceField("security_event_type", _A.PRE_AUTH, "Type of security event (security-event feed)"),
+    SourceField("confirmed_fraud_labels", _A.PRE_AUTH,
+                "Fraud confirmations made before the day of the transaction (point-in-time graph state); the "
+                "transaction's own outcome is never visible"),
+    SourceField("label_confirmed_at", _A.LABEL_DERIVED,
+                "When a fraud was confirmed; used only to decide what the graph may know, never a model input"),
     SourceField("transaction_date", _A.PRE_AUTH, "Event date"),
     SourceField("transaction_time", _A.PRE_AUTH, "Event time"),
     SourceField("transaction_amount", _A.PRE_AUTH, "Requested amount, in account currency"),
@@ -187,6 +192,32 @@ BALANCE_FEATURES: List[FeatureSpec] = [
                 "AMT_VS_BALANCE", "Amount-to-balance ratio relative to the customer's own average in the look-back"),
 ]
 
+# Point-in-time entity graph (bti.graph.temporal): computed from the state at the start of the transaction's
+# day, in training by prepare() and live from the nightly graph snapshot. Not produced by build_features.
+_GRAPH = ("customer_id", "device_id", "ip_location", "confirmed_fraud_labels") + _WHEN
+_GRAPH_PAYEE = ("customer_id", "payee_id", "confirmed_fraud_labels") + _WHEN
+GRAPH_FEATURES: List[FeatureSpec] = [
+    FeatureSpec("graph_component_customers", _N, _GRAPH, "NETWORK_LINK",
+                "Customers linked to this customer through shared devices or IPs"),
+    FeatureSpec("graph_component_known_fraud", _N, _GRAPH, "NETWORK_LINK",
+                "Other customers in that network with a confirmed fraud"),
+    FeatureSpec("graph_shared_entity_customers", _N, _GRAPH, "NETWORK_LINK",
+                "Most other customers seen on this transaction's device or IP"),
+    FeatureSpec("graph_shared_entity_known_fraud", _N, _GRAPH, "NETWORK_LINK",
+                "Customers with a confirmed fraud among them"),
+    FeatureSpec("graph_payee_senders", _N, _GRAPH_PAYEE, "MULE_PAYEE", "Other customers who have paid this payee"),
+    FeatureSpec("graph_payee_known_fraud", _N, _GRAPH_PAYEE, "MULE_PAYEE", "Confirmed frauds paid to this payee"),
+    FeatureSpec("graph_payee_known_fraud_share", _N, _GRAPH_PAYEE, "MULE_PAYEE",
+                "Confirmed frauds paid to this payee per customer who has paid it"),
+]
+# Learned from weekly snapshots (bti.graph.learned); computed only for feature sets that use them.
+LEARNED_GRAPH_FEATURES: List[FeatureSpec] = [
+    FeatureSpec("graph_embed_fraud_similarity", _N, _GRAPH, "NETWORK_LINK",
+                "Spectral-embedding similarity to customers with a confirmed fraud (latest weekly snapshot)"),
+    FeatureSpec("graph_sage_score", _N, _GRAPH, "NETWORK_LINK",
+                "Temporal GraphSAGE risk of this customer's network position (latest weekly snapshot)"),
+]
+
 # Feed-dependent signals. They need data the synthetic dataset does not carry (transaction location,
 # payee keys, the bank's security-event log), so they are in no default feature set and training
 # refuses them unless the feed is actually populated (see FEEDS and feed_coverage).
@@ -235,10 +266,13 @@ SECURITY_LOOKBACK_S = 30 * 86_400
 NO_RECENT_EVENT_HOURS = 24.0 * 31
 
 MODEL_FEATURES: List[FeatureSpec] = CORE_FEATURES
-ALL_FEATURES: List[FeatureSpec] = CORE_FEATURES + EXTENDED_FEATURES + BALANCE_FEATURES + SIGNAL_FEATURES
+ALL_FEATURES: List[FeatureSpec] = (CORE_FEATURES + EXTENDED_FEATURES + BALANCE_FEATURES + SIGNAL_FEATURES
+                                   + GRAPH_FEATURES + LEARNED_GRAPH_FEATURES)
 FEATURE_NAMES: List[str] = [f.name for f in CORE_FEATURES]
 EXTENDED_NAMES: List[str] = [f.name for f in CORE_FEATURES + EXTENDED_FEATURES]
 SIGNAL_NAMES: List[str] = [f.name for f in SIGNAL_FEATURES]
+GRAPH_NAMES: List[str] = [f.name for f in GRAPH_FEATURES]
+LEARNED_GRAPH_NAMES: List[str] = [f.name for f in LEARNED_GRAPH_FEATURES]
 ALL_FEATURE_NAMES: List[str] = [f.name for f in ALL_FEATURES]
 # Absolute size (USD amount, USD balance) tracks customer wealth, which varies by country and segment.
 # The "relative" sets judge amounts only against the customer's own behaviour; loss severity is
@@ -254,10 +288,15 @@ FEATURE_SETS: Dict[str, List[str]] = {
     "core-relative-nb": [n for n in FEATURE_NAMES if n not in ABSOLUTE_AMOUNT_FEATURES + ["amount_to_balance"]],
     "core-relative-own": [("balance_share_vs_own" if n == "amount_to_balance" else n)
                           for n in FEATURE_NAMES if n not in ABSOLUTE_AMOUNT_FEATURES],
+    # Network features on top of the current challenger's set (Phase 6).
+    "graph-relative": [n for n in FEATURE_NAMES if n not in ABSOLUTE_AMOUNT_FEATURES + ["amount_to_balance"]]
+                      + GRAPH_NAMES,
+    "graph-full-relative": [n for n in FEATURE_NAMES if n not in ABSOLUTE_AMOUNT_FEATURES + ["amount_to_balance"]]
+                           + GRAPH_NAMES + LEARNED_GRAPH_NAMES,
 }
 FEATURE_SET_SUFFIX: Dict[str, str] = {"core": "", "extended": "-x", "core-relative": "-r", "extended-relative": "-xr",
                                       "signals-relative": "-sr", "core-relative-nb": "-rn",
-                                      "core-relative-own": "-ro"}
+                                      "core-relative-own": "-ro", "graph-relative": "-g", "graph-full-relative": "-gf"}
 CATEGORICAL_FEATURES: List[str] = [f.name for f in ALL_FEATURES if f.kind is Kind.CATEGORICAL]
 NUMERIC_FEATURES: List[str] = [f.name for f in ALL_FEATURES if f.kind is Kind.NUMERIC]
 FEATURE_BY_NAME: Dict[str, FeatureSpec] = {f.name: f for f in ALL_FEATURES}
@@ -490,6 +529,8 @@ def build_features(df: pd.DataFrame, lookback_days: int = DEFAULT_LOOKBACK_DAYS,
 
     for col in CATEGORICAL_FEATURES:
         out[col] = df[col].astype("string")
+    for col in GRAPH_NAMES + LEARNED_GRAPH_NAMES:   # filled by training / the live graph snapshot
+        out[col] = np.nan
 
     return out[ALL_FEATURE_NAMES]
 

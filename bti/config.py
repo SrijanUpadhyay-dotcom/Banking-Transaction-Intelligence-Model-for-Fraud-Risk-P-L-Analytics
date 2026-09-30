@@ -128,6 +128,12 @@ class Settings(BaseSettings):
     cost_v2_margin_rate: float = _yaml.get("decisioning", {}).get("transaction_margin_rate", 0.01)
     customer_value_cron: str = _yaml.get("decisioning", {}).get("customer_value_cron", "30 1 * * *")
 
+    # Graph intelligence (Phase 6): assumed fraud-confirmation delay when the data has no confirmation time
+    graph_label_delay_days: int = _yaml.get("graph", {}).get("label_delay_days", 30)
+    graph_snapshot_cron: str = _yaml.get("graph", {}).get("snapshot_cron", "15 0 * * *")
+    graph_snapshot_path: str = Field(default=str(BASE_DIR / _yaml.get("graph", {}).get(
+        "snapshot_path", "data/graph/snapshot.joblib")), alias="BTI_GRAPH_SNAPSHOT_PATH")
+
     # Step-up orchestration (Phase 5)
     stepup_provider: str = Field(default=_yaml.get("stepup", {}).get("provider", "log"), alias="BTI_STEPUP_PROVIDER")
     stepup_webhook_url: str = Field(default=_yaml.get("stepup", {}).get("webhook_url", ""), alias="BTI_STEPUP_WEBHOOK_URL")

@@ -1,0 +1,85 @@
+{
+  "notice": "SYNTHETIC rings injected into a copy of synthetic data for capability testing of graph methods; not evidence of performance on a real book.",
+  "rings": {
+    "rings": 15,
+    "ring_rows": 779,
+    "ring_fraud_rows": 602,
+    "ring_fraud_share_of_all_fraud": 0.1949
+  },
+  "algorithm": "lightgbm",
+  "torch": true,
+  "runs": [
+    {
+      "data": "with_synthetic_rings",
+      "feature_set": "core-relative-nb",
+      "gates": "passed",
+      "failed_gates": [],
+      "oot_roc_auc": 0.9542,
+      "oot_pr_auc": 0.8774,
+      "ring_fraud_caught_at_2pct": 0.3787878787878788,
+      "ring_fraud_caught_at_5pct": 0.8181818181818182,
+      "ring_frauds_out_of_time": 66,
+      "top_features": []
+    },
+    {
+      "data": "with_synthetic_rings",
+      "feature_set": "graph-relative",
+      "gates": "passed",
+      "failed_gates": [],
+      "oot_roc_auc": 0.9567,
+      "oot_pr_auc": 0.891,
+      "ring_fraud_caught_at_2pct": 0.42424242424242425,
+      "ring_fraud_caught_at_5pct": 0.9090909090909091,
+      "ring_frauds_out_of_time": 66,
+      "top_features": []
+    },
+    {
+      "data": "with_synthetic_rings",
+      "feature_set": "graph-full-relative",
+      "gates": "passed",
+      "failed_gates": [],
+      "oot_roc_auc": 0.9559,
+      "oot_pr_auc": 0.8902,
+      "ring_fraud_caught_at_2pct": 0.42424242424242425,
+      "ring_fraud_caught_at_5pct": 0.9242424242424242,
+      "ring_frauds_out_of_time": 66,
+      "top_features": []
+    },
+    {
+      "data": "original",
+      "feature_set": "core-relative-nb",
+      "gates": "passed",
+      "failed_gates": [],
+      "oot_roc_auc": 0.9557,
+      "oot_pr_auc": 0.8845,
+      "ring_fraud_caught_at_2pct": null,
+      "ring_fraud_caught_at_5pct": null,
+      "ring_frauds_out_of_time": null,
+      "top_features": []
+    },
+    {
+      "data": "original",
+      "feature_set": "graph-relative",
+      "gates": "passed",
+      "failed_gates": [],
+      "oot_roc_auc": 0.9561,
+      "oot_pr_auc": 0.8847,
+      "ring_fraud_caught_at_2pct": null,
+      "ring_fraud_caught_at_5pct": null,
+      "ring_frauds_out_of_time": null,
+      "top_features": []
+    },
+    {
+      "data": "original",
+      "feature_set": "graph-full-relative",
+      "gates": "passed",
+      "failed_gates": [],
+      "oot_roc_auc": 0.9559,
+      "oot_pr_auc": 0.8828,
+      "ring_fraud_caught_at_2pct": null,
+      "ring_fraud_caught_at_5pct": null,
+      "ring_frauds_out_of_time": null,
+      "top_features": []
+    }
+  ]
+}

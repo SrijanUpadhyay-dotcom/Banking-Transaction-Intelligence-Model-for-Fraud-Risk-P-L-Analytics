@@ -31,6 +31,7 @@ RETRAIN_JOB_ID = "daily_retraining_check"
 RECALIBRATION_JOB_ID = "daily_recalibration"
 STEPUP_JOB_ID = "stepup_expiry"
 VALUES_JOB_ID = "daily_customer_values"
+GRAPH_JOB_ID = "nightly_graph_snapshot"
 _scheduler: Optional[BackgroundScheduler] = None
 
 
@@ -95,6 +96,11 @@ def _values_job() -> None:
     _run("customer value refresh", refresh_customer_values)
 
 
+def _graph_job() -> None:
+    from bti.graph.snapshot import build_snapshot
+    _run("graph snapshot", build_snapshot)
+
+
 def _recalibration_job() -> None:
     from bti.modeling import registry
     from bti.modeling.recalibration import recalibrate
@@ -123,7 +129,8 @@ def start() -> Optional[BackgroundScheduler]:
                              (_retrain_job, settings.retrain_check_cron, RETRAIN_JOB_ID),
                              (_recalibration_job, settings.recalibration_cron, RECALIBRATION_JOB_ID),
                              (_stepup_job, settings.stepup_expiry_cron, STEPUP_JOB_ID),
-                             (_values_job, settings.customer_value_cron, VALUES_JOB_ID)):
+                             (_values_job, settings.customer_value_cron, VALUES_JOB_ID),
+                             (_graph_job, settings.graph_snapshot_cron, GRAPH_JOB_ID)):
         _scheduler.add_job(fn, CronTrigger.from_crontab(cron, timezone="UTC"), id=job_id, max_instances=1,
                            coalesce=True, misfire_grace_time=3600)
     _scheduler.start()
@@ -161,5 +168,6 @@ def status() -> dict:
             RECALIBRATION_JOB_ID: {"cron_utc": settings.recalibration_cron, "next_run": next_run(RECALIBRATION_JOB_ID)},
             STEPUP_JOB_ID: {"cron_utc": settings.stepup_expiry_cron, "next_run": next_run(STEPUP_JOB_ID)},
             VALUES_JOB_ID: {"cron_utc": settings.customer_value_cron, "next_run": next_run(VALUES_JOB_ID)},
+            GRAPH_JOB_ID: {"cron_utc": settings.graph_snapshot_cron, "next_run": next_run(GRAPH_JOB_ID)},
         },
     }

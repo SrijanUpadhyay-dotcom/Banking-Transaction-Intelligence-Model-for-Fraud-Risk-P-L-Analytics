@@ -49,7 +49,7 @@ from bti.modeling.calibration import PlattCalibrator
 from bti.modeling.features import (
     CATEGORICAL_FEATURES, DEFAULT_LOOKBACK_DAYS, FEATURE_SET_SUFFIX, FEATURE_SETS, FEATURE_VERSION, PROTECTED_ATTRIBUTES, SOURCE_FIELDS,
     Availability, assert_feature_lineage, build_features, event_timestamps, feature_specs, feed_coverage,
-    feeds_required,
+    feeds_required, GRAPH_NAMES, LEARNED_GRAPH_NAMES,
     fit_category_encodings, leakage_audit, out_of_fold_category_encoding, to_model_matrix,
 )
 from bti.modeling.metrics import (
@@ -67,7 +67,9 @@ MONOTONE_INCREASING = [
     "ip_new_for_customer", "cust_txn_count_1h", "cust_txn_count_24h", "cust_txn_count_7d",
     "amount_usd", "log_amount_usd", "amount_to_balance",
     "device_txn_count_24h", "amount_zscore_customer", "cust_near_threshold_7d", "hour_deviation",
-    "balance_share_vs_own",
+    "balance_share_vs_own", "graph_component_customers", "graph_component_known_fraud",
+    "graph_shared_entity_customers", "graph_shared_entity_known_fraud", "graph_payee_known_fraud",
+    "graph_payee_known_fraud_share", "graph_embed_fraud_similarity", "graph_sage_score",
 ]
 REMEDIATION_LOG = [
     {
@@ -173,6 +175,7 @@ class TrainingData:
     security_events: Optional[pd.DataFrame] = None
     security_events_sha256: Optional[str] = None
     feeds: Optional[Dict[str, Dict[str, float]]] = None
+    graph_learned: Optional[Dict] = None      # lazily computed learned graph features (weekly snapshots, GraphSAGE)
 
 
 def prepare(data_path: Optional[Path] = None, lookback_days: int = DEFAULT_LOOKBACK_DAYS,
@@ -193,6 +196,9 @@ def prepare(data_path: Optional[Path] = None, lookback_days: int = DEFAULT_LOOKB
     es_val = tr & (np.arange(len(df)) >= es_start)
     features = build_features(df, lookback_days=lookback_days, feature_version=feature_version,
                               security_events=events)
+    from bti.graph.temporal import graph_features
+    features[GRAPH_NAMES] = graph_features(df.drop(columns=["_ts"]), delay_days=get_settings().graph_label_delay_days
+                                           ).to_numpy()
     ca = ((df["_ts"] >= cut_calib) & (df["_ts"] < cut_test)).to_numpy()
     te = (df["_ts"] >= cut_test).to_numpy()
     return TrainingData(
@@ -276,6 +282,16 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
     names = FEATURE_SETS[feature_set]
     specs = feature_specs(feature_set)
     check_feeds(data, feature_set)
+    graph_state = None
+    if set(names) & set(LEARNED_GRAPH_NAMES):
+        from bti.graph.learned import learned_features, torch_available
+        if "graph_sage_score" in names and not torch_available():
+            raise FeedUnavailableError("Feature set needs PyTorch for graph_sage_score; install requirements-graph.txt")
+        if data.graph_learned is None:
+            data.graph_learned = learned_features(data.df.drop(columns=["_ts"]), data.cut_calib,
+                                                  delay_days=get_settings().graph_label_delay_days)
+            data.features[LEARNED_GRAPH_NAMES] = data.graph_learned["features"].to_numpy()
+        graph_state = data.graph_learned["sage_state"]
     params = dict(params or algorithms.DEFAULT_PARAMS[algorithm])
     df, features, y, tr, ca, te = data.df, data.features, data.y, data.tr, data.ca, data.te
 
@@ -313,6 +329,13 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
         "segments": {c: segment_performance(y[te], p[te], df.loc[te, c], threshold)
                      for c in SEGMENT_COLUMNS if c in df.columns},
     }
+    if "synthetic_ring" in df.columns:        # capability test on injected synthetic rings only (bti.graph.synthetic_rings)
+        ring_fraud = te & (df["synthetic_ring"].to_numpy() == 1) & (y == 1)
+        cuts = [threshold_for_alert_rate(p[ca], b) for b in (0.02, 0.05)]
+        ring_eval = [float((p[ring_fraud] >= c).mean()) if ring_fraud.any() else None for c in cuts] + \
+                    [int(ring_fraud.sum())]
+    else:
+        ring_eval = None
     fairness = assess_fairness(data, p)
     robustness = missing_input_robustness(estimator, calibrator, X[te], y[te])
 
@@ -415,6 +438,7 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
         },
         "performance": {"metrics": metrics, **oot, "legacy_benchmark": legacy},
         "fairness": fairness,
+        "synthetic_ring_capability": ring_eval,
         "robustness": {"missing_inputs": robustness, "augmentation": {
             "method": "single-feature missingness on extra copies of the fit rows",
             "share_per_feature": MISSING_AUGMENT_SHARE}},
@@ -439,6 +463,8 @@ def train_candidate(data: TrainingData, algorithm: str = "hgb", feature_set: str
     }
     artifact = {"estimator": estimator, "calibrator": calibrator, "encodings": encodings,
                 "feature_names": names, "feeds": feeds_required(names), "lookback_days": data.lookback_days,
+                "graph": {"uses_graph": bool(set(names) & set(GRAPH_NAMES + LEARNED_GRAPH_NAMES)),
+                          "label_delay_days": get_settings().graph_label_delay_days, "sage_state": graph_state},
                 "algorithm": algorithm,
                 "feature_version": data.feature_version,
                 "reference_threshold": threshold, "model_id": model_id,
