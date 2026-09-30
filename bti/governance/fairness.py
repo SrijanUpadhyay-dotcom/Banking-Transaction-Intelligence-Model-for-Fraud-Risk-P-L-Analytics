@@ -199,3 +199,75 @@ def fairness_assessment(
         "watchlist": watchlist,
         "operating_points": runs,
     }
+
+
+DEFAULT_AMOUNT_BANDS = (0, 0.5, 0.8, 0.9, 0.95, 0.99, 1.0)
+
+
+def decision_fairness(y, intervened, groups: Dict[str, pd.Series], amount, bands=DEFAULT_AMOUNT_BANDS,
+                      ratio_threshold: float = DEFAULT_RATIO_THRESHOLD, alpha: float = DEFAULT_ALPHA,
+                      min_n: int = DEFAULT_MIN_N) -> Dict:
+    """
+    Fairness of the *decisions*, not the scores: how often genuine customers in each group are intervened on
+    (step-up, review or decline).
+
+    Expected-cost decisions weigh probability by amount, so groups that make large payments are intervened on
+    more. That is a legitimate risk factor, but it can hide or mimic group effects. So each group gets two ratios:
+    - raw: the group's genuine intervention rate against the overall rate
+    - amount-standardised: observed interventions against those expected if the group had each amount band's
+      overall rate (indirect standardisation over genuine-transaction amount bands). A ratio above 1 means the
+      group is intervened on more than its amounts explain.
+
+    A finding needs a standardised ratio above `ratio_threshold`, at least 5 interventions, and a
+    Benjamini–Hochberg-corrected Poisson test below alpha.
+    """
+    from scipy.stats import poisson
+
+    y = np.asarray(y, dtype=int)
+    iv = np.asarray(intervened, dtype=bool)
+    amt = np.nan_to_num(np.asarray(amount, dtype=float))
+    genuine = y == 0
+    edges = np.unique(np.quantile(amt[genuine], bands)) if genuine.any() else np.array([0.0, 1.0])
+    band = np.clip(np.searchsorted(edges, amt, side="right") - 1, 0, max(len(edges) - 2, 0))
+    band_rate = {b: float(iv[genuine & (band == b)].mean()) for b in np.unique(band[genuine])}
+    expected_each = np.array([band_rate.get(b, 0.0) for b in band])
+    overall = float(iv[genuine].mean()) if genuine.any() else 0.0
+
+    candidates, attributes = [], []
+    for attr, values in groups.items():
+        seg = pd.Series(np.asarray(values)).astype("string").fillna("(missing)").to_numpy()
+        rows = []
+        for name in sorted(set(seg)):
+            m = (seg == name) & genuine
+            if m.sum() < min_n:
+                continue
+            observed, expected = int(iv[m].sum()), float(expected_each[m].sum())
+            sir = observed / expected if expected > 0 else None
+            if expected > 0:
+                p_lo, p_hi = poisson.cdf(observed, expected), poisson.sf(observed - 1, expected)
+                p_value = min(1.0, 2 * min(p_lo, p_hi))
+            else:
+                p_value = 1.0
+            row = {"group": str(name), "genuine": int(m.sum()), "intervened": observed,
+                   "intervention_rate": round(float(iv[m].mean()), 5),
+                   "raw_ratio": round(float(iv[m].mean()) / overall, 3) if overall else None,
+                   "expected_from_amounts": round(expected, 1),
+                   "amount_standardised_ratio": round(sir, 3) if sir is not None else None,
+                   "p_value": round(p_value, 5)}
+            row["_material"] = bool(sir is not None and sir > ratio_threshold and observed >= 5)
+            candidates.append((attr, row))
+            rows.append(row)
+        attributes.append({"attribute": attr, "groups": rows})
+    q = benjamini_hochberg([r["p_value"] for _, r in candidates])
+    findings = []
+    for (attr, row), qv in zip(candidates, q):
+        row["q_value"] = round(qv, 5)
+        if row.pop("_material") and qv < alpha:
+            findings.append({"attribute": attr, **row})
+    return {"method": "Genuine-customer intervention rate, raw and indirectly standardised over amount bands "
+                      f"(quantiles {list(bands)}); Poisson test with Benjamini–Hochberg correction",
+            "overall_genuine_intervention_rate": round(overall, 5),
+            "band_rates": {f"{edges[b]:.0f}–{edges[min(b + 1, len(edges) - 1)]:.0f} USD": round(r, 4)
+                           for b, r in sorted(band_rate.items())},
+            "attributes": attributes, "findings": findings,
+            "status": "review_required" if findings else "pass"}

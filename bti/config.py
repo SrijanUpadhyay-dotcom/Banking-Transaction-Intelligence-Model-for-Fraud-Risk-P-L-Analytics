@@ -116,6 +116,30 @@ class Settings(BaseSettings):
     retrain_label_maturity_days: int = _yaml.get("retraining", {}).get("label_maturity_days", 90)
     recalibration_cron: str = _yaml.get("retraining", {}).get("recalibration_cron", "0 5 * * *")
 
+    # Cost model (Phase 5): "v1" flat economics, "v2" per-customer value and measured step-up outcomes
+    cost_model_version: str = Field(default=_yaml.get("decisioning", {}).get("cost_model", "v1"),
+                                    alias="BTI_COST_MODEL")
+    cost_v2_value_bounds: list = _yaml.get("decisioning", {}).get("customer_value_bounds_usd", [75.0, 1200.0])
+    cost_v2_min_challenges: int = _yaml.get("decisioning", {}).get("min_challenges_for_measured_rates", 200)
+    cost_v2_abandonment_prior: float = _yaml.get("decisioning", {}).get("step_up_abandonment_prior", 0.08)
+    cost_v2_message_cost_usd: dict = _yaml.get("decisioning", {}).get("step_up_message_cost_usd",
+                                                                    {"sms_otp": 0.05, "push": 0.01, "3ds": 0.10})
+    cost_v2_margin_rate: float = _yaml.get("decisioning", {}).get("transaction_margin_rate", 0.01)
+    customer_value_cron: str = _yaml.get("decisioning", {}).get("customer_value_cron", "30 1 * * *")
+
+    # Step-up orchestration (Phase 5)
+    stepup_provider: str = Field(default=_yaml.get("stepup", {}).get("provider", "log"), alias="BTI_STEPUP_PROVIDER")
+    stepup_webhook_url: str = Field(default=_yaml.get("stepup", {}).get("webhook_url", ""), alias="BTI_STEPUP_WEBHOOK_URL")
+    stepup_webhook_secret: str = Field(default="", alias="BTI_STEPUP_WEBHOOK_SECRET")
+    stepup_callback_secret: str = Field(default="", alias="BTI_STEPUP_CALLBACK_SECRET")
+    stepup_ttl_seconds: int = _yaml.get("stepup", {}).get("ttl_seconds", 300)
+    stepup_max_attempts: int = _yaml.get("stepup", {}).get("max_attempts", 3)
+    stepup_auto_issue: bool = _yaml.get("stepup", {}).get("auto_issue", False)
+    stepup_methods: dict = _yaml.get("stepup", {}).get("methods", {
+        "Card Not Present": "3ds", "Mobile Banking": "push", "Internet Banking": "sms_otp",
+        "API/Open Banking": "sms_otp"})
+    stepup_expiry_cron: str = _yaml.get("stepup", {}).get("expiry_cron", "*/5 * * * *")
+
     # Case management (Phase 4): queues, SLAs in minutes, maker-checker threshold for clearing high-value cases
     case_queues: dict = _yaml.get("cases", {}).get("queues", {
         "urgent": {"sla_minutes": 60, "min_probability": 0.8, "min_expected_loss_usd": 1000},

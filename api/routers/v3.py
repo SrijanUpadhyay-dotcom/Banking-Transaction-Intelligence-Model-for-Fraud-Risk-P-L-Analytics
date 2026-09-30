@@ -97,6 +97,8 @@ def _score_one(txn_model: V3Transaction, db: Session, explain: bool = True) -> d
                          "decline_requires_human_review_route": bool(policy and
                                                                      policy.decline_requires_human_review_route)},
         "shadow": sd.shadow,
+        "rules": [{k: h[k] for k in ("rule_id", "version", "name", "mode", "action", "enforced")} for h in sd.rules],
+        "step_up": sd.step_up,
         "history_rows_used": live.history_rows_used,
         "latency_ms": live.latency_ms,
         "notes": live.notes + ([] if policy else ["Unknown or missing country — default cost model applied."]),

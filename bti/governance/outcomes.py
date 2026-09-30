@@ -15,7 +15,9 @@ out-of-time figures.
 - Calibration-in-the-large: mean predicted rate against observed.
 
 **Fairness.** The same pooled, corrected false-positive-rate test as
-development.
+development, plus a test of the *decisions*: genuine-customer intervention
+rates standardised for payment amount, so a group is flagged only when it is
+intervened on more than its amounts explain.
 - The two halves of the quarter are the two windows, and a finding must
   recur in both.
 - It runs on the monitoring attributes recorded at scoring (segment, age band,
@@ -131,6 +133,14 @@ def _analyse_model(model_id: str, g: pd.DataFrame) -> Dict:
                       for g_ in a["groups"] if g_["group"] == group and g_["fpr_ratio"] is not None]
             retest.append({"attribute": attr, "group": group, "worst_pooled_ratio_live": max(ratios) if ratios else None})
         fair = {k: v for k, v in fair.items() if k != "operating_points"} | {"watchlist_retest": retest}
+        from bti.governance.fairness import decision_fairness
+        intervened = (gk["decision"].astype(str) != "APPROVE").to_numpy()
+        decisions = decision_fairness(y, intervened, groups, gk["amount_usd"].astype(float).fillna(0).to_numpy())
+        fair["decisions_amount_standardised"] = {k: decisions[k] for k in ("status", "findings", "band_rates")}
+        for f in decisions["findings"]:
+            flags.append((f"Live decision disparity beyond amounts: {f['attribute']} = {f['group']}", "medium",
+                          "fairness", f"Genuine customers intervened {f['amount_standardised_ratio']}x what their "
+                                      f"payment amounts explain (raw ratio {f['raw_ratio']}, q {f['q_value']})."))
     out.update({
         "status": "ok",
         "live": live, "development_out_of_time": {k: dev.get(k) for k in ("roc_auc", "pr_auc", "ks", "ece")},

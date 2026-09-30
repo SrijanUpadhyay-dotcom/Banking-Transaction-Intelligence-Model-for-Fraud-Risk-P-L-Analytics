@@ -10,12 +10,13 @@ champion/challenger reporting read from.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Optional
 
 from sqlalchemy.orm import Session
 
+from bti.config import get_settings
 from bti.database.models import ScoreLog
 from bti.jurisdiction.policies import JurisdictionPolicy, policy_for
 from bti.logging_config import get_logger
@@ -23,7 +24,7 @@ from bti.modeling import registry
 from bti.modeling.fx import to_usd
 from bti.modeling.scorer import V3Score, scorer
 from bti.operations.capacity import capacity_overrides
-from bti.operations.decisioning import Decision, decide
+from bti.operations.decisioning import Decision, decide, step_up_available
 
 log = get_logger("operations.scoring_service")
 
@@ -38,6 +39,8 @@ class ScoredDecision:
     policy: Optional[JurisdictionPolicy]
     amount_usd: float
     shadow: Optional[dict]
+    rules: list = field(default_factory=list)
+    step_up: Optional[dict] = None
 
 
 def model_available() -> bool:
@@ -100,12 +103,24 @@ def score_and_decide(txn: dict, db: Optional[Session] = None, explain: bool = Tr
     amount_usd = to_usd(float(txn.get("transaction_amount") or 0), txn["currency"])
     live = scorer.score(txn, db_session=db, explain=explain)
     capacity = capacity_overrides(live.model_id)
+    from bti.operations.cost_model import overrides_for
     decision = decide(live.fraud_probability, amount_usd, policy, txn.get("channel"), txn.get("transaction_type"),
-                      provisional_model=live.provisional, cost_overrides=capacity)
+                      provisional_model=live.provisional, cost_overrides=overrides_for(db, txn, amount_usd, capacity))
     if capacity is None:
         decision.guardrails_applied.append("No capacity policy fitted for this model: review and step-up volumes "
                                            "are unconstrained (python -m bti.operations.capacity)")
     iso = policy.iso2 if policy else None
+
+    rule_hits = []
+    if db is not None:
+        from bti.rules.lifecycle import apply_rules
+        values = {**live.features, "fraud_probability": live.fraud_probability, "currency": txn.get("currency"),
+                  **{k: txn.get(k) for k in ("merchant_name", "payee_id", "device_id", "ip_location")}}
+        rule_hits = apply_rules(db, values, decision, step_up_available(txn.get("channel"), txn.get("transaction_type")))
+        if decision.action == "DECLINE" and policy is not None and policy.decline_requires_human_review_route \
+                and not decision.human_review_route:
+            decision.human_review_route = True
+            decision.guardrails_applied.append("GDPR Art. 22 — decline notice must offer human review")
 
     shadow = None
     challenger_id = registry.model_for_role("challenger")
@@ -118,9 +133,13 @@ def score_and_decide(txn: dict, db: Optional[Session] = None, explain: bool = Tr
         if db is not None and log_scores:
             _log(db, sh, txn, sh_decision, iso, amount_usd, shadow=True)
 
+    step_up = None
     if db is not None and log_scores:
         try:
             _log(db, live, txn, decision, iso, amount_usd, shadow=False)
+            if rule_hits:
+                from bti.rules.lifecycle import record_hits
+                record_hits(db, live.transaction_id, rule_hits)
             if decision.action in ("REVIEW", "DECLINE"):
                 # Declines need a disposition too: no money moves, so no chargeback will ever label them.
                 from bti.operations.cases import open_case
@@ -133,5 +152,15 @@ def score_and_decide(txn: dict, db: Optional[Session] = None, explain: bool = Tr
         except Exception as exc:
             db.rollback()
             log.error("Score log write failed", extra={"transaction_id": live.transaction_id, "error": str(exc)})
+        if decision.action == "STEP_UP" and get_settings().stepup_auto_issue:
+            from bti.operations.stepup import StepUpError, issue
+            try:
+                step_up = issue(db, live.transaction_id, txn.get("customer_id"), txn.get("channel"),
+                                txn.get("transaction_type"), amount_usd, txn.get("currency") or "USD")
+            except StepUpError as exc:
+                step_up = {"status": "not_issued", "detail": str(exc)}
+            if step_up.get("status") in ("send_failed", "not_issued"):
+                decision.guardrails_applied.append("Step-up could not be issued; route the transaction to REVIEW")
 
-    return ScoredDecision(live=live, decision=decision, policy=policy, amount_usd=amount_usd, shadow=shadow)
+    return ScoredDecision(live=live, decision=decision, policy=policy, amount_usd=amount_usd, shadow=shadow,
+                          rules=rule_hits, step_up=step_up)

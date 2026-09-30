@@ -441,6 +441,83 @@ class FraudCase(Base):
     breach_alerted_at = Column(DateTime)
 
 
+class RuleVersion(Base):
+    """One immutable version of an analyst rule. Editing a rule creates a new version."""
+    __tablename__ = "rule_versions"
+
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    rule_id      = Column(String(40), nullable=False, index=True)
+    version      = Column(Integer, nullable=False)
+    name         = Column(String(120), nullable=False)
+    description  = Column(Text, nullable=False)
+    condition    = Column(JSON, nullable=False)
+    action       = Column(String(20), nullable=False)          # STEP_UP | REVIEW | DECLINE (a floor)
+    author       = Column(String(100), nullable=False)
+    created_at   = Column(DateTime, default=datetime.utcnow, nullable=False)
+    status       = Column(String(20), nullable=False, default="draft", index=True)  # draft|simulated|active|shadow|retired
+    simulation   = Column(JSON)
+    simulated_at = Column(DateTime)
+    approved_by  = Column(String(100))
+    approved_at  = Column(DateTime)
+    expires_at   = Column(DateTime)
+    retired_by   = Column(String(100))
+    retired_at   = Column(DateTime)
+    retire_reason = Column(Text)
+
+    __table_args__ = (Index("ux_rule_version", "rule_id", "version", unique=True),)
+
+
+class RuleHit(Base):
+    """Every live rule match, enforced (active) or logged only (shadow)."""
+    __tablename__ = "rule_hits"
+
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    transaction_id  = Column(String(50), nullable=False, index=True)
+    rule_version_id = Column(Integer, nullable=False, index=True)
+    rule_id         = Column(String(40), nullable=False, index=True)
+    version         = Column(Integer, nullable=False)
+    mode            = Column(String(10), nullable=False)
+    action          = Column(String(20), nullable=False)
+    decision_before = Column(String(20))
+    decision_after  = Column(String(20))
+    enforced        = Column(Boolean, nullable=False, default=False)
+    at              = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class StepUpChallenge(Base):
+    """A customer challenge (SMS one-time code, push approval, 3-D Secure) issued for a STEP_UP decision."""
+    __tablename__ = "stepup_challenges"
+
+    id             = Column(String(32), primary_key=True)             # unguessable token
+    transaction_id = Column(String(50), nullable=False, index=True)
+    customer_id    = Column(String(50), index=True)
+    method         = Column(String(20), nullable=False, index=True)    # sms_otp | push | 3ds
+    channel        = Column(String(50))
+    amount_usd     = Column(Float)
+    status         = Column(String(20), nullable=False, default="pending", index=True)
+    created_at     = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    expires_at     = Column(DateTime, nullable=False)
+    attempts       = Column(Integer, nullable=False, default=0)
+    max_attempts   = Column(Integer, nullable=False, default=3)
+    secret_hash    = Column(String(64))
+    salt           = Column(String(32))
+    provider       = Column(String(20))
+    provider_ref   = Column(String(100))
+    completed_at   = Column(DateTime)
+    outcome_detail = Column(JSON)
+
+
+class CustomerValue(Base):
+    """Annual net revenue per customer from the bank's P&L data (cost model v2). Refreshed daily."""
+    __tablename__ = "customer_values"
+
+    customer_id      = Column(String(50), primary_key=True)
+    annual_value_usd = Column(Float, nullable=False)
+    months_observed  = Column(Float, nullable=False)
+    transactions     = Column(Integer, nullable=False)
+    computed_at      = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class ModelRegistry(Base):
     """Versioned ML model metadata — tracks which model version scored a transaction."""
     __tablename__ = "model_registry"

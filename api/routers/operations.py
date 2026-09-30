@@ -229,3 +229,33 @@ def recalibration_rollback(body: RecalibrationRollback, db: Session = Depends(ge
         return rollback(db, body.model_id, body.actor, body.reason)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+
+
+
+# ── Cost model ───────────────────────────────────────────────────────────────
+
+@router.get("/cost-model")
+def cost_model_state(db: Session = Depends(get_db)):
+    """Which cost model decides, its bounds, and the step-up rates it would use (measured or prior)."""
+    from bti.database.models import CustomerValue
+    from bti.operations.cost_model import measured_stepup
+    from sqlalchemy import func
+    s = get_settings()
+    return {"version": s.cost_model_version, "customer_value_bounds_usd": s.cost_v2_value_bounds,
+            "customers_valued": db.query(func.count(CustomerValue.customer_id)).scalar() or 0,
+            "step_up_rates": measured_stepup(db),
+            "note": "v2 uses per-customer value (bounded) and measured step-up outcomes; segment is never priced."}
+
+
+@router.post("/cost-model/customer-values/refresh", dependencies=[Depends(require_api_key)])
+def refresh_values(db: Session = Depends(get_db)):
+    from bti.operations.cost_model import refresh_customer_values
+    return refresh_customer_values(db)
+
+
+@router.post("/cost-model/backtest", dependencies=[Depends(require_api_key)])
+def cost_backtest(model_id: Optional[str] = None):
+    """Replay v1 and v2 on out-of-time history: realised cost, action mix, raw and amount-standardised
+    decision fairness, and a recommendation."""
+    from bti.operations.cost_model import backtest
+    return backtest(model_id)

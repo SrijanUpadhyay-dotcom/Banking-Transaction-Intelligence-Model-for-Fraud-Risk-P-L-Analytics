@@ -28,6 +28,8 @@ GOVERNANCE_JOB_ID = "weekly_governance_check"
 CASE_SLA_JOB_ID = "case_sla_check"
 RETRAIN_JOB_ID = "daily_retraining_check"
 RECALIBRATION_JOB_ID = "daily_recalibration"
+STEPUP_JOB_ID = "stepup_expiry"
+VALUES_JOB_ID = "daily_customer_values"
 _scheduler: Optional[BackgroundScheduler] = None
 
 
@@ -82,6 +84,16 @@ def _retrain_job() -> None:
     _run("retraining check", run_retraining)
 
 
+def _stepup_job() -> None:
+    from bti.operations.stepup import expire
+    _run("step-up expiry", expire)
+
+
+def _values_job() -> None:
+    from bti.operations.cost_model import refresh_customer_values
+    _run("customer value refresh", refresh_customer_values)
+
+
 def _recalibration_job() -> None:
     from bti.modeling import registry
     from bti.modeling.recalibration import recalibrate
@@ -108,7 +120,9 @@ def start() -> Optional[BackgroundScheduler]:
                              (_governance_job, settings.governance_check_cron, GOVERNANCE_JOB_ID),
                              (_case_sla_job, settings.case_sla_check_cron, CASE_SLA_JOB_ID),
                              (_retrain_job, settings.retrain_check_cron, RETRAIN_JOB_ID),
-                             (_recalibration_job, settings.recalibration_cron, RECALIBRATION_JOB_ID)):
+                             (_recalibration_job, settings.recalibration_cron, RECALIBRATION_JOB_ID),
+                             (_stepup_job, settings.stepup_expiry_cron, STEPUP_JOB_ID),
+                             (_values_job, settings.customer_value_cron, VALUES_JOB_ID)):
         _scheduler.add_job(fn, CronTrigger.from_crontab(cron, timezone="UTC"), id=job_id, max_instances=1,
                            coalesce=True, misfire_grace_time=3600)
     _scheduler.start()
@@ -144,5 +158,7 @@ def status() -> dict:
             CASE_SLA_JOB_ID: {"cron_utc": settings.case_sla_check_cron, "next_run": next_run(CASE_SLA_JOB_ID)},
             RETRAIN_JOB_ID: {"cron_utc": settings.retrain_check_cron, "next_run": next_run(RETRAIN_JOB_ID)},
             RECALIBRATION_JOB_ID: {"cron_utc": settings.recalibration_cron, "next_run": next_run(RECALIBRATION_JOB_ID)},
+            STEPUP_JOB_ID: {"cron_utc": settings.stepup_expiry_cron, "next_run": next_run(STEPUP_JOB_ID)},
+            VALUES_JOB_ID: {"cron_utc": settings.customer_value_cron, "next_run": next_run(VALUES_JOB_ID)},
         },
     }

@@ -301,3 +301,28 @@ def test_workbench_page_is_served_and_its_script_parses(client, tmp_path):
         path = tmp_path / "workbench.js"
         path.write_text(script)
         assert subprocess.run(["node", "--check", str(path)], capture_output=True).returncode == 0
+
+
+class TestRulesLoop:
+    def test_rule_is_simulated_approved_and_raises_a_live_decision(self, client):
+        refused = client.post("/api/v1/rules", headers=KEY, json={
+            "name": "Student big spend", "description": "Uses a protected attribute and must be refused",
+            "condition": {"field": "customer_segment", "op": "==", "value": "Student"}, "action": "REVIEW",
+            "author": "rules.analyst"})
+        assert refused.status_code == 409 and "protected" in refused.json()["detail"]
+        rule = client.post("/api/v1/rules", headers=KEY, json={
+            "name": "Compromised merchant watchlist", "description": "Merchant reported compromised by the card scheme",
+            "condition": {"field": "merchant_name", "op": "in", "value": ["Compromised Merchant Ltd"]},
+            "action": "REVIEW", "author": "rules.analyst"}).json()
+        sim = client.post(f"/api/v1/rules/versions/{rule['id']}/simulate", headers=KEY,
+                          json={"actor": "rules.analyst"}).json()
+        assert sim["status"] == "simulated" and sim["simulation"]["hits"] == 0
+        assert client.post(f"/api/v1/rules/versions/{rule['id']}/approve", headers=KEY,
+                           json={"approver": "rules.analyst"}).status_code == 409          # four-eyes
+        assert client.post(f"/api/v1/rules/versions/{rule['id']}/approve", headers=KEY,
+                           json={"approver": "fraud.strategy.lead"}).json()["status"] == "active"
+        body = client.post("/api/v1/v3/score", json=_txn(400, merchant_name="Compromised Merchant Ltd")).json()
+        assert body["decision"]["action"] in ("REVIEW", "DECLINE")
+        assert body["rules"] and body["rules"][0]["rule_id"] == rule["rule_id"]
+        perf = client.get(f"/api/v1/rules/{rule['rule_id']}/performance").json()
+        assert perf["versions"][0]["hits"] == 1

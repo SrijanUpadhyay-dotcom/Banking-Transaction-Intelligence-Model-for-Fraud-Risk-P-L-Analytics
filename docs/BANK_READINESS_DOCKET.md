@@ -424,12 +424,94 @@ out-of-time):
 
 ## Phase 5 — Decision economics and rules
 
-| Item | Status | Scope |
+| Item | Status | Notes |
 |---|---|---|
-| False-positive cost model | Done | Expected-cost decisions, capacity and challenge budgets, guardrails. |
-| Cost model v2 | Extend | Per-customer value from BTI's P&L data, measured step-up abandonment, segment friction. |
-| Analyst rules engine | New | Versioned rules, simulation on history, champion/challenger rules. |
-| Step-up orchestration | New | SMS / push / 3-D Secure adapters. |
+| False-positive cost model | **Done** | Expected-cost decisions, capacity and challenge budgets, guardrails. |
+| Cost model v2 | **Done — switch pending approval** | `bti.operations.cost_model`; see *Cost model v2* below. |
+| Analyst rules engine | **Done** | `/api/v1/rules`; see *Rules engine* below. |
+| Step-up orchestration | **Done — needs the bank's gateways** | `/api/v1/stepup`; see *Step-up* below. |
+| Decision-level fairness | **Done** (new) | See *Decision-level fairness* below. |
+
+**Rules engine.**
+
+- **Authoring.** Rules are JSON condition trees (`all` / `any` / `not`, ten null-safe operators), never code.
+  They use only lineage-allowed fields: model features, the model's probability, currency, and identifiers for
+  merchant, payee, device and IP watchlists. Protected attributes, post-event and label-derived fields are refused
+  with the reason. The legacy engine used customer segment (R13), the label-derived risk score (R17), and refund
+  and chargeback history.
+- **Versions.** Versions are immutable. At most one active (enforced) and one shadow (logged-only challenger)
+  version per rule can be live at once.
+- **Simulation.** Every version is simulated on out-of-time history against the model's own capacity-constrained
+  decisions. The simulation reports hits, precision, incremental fraud caught (hits the model alone would have
+  approved), genuine customers disturbed, and the fairness of the rule's hits.
+- **Approval rules.**
+  - The approver must differ from the author.
+  - The simulation must be under 30 days old.
+  - A DECLINE rule needs at least 50% historical precision.
+  - A rule with a fairness finding may run only in shadow.
+- **Live effect.** An active rule can only raise a decision, never lower one. STEP_UP becomes REVIEW where the
+  channel cannot challenge. Every hit is recorded, and `GET /rules/{id}/performance` gives live precision per
+  version on matured labels.
+- **Starter library** (`bti.rules.library`, drafts), simulated:
+
+  | Rule | Result on history | Status |
+  |---|---|---|
+  | New device with login anomaly | 99% precision, 11 extra frauds, 1 genuine disturbed | Approved in the live run |
+  | Failed-authentication burst | 3.9% precision (5 frauds for 566 genuine) | The simulation shows it is a bad rule |
+  | First transaction draining the balance | Corporate FPR finding | Blocked from active by the fairness gate |
+  | Velocity burst | 0 hits on synthetic data | Still recommended: the model's velocity features carry no weight (Phase 3 finding) |
+  | Repeated just-below-threshold amounts | 0 hits on synthetic data | Kept as a draft |
+
+**Step-up.**
+
+- **Methods.** 3-D Secure for card-not-present, push for mobile, SMS one-time code otherwise (`stepup.methods`).
+- **SMS codes.** Stored as salted hashes, compared in constant time, 3 attempts, 5-minute expiry.
+- **Callbacks.** Challenge IDs are unguessable. Push and 3-D Secure results must carry an HMAC-SHA256 signature.
+- **Providers.** `log` (development only, refused in production) or `webhook`: a signed POST to the bank's SMS,
+  push or 3DS gateway.
+- **Send failures.** A failed send marks the challenge `send_failed` and routes the transaction to REVIEW.
+- **Outcomes.** Measured per method (pass, fail, abandon, catch rate on labels). Outcomes are not written as
+  labels, because passing an SMS code does not prove a customer genuine (SIM swap).
+- **Expiry and issuing.** An expiry sweep runs every 5 minutes. Optional auto-issue on STEP_UP decisions
+  (`stepup.auto_issue`).
+- **3-D Secure fields.** The 3DS field names follow EMV 3DS 2.x. Map them to the bank's 3DS server during
+  integration.
+
+**Cost model v2.**
+
+- **Customer value.** Per-customer annual net revenue from the bank's P&L data (point-in-time, annualised,
+  refreshed daily), bounded to $75–$1,200. Unbounded, a Student ($1.8 a year here) would be about 700 times
+  cheaper to decline than a Corporate client.
+- **Step-up economics.** Friction and catch rate come from measured outcomes per method once 200 challenges have
+  completed (priors until then). Capacity shadow prices stay as floors.
+- **No segment pricing.** Segment is not priced (it is a protected proxy). This is a deliberate departure from
+  the original "segment friction" wording.
+- **Backtest.** `POST /operations/cost-model/backtest` replays v1 and v2 on history. v2 lowered realised cost by
+  about $11.9k (0.6%) and added no decision disparity.
+- **Default.** The default stays **v1** until the bank approves the switch (`decisioning.cost_model`).
+
+**Decision-level fairness** (found in the backtest). Earlier fairness tests checked scores at thresholds; this
+one checks the actual decisions.
+
+- **The raw picture.** Genuine Corporate customers are intervened on 34% of the time against 0.5% for Students
+  (raw ratio 4.1×), because expected-cost decisions weigh probability by amount.
+- **The new test** (`decision_fairness`) standardises intervention rates for amount, separating amount (a
+  legitimate risk factor) from group.
+- **What it shows.** Corporate and Private Banking are intervened on *less* than their amounts explain (0.83×,
+  0.90×). **Genuine Retail customers are intervened on 1.88× what their amounts explain** (q < 0.001), although
+  raw they are intervened on least. A given payment is unusual relative to their own history.
+- **Where it runs and how it is recorded.** Raised as a medium finding for a policy decision. The test now also
+  runs quarterly on live decisions in the outcomes analysis.
+
+**Live run** (copies of the DB and registry; 11 scheduled jobs).
+
+- **Starter rules.** Created and simulated through the API. "New device with login anomaly" was approved by a
+  second person. "First transaction draining the balance" was refused active by the fairness gate.
+- **Live rule hit.** A transaction from a known customer on a never-seen device after 4 logins hit the rule. It
+  was recorded, and the model had already chosen REVIEW. For a first-time customer the rule correctly did not
+  fire: "new device" is unknown without history.
+- **Step-up.** A push challenge was issued, and its signed callback passed it.
+- **Cost model.** 7,655 customer values were refreshed, and the step-up rates showed "prior" (nothing measured yet).
 
 ## Phase 6 — Graph intelligence (GNN)
 

@@ -99,6 +99,15 @@ audit:
 decisioning:
   max_review_rate: 0.02
   max_step_up_rate: 0.05
+  # Cost model: v1 flat economics; v2 per-customer value (bounded) and measured step-up outcomes.
+  # Switch only after the v1-vs-v2 backtest (POST /operations/cost-model/backtest) is approved.
+  cost_model: "v1"
+  customer_value_bounds_usd: [75, 1200]
+  min_challenges_for_measured_rates: 200
+  step_up_abandonment_prior: 0.08
+  step_up_message_cost_usd: {sms_otp: 0.05, push: 0.01, "3ds": 0.10}
+  transaction_margin_rate: 0.01
+  customer_value_cron: "30 1 * * *"
 
 # Phase 2 — run alongside the incumbent fraud platform
 parallel_run:
@@ -144,3 +153,14 @@ cases:
     standard: {sla_minutes: 480}
   checker_threshold_usd: 10000   # clearing a case this large as genuine needs a second reviewer
   sla_check_cron: "*/15 * * * *"
+
+# Step-up orchestration. Providers: "log" (development only) or "webhook" (signed POST to the bank's
+# SMS / push / 3-D Secure gateway). Secrets come from BTI_STEPUP_WEBHOOK_SECRET and BTI_STEPUP_CALLBACK_SECRET.
+stepup:
+  provider: "log"
+  webhook_url: ""
+  ttl_seconds: 300
+  max_attempts: 3
+  auto_issue: false              # issue a challenge automatically on STEP_UP decisions
+  methods: {"Card Not Present": "3ds", "Mobile Banking": "push", "Internet Banking": "sms_otp", "API/Open Banking": "sms_otp"}
+  expiry_cron: "*/5 * * * *"
