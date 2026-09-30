@@ -198,6 +198,45 @@ def list_cases(db: Session, status: Optional[str] = None, queue: Optional[str] =
     return [_row(c, now) for c in q.order_by(FraudCase.sla_due_at).limit(limit).all()]
 
 
+def case_context(db: Session, case_id: int, history: int = 20) -> Dict:
+    """Everything an analyst needs beside the case: the scored decision, the customer's recent activity,
+    their earlier cases and confirmed outcomes."""
+    from bti.database.models import FraudLabel, ScoreLog
+    case = db.get(FraudCase, case_id)
+    if case is None:
+        raise CaseError(f"No case {case_id}")
+    score = (db.query(ScoreLog).filter(ScoreLog.transaction_id == case.transaction_id,
+                                       ScoreLog.is_shadow.is_(False))
+             .order_by(ScoreLog.scored_at.desc()).first())
+    recent, earlier, outcomes = [], [], []
+    if case.customer_id:
+        rows = (db.query(ScoreLog).filter(ScoreLog.customer_id == case.customer_id, ScoreLog.is_shadow.is_(False))
+                .order_by(ScoreLog.scored_at.desc()).limit(history).all())
+        recent = [{"transaction_id": r.transaction_id, "scored_at": r.scored_at.isoformat(),
+                   "amount_usd": r.amount_usd, "fraud_probability": r.fraud_probability, "decision": r.decision}
+                  for r in rows]
+        earlier = [_row(c) for c in db.query(FraudCase).filter(FraudCase.customer_id == case.customer_id,
+                                                               FraudCase.id != case.id)
+                   .order_by(FraudCase.created_at.desc()).limit(10).all()]
+        ids = [r["transaction_id"] for r in recent]
+        if ids:
+            outcomes = [{"transaction_id": l.transaction_id, "label": l.label, "source": l.label_source,
+                         "at": l.event_at.isoformat()}
+                        for l in db.query(FraudLabel).filter(FraudLabel.transaction_id.in_(ids))
+                        .order_by(FraudLabel.event_at.desc()).all()]
+    return {
+        "case": _row(case),
+        "score": None if score is None else {
+            "model_id": score.model_id, "model_role": score.model_role, "fraud_probability": score.fraud_probability,
+            "decision": score.decision, "jurisdiction": score.jurisdiction, "amount_usd": score.amount_usd,
+            "guardrails": score.guardrails or [], "features": score.features or {},
+            "scored_at": score.scored_at.isoformat()},
+        "customer_recent": recent, "customer_earlier_cases": earlier, "customer_outcomes": outcomes,
+        "checker_threshold_usd": get_settings().case_checker_threshold_usd,
+        "dispositions": list(DISPOSITIONS),
+    }
+
+
 def queue_status(db: Session, days: int = 7, now: Optional[datetime] = None) -> Dict:
     now = now or datetime.utcnow()
     rows = db.query(FraudCase).filter((FraudCase.status.in_(OPEN_STATES)) |

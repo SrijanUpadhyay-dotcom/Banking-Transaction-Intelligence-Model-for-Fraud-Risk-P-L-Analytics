@@ -60,6 +60,15 @@ def queues(days: int = Query(7, ge=1, le=90), db: Session = Depends(get_db)):
     return cases.queue_status(db, days)
 
 
+@router.get("/{case_id}/context")
+def case_context(case_id: int, db: Session = Depends(get_db)):
+    """The case, the scored decision behind it, and the customer's recent activity, cases and outcomes."""
+    try:
+        return cases.case_context(db, case_id)
+    except cases.CaseError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
 @router.post("", dependencies=[Depends(require_api_key)], status_code=201)
 def open_case(body: CaseIn, db: Session = Depends(get_db)):
     """Manual referral, e.g. a customer asking for human review of an automated decline."""

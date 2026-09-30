@@ -32,7 +32,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from pathlib import Path
+
+from fastapi.responses import FileResponse, JSONResponse
 
 from bti.config import get_settings
 from bti.logging_config import setup_logging, get_logger
@@ -117,6 +119,12 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # ── Health ─────────────────────────────────────────────────────────────────────
+
+@app.get("/workbench", include_in_schema=False)
+def workbench():
+    """Analyst case workbench: live queues, SLA clocks, case context and dispositions (calls /api/v1/cases)."""
+    return FileResponse(Path(__file__).parent / "static" / "workbench.html", media_type="text/html")
+
 
 @app.get("/health", tags=["Health"])
 def health():

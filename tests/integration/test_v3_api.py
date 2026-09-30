@@ -275,6 +275,10 @@ class TestCaseLoop:
         assert nxt["queue"] == "urgent" and nxt["status"] == "assigned"          # most urgent first
         taken = client.post(f"/api/v1/cases/{case['id']}/assign", headers=KEY, json={"analyst": "analyst.one"}).json()
         assert taken["assigned_to"] == "analyst.one" and taken["status"] == "assigned"
+        ctx = client.get(f"/api/v1/cases/{case['id']}/context").json()
+        assert ctx["case"]["id"] == case["id"] and ctx["score"]["decision"] == action
+        assert any(r["transaction_id"] == "V3-0300" for r in ctx["customer_recent"])
+        assert "confirmed_fraud" in ctx["dispositions"]
         closed = client.post(f"/api/v1/cases/{case['id']}/disposition", headers=KEY, json={
             "disposition": "confirmed_fraud", "analyst": "analyst.one", "fraud_type": "Account Takeover"})
         assert closed.status_code == 200 and closed.json()["label_written"] is True
@@ -284,3 +288,16 @@ class TestCaseLoop:
         assert queues["urgent"]["dispositions"].get("confirmed_fraud", 0) >= 1
         triggers = client.get("/api/v1/operations/retraining/triggers").json()
         assert triggers["new_labels_since_last"] >= 1
+
+
+def test_workbench_page_is_served_and_its_script_parses(client, tmp_path):
+    import shutil
+    import subprocess
+    r = client.get("/workbench")
+    assert r.status_code == 200 and "BTI Case Workbench" in r.text and "/api/v1" in r.text
+    assert "innerHTML" not in r.text                        # data is only ever rendered as text
+    if shutil.which("node"):
+        script = r.text[r.text.index("<script>") + 8:r.text.index("</script>")]
+        path = tmp_path / "workbench.js"
+        path.write_text(script)
+        assert subprocess.run(["node", "--check", str(path)], capture_output=True).returncode == 0

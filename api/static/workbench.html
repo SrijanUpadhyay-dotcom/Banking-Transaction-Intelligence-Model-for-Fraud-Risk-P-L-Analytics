@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BTI Case Workbench</title>
+<style>
+  :root {
+    --ground: #f4f6f9; --surface: #ffffff; --raised: #f9fafc; --ink: #15191e; --muted: #5a6470; --line: #dce1e8;
+    --accent: #2457c5; --accent-ink: #ffffff; --accent-soft: #e6edfb;
+    --breach: #b83227; --breach-soft: #fbe9e7; --warn: #a86b12; --warn-soft: #fbf1df; --ok: #2c7a4b; --ok-soft: #e4f3ea;
+    --shadow: 0 1px 2px rgba(20, 30, 50, .06), 0 2px 8px rgba(20, 30, 50, .05);
+    --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0e1116; --surface: #161b22; --raised: #1b212a; --ink: #e5e9ef; --muted: #98a2ae; --line: #2a313b;
+      --accent: #7ea3f5; --accent-ink: #0e1116; --accent-soft: #1d2a44;
+      --breach: #f2786d; --breach-soft: #3a1f1d; --warn: #e3b35c; --warn-soft: #36291a; --ok: #6cc28c; --ok-soft: #173024;
+      --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0e1116; --surface: #161b22; --raised: #1b212a; --ink: #e5e9ef; --muted: #98a2ae; --line: #2a313b;
+    --accent: #7ea3f5; --accent-ink: #0e1116; --accent-soft: #1d2a44;
+    --breach: #f2786d; --breach-soft: #3a1f1d; --warn: #e3b35c; --warn-soft: #36291a; --ok: #6cc28c; --ok-soft: #173024;
+    --shadow: none;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font: 14px/1.45 var(--ui); }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  .num { font-variant-numeric: tabular-nums; }
+  .mono { font-family: var(--mono); font-size: 12.5px; }
+  .muted { color: var(--muted); }
+
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 12px 20px;
+           background: var(--surface); border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 16px; letter-spacing: .01em; }
+  header h1 span { color: var(--muted); font-weight: 500; }
+  .who { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .who input { width: 170px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--raised); }
+  .pill { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--raised); border: 1px solid var(--line); }
+  .pill.ok { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+
+  main { padding: 16px 20px 28px; display: grid; gap: 16px; max-width: 1480px; margin: 0 auto; }
+  .queues { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .q { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+       display: grid; gap: 8px; box-shadow: var(--shadow); }
+  .q-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .q-name { font-weight: 650; text-transform: capitalize; }
+  .q-sla { font-size: 12px; color: var(--muted); }
+  .q-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .q-stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .q-stat small { color: var(--muted); font-size: 11px; letter-spacing: .03em; text-transform: uppercase; }
+  .q-stat.bad b { color: var(--breach); }
+
+  .work { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 16px; align-items: start; }
+  @media (max-width: 980px) { .work { grid-template-columns: 1fr; } }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+  .panel-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .panel-head h2 { margin: 0 auto 0 0; font-size: 14px; }
+  select, .seg button { padding: 5px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--raised); }
+  .seg { display: inline-flex; }
+  .seg button { border-radius: 0; cursor: pointer; }
+  .seg button:first-child { border-radius: 6px 0 0 6px; }
+  .seg button:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
+  .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .btn { padding: 7px 12px; border-radius: 7px; border: 1px solid var(--line); background: var(--raised); cursor: pointer; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .list { max-height: calc(100vh - 290px); min-height: 260px; overflow: auto; }
+  .row { display: grid; grid-template-columns: 4px 1fr auto; gap: 0 10px; padding: 9px 12px 9px 0;
+         border-bottom: 1px solid var(--line); cursor: pointer; background: var(--surface); width: 100%; text-align: left;
+         border-left: 0; border-right: 0; border-top: 0; }
+  .row:hover { background: var(--raised); }
+  .row[aria-current="true"] { background: var(--accent-soft); }
+  .stripe { border-radius: 0 3px 3px 0; background: var(--line); }
+  .row.breach .stripe { background: var(--breach); }
+  .row.warn .stripe { background: var(--warn); }
+  .row-main { display: grid; gap: 2px; min-width: 0; }
+  .row-top { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .row-top .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-side { text-align: right; display: grid; gap: 2px; align-content: center; }
+  .chip { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--raised); border: 1px solid var(--line);
+          text-transform: capitalize; white-space: nowrap; }
+  .chip.urgent { color: var(--breach); background: var(--breach-soft); border-color: transparent; }
+  .chip.high_value { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+  .clock { font-family: var(--mono); font-size: 12.5px; }
+  .clock.breach { color: var(--breach); font-weight: 650; }
+  .clock.warn { color: var(--warn); }
+  .empty { padding: 28px 16px; text-align: center; color: var(--muted); }
+
+  .detail { padding: 14px 16px 18px; display: grid; gap: 16px; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 16px; }
+  .fact small { display: block; color: var(--muted); font-size: 11px; letter-spacing: .03em; text-transform: uppercase; }
+  .fact b { font-size: 15px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: .02em; }
+  .reasons { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+  .notice { padding: 8px 10px; border-radius: 7px; background: var(--warn-soft); color: var(--warn); font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .03em; text-transform: uppercase; }
+  td.r, th.r { text-align: right; }
+  .scroll { overflow-x: auto; }
+
+  form.dispose { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--raised); }
+  .choices { display: flex; flex-wrap: wrap; gap: 6px; }
+  .choices label { display: inline-flex; gap: 6px; align-items: center; padding: 5px 10px; border: 1px solid var(--line);
+                   border-radius: 7px; background: var(--surface); cursor: pointer; }
+  .choices input:checked + span { font-weight: 650; color: var(--accent); }
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+  .fields label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+  .fields input, textarea { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+  textarea { width: 100%; min-height: 60px; resize: vertical; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  [hidden] { display: none !important; }
+
+  .toast { position: fixed; right: 16px; bottom: 16px; max-width: min(420px, calc(100vw - 32px)); padding: 10px 14px;
+           border-radius: 8px; background: var(--ink); color: var(--surface); box-shadow: 0 6px 24px rgba(0,0,0,.2); }
+  .toast.error { background: var(--breach); color: #fff; }
+  @media (prefers-reduced-motion: no-preference) { .toast { transition: opacity .2s; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>BTI Case Workbench <span>· fraud investigation queues</span></h1>
+  <div class="who">
+    <input id="analyst" placeholder="Your analyst ID" autocomplete="username" aria-label="Analyst ID">
+    <input id="apikey" type="password" placeholder="API key" autocomplete="off" aria-label="API key">
+    <span id="authState" class="pill">Read-only</span>
+    <span id="updated" class="muted num" aria-live="polite"></span>
+  </div>
+</header>
+
+<main>
+  <section class="queues" id="queues" aria-label="Queue health"></section>
+
+  <section class="work">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Cases</h2>
+        <div class="seg" role="group" aria-label="Scope">
+          <button type="button" data-scope="all" aria-pressed="true">All open</button>
+          <button type="button" data-scope="mine" aria-pressed="false">Mine</button>
+        </div>
+        <select id="queueFilter" aria-label="Queue"><option value="">All queues</option></select>
+        <button class="btn primary" id="takeNext" type="button">Take next case</button>
+      </div>
+      <div class="list" id="list" role="list"></div>
+    </div>
+
+    <div class="panel">
+      <div class="detail" id="detail">
+        <div class="empty">Select a case, or take the next one. Cases are ordered by queue urgency, then expected loss.</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script>
+(() => {
+  const API = "/api/v1";
+  const state = { cases: [], queues: {}, selected: null, context: null, scope: "all", queue: "", timer: null };
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k) { try { return sessionStorage.getItem(k) || ""; } catch (e) { return ""; } },
+    set(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} },
+  };
+
+  function el(tag, attrs = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v === null || v === undefined || v === false) continue;
+      if (k === "class") node.className = v;
+      else if (k === "text") node.textContent = v;
+      else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+      else node.setAttribute(k, v === true ? "" : v);
+    }
+    for (const c of children.flat()) if (c !== null && c !== undefined) node.append(c instanceof Node ? c : String(c));
+    return node;
+  }
+  const money = (v) => v === null || v === undefined ? "—" : "$" + Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const pct = (v) => v === null || v === undefined ? "—" : (Number(v) * 100).toFixed(1) + "%";
+  const when = (iso) => iso ? new Date(iso + (iso.endsWith("Z") ? "" : "Z")).toLocaleString() : "—";
+  const label = (s) => String(s || "").replace(/_/g, " ");
+
+  function toast(msg, error = false) {
+    const t = $("toast");
+    t.textContent = msg; t.className = "toast" + (error ? " error" : ""); t.hidden = false;
+    clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, error ? 7000 : 3500);
+  }
+
+  async function call(path, method = "GET", body) {
+    const headers = { "Content-Type": "application/json" };
+    const key = $("apikey").value.trim();
+    if (key) headers["X-API-Key"] = key;
+    const res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    let data = null;
+    try { data = await res.json(); } catch (e) {}
+    if (!res.ok) throw new Error((data && data.detail) ? (typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail)) : res.statusText);
+    return data;
+  }
+
+  // ── SLA clock ──
+  function sla(c) {
+    const due = new Date(c.sla_due_at + "Z").getTime();
+    const created = new Date(c.created_at + "Z").getTime();
+    const left = due - Date.now();
+    const total = Math.max(due - created, 1);
+    const cls = left < 0 ? "breach" : (left / total < 0.25 ? "warn" : "");
+    const m = Math.floor(Math.abs(left) / 60000), h = Math.floor(m / 60);
+    const text = (left < 0 ? "+" : "") + (h ? `${h}h ${String(m % 60).padStart(2, "0")}m` : `${m}m`) + (left < 0 ? " over" : " left");
+    return { cls, text };
+  }
+
+  // ── Queues ──
+  function renderQueues() {
+    const wrap = $("queues"); wrap.replaceChildren();
+    const sel = $("queueFilter");
+    if (sel.options.length === 1) for (const name of Object.keys(state.queues)) sel.append(el("option", { value: name, text: label(name) }));
+    for (const [name, q] of Object.entries(state.queues)) {
+      const stat = (v, t, bad) => el("div", { class: "q-stat" + (bad ? " bad" : "") }, el("b", { text: v }), el("small", { text: t }));
+      wrap.append(el("article", { class: "q" },
+        el("div", { class: "q-head" }, el("span", { class: "q-name", text: label(name) }),
+           el("span", { class: "q-sla", text: `SLA ${q.sla_minutes >= 60 ? q.sla_minutes / 60 + "h" : q.sla_minutes + "m"}` })),
+        el("div", { class: "q-stats" },
+           stat(q.open, "open"), stat(q.unassigned, "unassigned"), stat(q.open_breached, "breached", q.open_breached > 0),
+           stat(q.sla_attainment === null ? "—" : Math.round(q.sla_attainment * 100) + "%", "SLA 7d"))));
+    }
+  }
+
+  // ── Case list ──
+  function visible() {
+    const me = $("analyst").value.trim().toLowerCase();
+    return state.cases.filter((c) => (!state.queue || c.queue === state.queue)
+      && (state.scope === "all" || (c.assigned_to || "").toLowerCase() === me));
+  }
+
+  function renderList() {
+    const list = $("list"); list.replaceChildren();
+    const rows = visible();
+    if (!rows.length) {
+      list.append(el("div", { class: "empty", text: state.scope === "mine" ? "No cases assigned to you." : "No open cases. The queues are clear." }));
+      return;
+    }
+    for (const c of rows) {
+      const clock = sla(c);
+      const row = el("button", { class: "row " + clock.cls, type: "button", role: "listitem",
+                                 "aria-current": state.selected === c.id ? "true" : "false", onclick: () => select(c.id) },
+        el("span", { class: "stripe" }),
+        el("span", { class: "row-main" },
+          el("span", { class: "row-top" }, el("span", { class: "chip " + c.queue, text: label(c.queue) }),
+             el("span", { class: "mono", text: c.transaction_id })),
+          el("span", { class: "muted", text: `${label(c.status)}${c.assigned_to ? " · " + c.assigned_to : ""} · ${label(c.source)}` })),
+        el("span", { class: "row-side" },
+          el("span", { class: "clock " + clock.cls, "data-case": c.id, text: clock.text }),
+          el("span", { class: "num", text: `${money(c.amount_usd)} · p ${pct(c.fraud_probability)}` })));
+      list.append(row);
+    }
+  }
+
+  function tickClocks() {
+    for (const node of document.querySelectorAll(".clock[data-case]")) {
+      const c = state.cases.find((x) => x.id === Number(node.dataset.case));
+      if (!c) continue;
+      const s = sla(c);
+      node.textContent = s.text; node.className = "clock " + s.cls;
+      node.closest(".row").className = "row " + s.cls;
+    }
+  }
+
+  // ── Detail ──
+  async function select(id) {
+    state.selected = id; renderList();
+    try {
+      state.context = await call(`/cases/${id}/context`);
+      renderDetail();
+    } catch (e) { toast(e.message, true); }
+  }
+
+  function renderDetail() {
+    const d = $("detail"); d.replaceChildren();
+    const ctx = state.context; if (!ctx) return;
+    const c = ctx.case, s = ctx.score, open = ["open", "assigned", "pending_customer"].includes(c.status);
+    const clock = sla(c);
+    const fact = (t, v, cls) => el("div", { class: "fact" }, el("small", { text: t }), el("b", { class: cls || "", text: v }));
+    d.append(
+      el("div", { class: "facts" },
+        fact("Case", "#" + c.id), fact("Transaction", c.transaction_id, "mono"), fact("Customer", c.customer_id || "—", "mono"),
+        fact("Amount (USD)", money(c.amount_usd)), fact("Fraud probability", pct(c.fraud_probability)),
+        fact("Expected loss (USD)", money(c.priority_score)), fact("Decision", label(c.decision)),
+        fact("Queue", label(c.queue)), fact("SLA", open ? clock.text : (c.sla_breached ? "breached" : "met")),
+        fact("Status", label(c.status) + (c.assigned_to ? " · " + c.assigned_to : ""))));
+
+    const reasons = c.reason_codes || [];
+    d.append(el("section", {}, el("h3", { text: "Why the model flagged it" }),
+      reasons.length ? el("ol", { class: "reasons" }, reasons.map((r) => el("li", {}, el("b", { text: r.code }), " — ", r.analyst_text || "")))
+                     : el("p", { class: "muted", text: "No reason codes recorded." })));
+    if (s && s.guardrails && s.guardrails.length)
+      d.append(el("div", { class: "notice", text: "Decision guardrails: " + s.guardrails.join(" · ") }));
+
+    const hist = ctx.customer_recent.filter((r) => r.transaction_id !== c.transaction_id).slice(0, 10);
+    const outcome = Object.fromEntries(ctx.customer_outcomes.map((o) => [o.transaction_id, o]));
+    d.append(el("section", {}, el("h3", { text: "Customer's recent scored activity" }),
+      hist.length ? historyTable(hist, outcome) : el("p", { class: "muted", text: "No other scored transactions for this customer." })));
+    if (ctx.customer_earlier_cases.length)
+      d.append(el("section", {}, el("h3", { text: "Earlier cases for this customer" }),
+        el("p", { class: "muted", text: ctx.customer_earlier_cases.map((e) => `#${e.id} ${label(e.disposition || e.status)}`).join(" · ") })));
+
+    if (!open) {
+      d.append(el("div", { class: "notice", text: `Closed ${when(c.closed_at)} as ${label(c.disposition)} by ${c.disposition_by}` +
+        (c.checked_by ? `, checked by ${c.checked_by}` : "") + (c.label_written ? ". Written to the label store." : ". No label written.") }));
+      return;
+    }
+    const me = $("analyst").value.trim();
+    d.append(el("div", { class: "actions" },
+      el("button", { class: "btn", type: "button", disabled: !me || c.assigned_to === me,
+                     onclick: () => act(`/cases/${c.id}/assign`, { analyst: me }, "Assigned to you") }, "Assign to me"),
+      el("button", { class: "btn", type: "button", disabled: !me || c.status === "pending_customer",
+                     onclick: () => act(`/cases/${c.id}/pending-customer`, { analyst: me }, "Waiting for the customer") }, "Waiting for customer")));
+    d.append(dispositionForm(c, ctx));
+  }
+
+  function historyTable(rows, outcome) {
+    const outcomeText = (id) => {
+      const o = outcome[id];
+      return o ? `${o.label ? "fraud" : "genuine"} (${label(o.source).toLowerCase()})` : "—";
+    };
+    const head = el("thead", {}, el("tr", {}, ["When", "Transaction", "Amount", "p", "Decision", "Outcome"]
+      .map((h, i) => el("th", { class: i === 2 || i === 3 ? "r" : "", text: h }))));
+    const body = el("tbody", {}, rows.map((r) => el("tr", {},
+      el("td", { class: "num", text: when(r.scored_at) }),
+      el("td", { class: "mono", text: r.transaction_id }),
+      el("td", { class: "r num", text: money(r.amount_usd) }),
+      el("td", { class: "r num", text: pct(r.fraud_probability) }),
+      el("td", { text: label(r.decision) }),
+      el("td", { text: outcomeText(r.transaction_id) }))));
+    return el("div", { class: "scroll" }, el("table", {}, head, body));
+  }
+
+  function dispositionForm(c, ctx) {
+    const needsChecker = () => form.querySelector("input[name=disp]:checked")?.value === "confirmed_genuine"
+                                 && (c.amount_usd || 0) >= ctx.checker_threshold_usd;
+    const isFraud = () => form.querySelector("input[name=disp]:checked")?.value === "confirmed_fraud";
+    const fraudFields = el("div", { class: "fields", hidden: true },
+      el("label", {}, "Fraud type", el("input", { name: "fraud_type", placeholder: "e.g. Account Takeover" })),
+      el("label", {}, "Loss (USD)", el("input", { name: "loss_amount", type: "number", min: "0", step: "0.01" })));
+    const checker = el("div", { class: "fields", hidden: true },
+      el("label", {}, `Second reviewer (clearing ${money(ctx.checker_threshold_usd)}+ needs one)`,
+         el("input", { name: "checked_by", placeholder: "Reviewer ID, not your own" })));
+    const form = el("form", { class: "dispose", onsubmit: async (ev) => {
+        ev.preventDefault();
+        const me = $("analyst").value.trim();
+        const disp = form.querySelector("input[name=disp]:checked")?.value;
+        if (!me) return toast("Enter your analyst ID first.", true);
+        if (!disp) return toast("Choose an outcome.", true);
+        const body = { disposition: disp, analyst: me, notes: form.notes.value.trim() || null };
+        if (isFraud()) { body.fraud_type = form.fraud_type.value.trim() || null;
+                         body.loss_amount = form.loss_amount.value ? Number(form.loss_amount.value) : null; }
+        if (needsChecker()) body.checked_by = form.checked_by.value.trim() || null;
+        await act(`/cases/${c.id}/disposition`, body, disp === "confirmed_fraud" || disp === "confirmed_genuine"
+                  ? "Case closed — outcome written as a confirmed label" : "Case closed");
+      } },
+      el("h3", { text: "Outcome" }),
+      el("div", { class: "choices", role: "radiogroup", "aria-label": "Outcome" },
+        ctx.dispositions.map((v) => el("label", {}, el("input", { type: "radio", name: "disp", value: v,
+          onchange: () => { fraudFields.hidden = !isFraud(); checker.hidden = !needsChecker(); } }), el("span", { text: label(v) })))),
+      fraudFields, checker,
+      el("textarea", { name: "notes", placeholder: "Investigation notes (who you spoke to, what was confirmed)", "aria-label": "Notes" }),
+      el("div", { class: "actions" }, el("button", { class: "btn primary", type: "submit" }, "Close case")));
+    return form;
+  }
+
+  async function act(path, body, ok) {
+    try { await call(path, "POST", body); toast(ok); await refresh(); if (state.selected) await select(state.selected); }
+    catch (e) { toast(e.message, true); }
+  }
+
+  // ── Data ──
+  async function refresh() {
+    try {
+      const [q, ...lists] = await Promise.all([call("/cases/queues"), ...["open", "assigned", "pending_customer"]
+        .map((s) => call(`/cases?status=${s}&limit=500`))]);
+      state.queues = q.queues;
+      const order = Object.keys(q.queues);
+      state.cases = lists.flatMap((l) => l.cases).sort((a, b) =>
+        order.indexOf(a.queue) - order.indexOf(b.queue) || b.priority_score - a.priority_score || a.created_at.localeCompare(b.created_at));
+      renderQueues(); renderList();
+      $("updated").textContent = "Updated " + new Date().toLocaleTimeString();
+    } catch (e) { toast("Could not load cases: " + e.message, true); }
+  }
+
+  function authState() {
+    const has = $("apikey").value.trim() && $("analyst").value.trim();
+    $("authState").textContent = has ? "Signed in" : "Read-only"; $("authState").className = "pill" + (has ? " ok" : "");
+    $("takeNext").disabled = !has;
+  }
+
+  $("takeNext").addEventListener("click", async () => {
+    try {
+      const r = await call("/cases/next", "POST", { analyst: $("analyst").value.trim(), queue: state.queue || null });
+      if (!r.case) return toast(r.detail || "No unassigned cases.");
+      toast(`Case #${r.case.id} is yours`); await refresh(); await select(r.case.id);
+    } catch (e) { toast(e.message, true); }
+  });
+  document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => {
+    state.scope = b.dataset.scope;
+    document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    renderList();
+  }));
+  $("queueFilter").addEventListener("change", (e) => { state.queue = e.target.value; renderList(); });
+  for (const id of ["analyst", "apikey"]) {
+    $(id).value = store.get("bti." + id);
+    $(id).addEventListener("input", () => { store.set("bti." + id, $(id).value); authState(); if (id === "analyst") renderList(); });
+  }
+  authState(); refresh();
+  setInterval(refresh, 20000); setInterval(tickClocks, 1000);
+})();
+</script>
+</body>
+</html>

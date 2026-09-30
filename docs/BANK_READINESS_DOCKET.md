@@ -337,6 +337,7 @@ out-of-time):
 |---|---|---|
 | Confirmed-label feedback loop | **Done** | `POST /operations/labels`, 90-day maturity rule. |
 | Case management feeding labels | **Done** | `/api/v1/cases`. See *Case management* below. |
+| Analyst case workbench | **Done** | `GET /workbench`, served by the BTI API itself: same origin, no third-party requests. See *Case workbench* below. |
 | Continuous retraining | **Done** | `python -m bti.modeling.retrain`, `GET /operations/retraining/triggers`, `POST /operations/retraining/run`. See *Continuous retraining* below. |
 | Bounded daily recalibration | **Done** | `POST /operations/recalibration/run`, `/rollback`; daily job. See *Recalibration* below. |
 
@@ -358,6 +359,28 @@ out-of-time):
 - **Maker-checker.** Clearing a case of $10,000 or more as genuine needs a second reviewer.
 - **SLA and metrics.** An SLA check runs every 15 minutes and alerts once per breached case.
   `GET /cases/queues` reports open, breached, time to close, SLA attainment and fraud-confirmation rate per queue.
+
+**Case workbench** (`/workbench`).
+
+- **Queue health.** Open, unassigned and breached cases per queue, plus SLA attainment over 7 days.
+- **Case list.** Live cases in urgency order, each with a ticking SLA clock (amber under 25% of the time left, red
+  when breached). It filters by "mine" and by queue, and a button takes the next case.
+- **Case detail.**
+  - probability, amount and expected loss
+  - reason codes in analyst language
+  - decision guardrails
+  - the customer's recent scored activity, with confirmed outcomes and earlier cases (`GET /cases/{id}/context`)
+- **Actions.** Assign to me, "waiting for customer", and closing a case with an outcome. Fraud type and loss are
+  asked for on confirmed fraud. The second-reviewer field appears when clearing $10,000 or more.
+- **Safety.**
+  - All data is rendered as text, never HTML.
+  - The analyst ID and API key are kept in session storage only.
+  - In production, put the page behind the bank's SSO and replace the key entry with the SSO identity.
+- **Verified.** In a headless-browser run, "take next" handed over the most urgent case. Confirming fraud wrote a
+  label. Clearing a $12,800 case was refused without a second reviewer, then accepted with one. No page errors in
+  light or dark mode. A test syntax-checks the page's script on every run.
+- **Relation to the old queue.** The older `/alerts` exception queue remains for the batch history only. The
+  workbench is the live queue.
 
 **Continuous retraining.**
 
