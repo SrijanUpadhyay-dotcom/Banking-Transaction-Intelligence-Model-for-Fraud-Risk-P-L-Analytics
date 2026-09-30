@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 One scoring path for every API: v3 score → expected-cost decision →
 shadow challenger → score log.

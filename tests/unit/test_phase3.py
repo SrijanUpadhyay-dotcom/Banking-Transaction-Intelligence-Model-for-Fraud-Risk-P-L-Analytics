@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """Phase 3: tamper-evident audit storage, validation workflow, benchmark findings, outcomes analysis."""
 
 import os

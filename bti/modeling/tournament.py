@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Challenger tournament: train several candidate models on identical data and
 split, register every one of them (the alternatives considered are part of the

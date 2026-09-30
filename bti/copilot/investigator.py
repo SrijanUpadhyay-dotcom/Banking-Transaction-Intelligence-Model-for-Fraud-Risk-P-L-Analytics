@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 BTI Copilot — AI-Powered Fraud Investigation Assistant
 Phase 3 of BTI v2 (Fraud Intelligence Layer)

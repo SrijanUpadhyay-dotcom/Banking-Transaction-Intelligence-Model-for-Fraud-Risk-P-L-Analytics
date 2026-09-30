@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Outcomes analysis on matured labels (SR 11-7 ongoing monitoring; PRA SS1/23
 Principle 5).

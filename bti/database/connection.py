@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Database connection pool. Supports SQLite (default) and PostgreSQL.
 Switch via BTI_DATABASE_URL environment variable — no code changes needed.

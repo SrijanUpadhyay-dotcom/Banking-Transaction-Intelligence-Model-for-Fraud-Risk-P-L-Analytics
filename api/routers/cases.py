@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 /api/v1/cases — investigation queues with SLAs. Live REVIEW decisions open cases automatically; dispositions
 become confirmed labels for monitoring and retraining.

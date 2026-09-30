@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Assign a registered model to champion or challenger from the command line.
 Applies the same controls as POST /api/v1/governance/models/{id}/promote:

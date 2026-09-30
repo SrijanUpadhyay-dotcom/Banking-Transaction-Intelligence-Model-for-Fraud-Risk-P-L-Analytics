@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """Phase 5: governed rules, step-up orchestration, cost model v2 and decision-level fairness."""
 
 import hashlib

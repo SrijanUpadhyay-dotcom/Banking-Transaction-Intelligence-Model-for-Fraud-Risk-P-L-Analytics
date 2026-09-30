@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """Unit tests for the BTI v3 model: feature governance, point-in-time features, metrics, registry, scoring."""
 
 import numpy as np

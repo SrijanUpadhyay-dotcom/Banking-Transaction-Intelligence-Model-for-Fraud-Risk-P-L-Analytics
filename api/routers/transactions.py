@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 /api/v1/transactions endpoints — paginated listing, filtering, detail lookup.
 """

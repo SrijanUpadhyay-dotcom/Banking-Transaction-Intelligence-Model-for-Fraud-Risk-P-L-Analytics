@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Gradient-boosting back-ends behind one interface: histogram GBM (scikit-learn),
 LightGBM and XGBoost.

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 /api/v1/sas — SAS Integration Enrichment API
 Phase 4 of BTI v2 (Fraud Intelligence Layer)

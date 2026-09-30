@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """Shared API-key guard for state-changing endpoints (model promotion, label ingestion)."""
 
 import hmac

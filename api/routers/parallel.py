@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 /api/v1/parallel — run BTI alongside the incumbent fraud platform (e.g. SAS).
 

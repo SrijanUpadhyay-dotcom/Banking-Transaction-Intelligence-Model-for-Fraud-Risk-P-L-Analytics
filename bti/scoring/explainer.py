@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 SHAP-based Explainability Layer — Phase 1 of BTI v2 (Fraud Intelligence Layer)
 

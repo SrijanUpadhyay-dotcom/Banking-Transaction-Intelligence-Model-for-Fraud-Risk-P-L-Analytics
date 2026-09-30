@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Step-up orchestration: challenge the customer when the decision is STEP_UP.
 

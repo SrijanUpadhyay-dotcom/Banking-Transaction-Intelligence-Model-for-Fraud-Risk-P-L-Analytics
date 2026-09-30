@@ -372,3 +372,13 @@ After a pipeline run, `outputs/pnl/` contains:
 ---
 
 *Built to demonstrate production-grade financial crime infrastructure — REST API, ML scoring pipeline, compliance audit logging, and full test coverage at the standard expected in Tier 1 banking.*
+
+---
+
+## License
+
+**Proprietary — all rights reserved.** Copyright (c) 2026 Srijan Upadhyay.
+
+No licence is granted to use, copy, modify or distribute this software except by separate written
+agreement with the copyright holder. See [LICENSE](LICENSE) and [NOTICE](NOTICE). This licence replaces
+the earlier Creative Commons (CC BY-NC 4.0) and proprietary notices.

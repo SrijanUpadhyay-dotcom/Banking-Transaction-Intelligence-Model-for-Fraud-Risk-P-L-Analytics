@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Validation workflow (SR 11-7 / PRA SS1/23): model inventory, findings tracker,
 independent sign-offs, periodic review schedule, and the champion gate that

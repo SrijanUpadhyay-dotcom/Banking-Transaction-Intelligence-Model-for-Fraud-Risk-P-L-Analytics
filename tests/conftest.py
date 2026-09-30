@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """Test-wide settings: fix the API key before any module reads (and caches) the settings."""
 
 import os

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 /api/v1/governance — model inventory, documentation, promotion, drift,
 leakage screening and jurisdiction policy.

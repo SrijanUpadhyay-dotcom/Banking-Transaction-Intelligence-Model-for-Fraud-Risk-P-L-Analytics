@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """Phase 1: algorithm back-ends, extended features, rolling-fold tuning, challenger tournament."""
 
 from pathlib import Path

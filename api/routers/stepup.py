@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 /api/v1/stepup — customer challenges for STEP_UP decisions: SMS one-time code, push approval, 3-D Secure.
 """

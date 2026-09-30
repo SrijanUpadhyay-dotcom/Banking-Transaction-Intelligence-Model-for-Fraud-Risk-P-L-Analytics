@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """Phase 4: case management feeding labels, bounded recalibration, continuous retraining."""
 
 import shutil

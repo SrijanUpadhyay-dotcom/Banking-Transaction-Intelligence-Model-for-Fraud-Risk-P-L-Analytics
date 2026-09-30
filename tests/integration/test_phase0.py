@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Phase 0 guarantees:
   * /score, /score/explain, /score/upload and /sas/enrich run on the v3 model

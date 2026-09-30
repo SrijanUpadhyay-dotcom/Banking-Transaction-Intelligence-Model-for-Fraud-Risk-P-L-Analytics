@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """Phase 2: incumbent ingestion, parallel-run report, traffic split with fallback, reconciliation."""
 
 import time

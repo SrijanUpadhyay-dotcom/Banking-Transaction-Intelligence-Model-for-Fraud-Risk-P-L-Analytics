@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """Unit tests for Phase 0 helpers: legacy mapping, transaction preparation, metrics grouping, promote CLI."""
 
 import sys

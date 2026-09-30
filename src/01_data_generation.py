@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Banking Transaction Intelligence Model
 Part 1: Synthetic Dataset Generation (50,000 transactions)

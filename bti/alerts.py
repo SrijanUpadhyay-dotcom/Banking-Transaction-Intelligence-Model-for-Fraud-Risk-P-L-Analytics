@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Alert notification system — sends email and/or webhook on CRITICAL/HIGH alerts.
 Designed to integrate with PagerDuty, Slack, or any webhook endpoint.

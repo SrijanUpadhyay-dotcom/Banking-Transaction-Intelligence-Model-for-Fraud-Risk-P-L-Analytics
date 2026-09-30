@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Render a registry card as a model documentation pack structured for
 SR 11-7 / PRA SS1/23 review. Sections 13–15 carry the validation evidence:

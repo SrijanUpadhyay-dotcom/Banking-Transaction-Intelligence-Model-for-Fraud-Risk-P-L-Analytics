@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 /api/v1/operations — confirmed-label feedback, fraud-ops KPIs,
 champion/challenger comparison, policy backtesting and model-agnostic decisions.

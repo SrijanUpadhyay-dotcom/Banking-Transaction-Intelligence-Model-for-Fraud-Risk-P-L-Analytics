@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 In-process request metrics: counts, 5xx errors and latency samples per
 endpoint group since this worker started. Per-worker by design; a production

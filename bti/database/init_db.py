@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Database initialisation — creates all tables and optionally seeds from CSV.
 Run once on first deployment or after schema migrations.

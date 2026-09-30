@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Parallel run through the API with the real scoring model: incumbent feed → router → report → reconciliation.
 Runs against a temporary copy of the model registry and an in-memory database.

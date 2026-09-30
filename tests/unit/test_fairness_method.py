@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """Fairness method: multiple-testing correction, pooled windows, watchlist, remediation acceptance, registry notes."""
 
 import numpy as np

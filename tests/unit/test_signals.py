@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Feed-dependent signals: impossible travel, payee velocity, time since security event.
 

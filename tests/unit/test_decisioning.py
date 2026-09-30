@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """Unit tests for expected-cost decisioning guardrails and jurisdiction policy."""
 
 import numpy as np

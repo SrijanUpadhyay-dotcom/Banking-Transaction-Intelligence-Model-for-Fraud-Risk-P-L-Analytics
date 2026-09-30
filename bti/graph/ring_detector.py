@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Graph / Network Analytics — Fraud Ring Detector
 Phase 2 of BTI v2 (Fraud Intelligence Layer)

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Live fraud-operations KPIs, champion/challenger comparison and live drift —
 all computed from the score log and confirmed labels.

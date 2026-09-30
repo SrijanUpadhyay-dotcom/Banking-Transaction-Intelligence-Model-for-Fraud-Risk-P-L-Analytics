@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 End-to-end tests of the governed v3 lifecycle through the API:
 score → shadow → labels → KPIs → promotion (four-eyes) → champion/challenger.

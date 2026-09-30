@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Rehearsal of the parallel-run report on the synthetic data. This is NOT a
 comparison with SAS.

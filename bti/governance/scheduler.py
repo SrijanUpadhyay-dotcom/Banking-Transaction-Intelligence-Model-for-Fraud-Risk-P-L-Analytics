@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 In-process monitoring scheduler: weekly drift check, weekly parallel-run report
 against the incumbent, and daily reconciliation of the two decision logs.

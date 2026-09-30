@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Starter rule library, created as drafts for analysts to simulate, adjust and approve.
 

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Banking Transaction Intelligence Model
 Part 5: FP&A and P&L Analytics Layer

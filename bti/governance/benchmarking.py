@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Benchmarking, sensitivity analysis and stress testing (SR 11-7 "outcomes and
 benchmarking"; PRA SS1/23 Principle 4).

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """Platt (sigmoid) calibration on the logit of the raw score — strictly monotone, so ranking is preserved."""
 
 from __future__ import annotations
