@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Banking Transaction Intelligence (BTI) — Production Package
 Version 2.0.0

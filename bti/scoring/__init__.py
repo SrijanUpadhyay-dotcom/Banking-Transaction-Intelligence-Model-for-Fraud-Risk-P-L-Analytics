@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 from .model_loader import ModelBundle, load_models
 from .realtime import score_transaction, RealTimeScorer
 

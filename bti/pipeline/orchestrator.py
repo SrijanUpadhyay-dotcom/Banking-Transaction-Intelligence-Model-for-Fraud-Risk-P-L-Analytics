@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Pipeline orchestrator — runs each stage in order, tracks run metadata,
 persists results to the database, and dispatches alerts on completion.

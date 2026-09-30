@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Integration tests for the FastAPI REST endpoints.
 Uses FastAPI's dependency override to inject an in-memory SQLite DB.

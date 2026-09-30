@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 /api/v1/pipeline — trigger and inspect pipeline runs.
 Protected: requires X-API-Key header in non-dev environments.

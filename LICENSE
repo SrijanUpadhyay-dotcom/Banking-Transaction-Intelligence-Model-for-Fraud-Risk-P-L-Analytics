@@ -1,25 +1,67 @@
-Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)
+PROPRIETARY LICENSE — ALL RIGHTS RESERVED
 
-Copyright (c) 2026 Srijan Upadhyay
+Banking Transaction Intelligence (BTI)
+Copyright (c) 2026 Srijan Upadhyay. All rights reserved.
 
-This work is licensed under the Creative Commons Attribution-NonCommercial 4.0
-International License.
+1. Ownership
 
-You are free to:
-  Share — copy and redistribute the material in any medium or format
-  Adapt — remix, transform, and build upon the material
+This repository and everything in it (the "Software") is the proprietary work of
+Srijan Upadhyay (the "Owner"). The Software includes, without limitation:
+  - source code, scripts, configuration and tests;
+  - trained models, model cards, registries, feature definitions, rules and
+    decision policies;
+  - data generators, synthetic data, reports, workbooks, dashboards and outputs;
+  - documentation, designs, methods, governance and validation frameworks.
 
-Under the following terms:
-  Attribution — You must give appropriate credit to Srijan Upadhyay, provide a
-  link to the license, and indicate if changes were made.
+2. No licence granted
 
-  NonCommercial — You may not use the material for commercial purposes without
-  explicit written permission from the copyright holder.
+No licence or other right in the Software is granted to anyone, whether by
+implication, estoppel or otherwise, except by a separate written agreement
+signed by the Owner.
 
-No additional restrictions — You may not apply legal terms or technological
-measures that legally restrict others from doing anything the license permits.
+Without the Owner's prior written permission, no person may:
+  (a) use, run, copy, reproduce or store the Software, in whole or in part;
+  (b) modify, adapt, translate or create derivative works of it;
+  (c) distribute, publish, sublicense, sell, rent, lend or otherwise make it
+      available to any third party;
+  (d) use it, or any output of it, to build, train or benchmark another product,
+      model or service;
+  (e) reverse engineer, decompile or attempt to extract its methods, except to
+      the extent applicable law expressly permits despite this restriction;
+  (f) remove or alter any copyright, licence or proprietary notice.
 
-Full license text: https://creativecommons.org/licenses/by-nc/4.0/legalcode
+Viewing the Software where it is hosted does not grant any right to use it.
 
-For commercial licensing enquiries, contact the author via GitHub:
-https://github.com/SrijanUpadhyay-dotcom
+3. Earlier notices
+
+This licence replaces every earlier licence notice in this repository, including
+the Creative Commons Attribution-NonCommercial 4.0 notice (file LICENSE, added
+8 July 2026) and the earlier proprietary notice (file LICENSE.md, 25 May 2026).
+
+To the extent any version of the Software was previously made available under
+Creative Commons Attribution-NonCommercial 4.0, that permission is not extended
+to any version, change or addition published on or after the date of this
+licence (30 September 2026).
+
+4. Third-party components
+
+Open-source libraries the Software depends on (listed in requirements.txt)
+remain under their own licences. Datasets published by third parties remain
+subject to their own terms. Nothing in this licence restricts rights that those
+licences or terms grant.
+
+5. No warranty
+
+The Software is provided "as is", without warranty of any kind, express or
+implied, including fitness for a particular purpose and non-infringement. The
+Owner is not liable for any claim, damages or other liability arising from the
+Software or its use. Its models are trained on synthetic data and are not
+validated for production use.
+
+6. Permissions and enquiries
+
+For permission to use the Software, or for licensing and commercial enquiries,
+contact the Owner through GitHub: https://github.com/SrijanUpadhyay-dotcom
+
+Unauthorised use, reproduction or distribution of the Software may result in
+civil and criminal liability.

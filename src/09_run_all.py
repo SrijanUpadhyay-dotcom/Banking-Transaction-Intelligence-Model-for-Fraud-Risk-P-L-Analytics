@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Banking Transaction Intelligence Model
 Master Execution Script — Run All Pipeline Stages in Sequence

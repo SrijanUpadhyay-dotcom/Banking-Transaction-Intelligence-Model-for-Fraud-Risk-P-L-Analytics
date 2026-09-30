@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Unit tests for the real-time scoring engine.
 Uses the trained model artifacts — requires the pipeline to have run at least once.
