@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Structured logging with JSON output for production, human-readable for dev.
 Every fraud decision gets an immutable audit trail entry.

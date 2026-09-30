@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 APScheduler-based pipeline orchestration.
 Runs the full BTI pipeline on a configurable cron schedule.

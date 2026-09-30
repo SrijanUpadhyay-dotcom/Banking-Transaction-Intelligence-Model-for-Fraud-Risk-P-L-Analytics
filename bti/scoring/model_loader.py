@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Model loader with in-process caching.
 Models are loaded from disk once and held in memory for the lifetime of the process.

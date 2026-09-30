@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Real-time transaction fraud scoring engine.
 

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 IEEE-CIS Fraud Detection Dataset Validation
 Maps IEEE-CIS columns to BTI model features, scores 20k transactions,

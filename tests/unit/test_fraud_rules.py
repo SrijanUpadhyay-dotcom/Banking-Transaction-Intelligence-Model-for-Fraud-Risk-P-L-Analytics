@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Unit tests for the fraud rules engine.
 Each rule is tested in isolation with minimal synthetic data.

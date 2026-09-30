@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Pydantic request/response schemas for the BTI REST API.
 Separate from the ORM models to allow independent versioning.

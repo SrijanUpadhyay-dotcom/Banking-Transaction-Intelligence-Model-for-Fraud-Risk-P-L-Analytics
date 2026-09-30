@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 Centralised configuration — reads settings.yaml then overrides with env vars.
 All application code imports from here; never use hardcoded paths or values.

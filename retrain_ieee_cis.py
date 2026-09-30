@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Srijan Upadhyay. All rights reserved. Proprietary — see LICENSE.
 """
 BTI Retrain on IEEE-CIS Real Fraud Data
 Trains Isolation Forest + Logistic Regression + Random Forest
