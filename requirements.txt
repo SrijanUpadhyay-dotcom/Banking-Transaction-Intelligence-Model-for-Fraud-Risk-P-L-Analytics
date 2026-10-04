@@ -45,6 +45,11 @@ apscheduler==3.11.3
 python-dotenv>=1.0.0
 pyyaml==6.0.1
 
+# ── Streaming (Phase 7) ──────────────────────────────────────────────────────
+redis==8.1.0
+kafka-python==3.0.11
+defusedxml==0.7.1
+
 # ── Testing ──────────────────────────────────────────────────────────────────
 pytest==9.1.1
 pytest-asyncio>=0.21.0

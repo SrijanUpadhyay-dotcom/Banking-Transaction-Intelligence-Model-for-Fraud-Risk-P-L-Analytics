@@ -1,0 +1,88 @@
+{
+  "generated_at": "2026-10-04T12:24:49+00:00",
+  "transactions": 1000,
+  "warmup": 50,
+  "history_rows": 48950,
+  "target_p99_ms": 50.0,
+  "platform": {
+    "python": "3.11.15",
+    "machine": "x86_64",
+    "cpus": 4,
+    "database": "sqlite (scratch)",
+    "store": "redis (local)"
+  },
+  "configurations": {
+    "database": {
+      "end_to_end_ms": {
+        "n": 1000,
+        "p50": 58.84,
+        "p95": 75.81,
+        "p99": 86.82,
+        "max": 176.02
+      },
+      "scorer_ms": {
+        "n": 1000,
+        "p50": 56.43,
+        "p95": 72.99,
+        "p99": 82.75,
+        "max": 173.9
+      },
+      "feature_path": {
+        "batch": 1000
+      },
+      "meets_target": false
+    },
+    "store_inline": {
+      "end_to_end_ms": {
+        "n": 1000,
+        "p50": 5.17,
+        "p95": 10.7,
+        "p99": 12.76,
+        "max": 22.8
+      },
+      "scorer_ms": {
+        "n": 1000,
+        "p50": 3.37,
+        "p95": 7.37,
+        "p99": 8.7,
+        "max": 20.03
+      },
+      "feature_path": {
+        "online": 1000
+      },
+      "meets_target": true
+    },
+    "store_async": {
+      "end_to_end_ms": {
+        "n": 1000,
+        "p50": 10.35,
+        "p95": 17.4,
+        "p99": 20.73,
+        "max": 152.17
+      },
+      "scorer_ms": {
+        "n": 1000,
+        "p50": 4.48,
+        "p95": 7.79,
+        "p99": 10.71,
+        "max": 17.98
+      },
+      "feature_path": {
+        "online": 1000
+      },
+      "meets_target": true,
+      "explanations": {
+        "submitted": 1000,
+        "ready": 1000,
+        "ready_after_ms": {
+          "n": 1000,
+          "p50": 2.01,
+          "p95": 5.29,
+          "p99": 15.59,
+          "max": 18.21
+        }
+      }
+    }
+  },
+  "store_vs_database_p99_speedup": 6.8
+}

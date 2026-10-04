@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic test message: fictitious parties and accounts (IBANs are format-valid examples). -->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>BTIBANK20261004-0001</MsgId>
+      <CreDtTm>2026-10-04T09:41:07+01:00</CreDtTm>
+      <NbOfTxs>2</NbOfTxs>
+      <SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>INSTR-1</InstrId>
+        <EndToEndId>INV-2026-118</EndToEndId>
+        <TxId>TX-0001</TxId>
+        <UETR>3f1c8a52-6c3e-4d6f-9b8e-0c6a1d2e7f41</UETR>
+      </PmtId>
+      <IntrBkSttlmAmt Ccy="EUR">2450.00</IntrBkSttlmAmt>
+      <ChrgBr>SHAR</ChrgBr>
+      <Dbtr><Nm>Private Person A</Nm><PstlAdr><Ctry>DE</Ctry></PstlAdr></Dbtr>
+      <DbtrAcct><Id><IBAN>DE89370400440532013000</IBAN></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><BICFI>COBADEFFXXX</BICFI></FinInstnId></DbtrAgt>
+      <CdtrAgt><FinInstnId><BICFI>BNPAFRPPXXX</BICFI></FinInstnId></CdtrAgt>
+      <Cdtr><Nm>Example Utilities SA</Nm><Id><OrgId><LEI>969500T3MBS4SQAMHJ45</LEI></OrgId></Id></Cdtr>
+      <CdtrAcct><Id><IBAN>FR1420041010050500013M02606</IBAN></Id></CdtrAcct>
+      <Purp><Cd>ELEC</Cd></Purp>
+      <RmtInf><Ustrd>Invoice 118 — private remittance text</Ustrd></RmtInf>
+    </CdtTrfTxInf>
+    <CdtTrfTxInf>
+      <PmtId><EndToEndId>NOTPROVIDED</EndToEndId><TxId>TX-0002</TxId></PmtId>
+      <IntrBkSttlmAmt Ccy="EUR">980.50</IntrBkSttlmAmt>
+      <ChrgBr>SHAR</ChrgBr>
+      <Dbtr><Nm>Private Person A</Nm><PstlAdr><Ctry>DE</Ctry></PstlAdr></Dbtr>
+      <DbtrAcct><Id><IBAN>DE89370400440532013000</IBAN></Id></DbtrAcct>
+      <Cdtr><Nm>Private Person B</Nm></Cdtr>
+      <CdtrAcct><Id><IBAN>GB29NWBK60161331926819</IBAN></Id></CdtrAcct>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

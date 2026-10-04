@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic test message: fictitious parties and accounts. -->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09">
+  <CstmrCdtTrfInitn>
+    <GrpHdr><MsgId>WEB-55120</MsgId><CreDtTm>2026-10-04T22:13:45</CreDtTm><NbOfTxs>1</NbOfTxs>
+      <InitgPty><Nm>Private Person C</Nm></InitgPty></GrpHdr>
+    <PmtInf>
+      <PmtInfId>PMT-1</PmtInfId><PmtMtd>TRF</PmtMtd>
+      <ReqdExctnDt><Dt>2026-10-05</Dt></ReqdExctnDt>
+      <Dbtr><Nm>Private Person C</Nm><PstlAdr><Ctry>GB</Ctry></PstlAdr></Dbtr>
+      <DbtrAcct><Id><IBAN>GB33BUKB20201555555555</IBAN></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><BICFI>BUKBGB22XXX</BICFI></FinInstnId></DbtrAgt>
+      <CdtTrfTxInf>
+        <PmtId><EndToEndId>RENT-OCT</EndToEndId></PmtId>
+        <Amt><InstdAmt Ccy="GBP">1200.00</InstdAmt></Amt>
+        <Cdtr><Nm>Private Person D</Nm></Cdtr>
+        <CdtrAcct><Id><IBAN>GB29NWBK60161331926819</IBAN></Id></CdtrAcct>
+        <Purp><Cd>RENT</Cd></Purp>
+      </CdtTrfTxInf>
+    </PmtInf>
+  </CstmrCdtTrfInitn>
+</Document>

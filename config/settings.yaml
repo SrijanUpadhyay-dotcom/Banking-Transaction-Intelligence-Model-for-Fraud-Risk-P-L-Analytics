@@ -170,3 +170,40 @@ graph:
   label_delay_days: 30           # assumed fraud-confirmation delay where the data has no confirmation time
   snapshot_path: "data/graph/snapshot.joblib"
   snapshot_cron: "15 0 * * *"
+
+feature_store:                   # Phase 7 online feature store; empty url = live history from the database
+  url: ""                        # e.g. redis://redis.internal:6379/0 (or BTI_FEATURE_STORE_URL)
+
+scoring:
+  explain_mode: "inline"         # inline | async (reason codes filled on the score log and case after the response)
+  explain_workers: 2
+
+streaming:                       # Phase 7 Kafka ingestion (python -m bti.streaming.consumer run)
+  bootstrap_servers: "localhost:9092"   # or BTI_KAFKA_BOOTSTRAP_SERVERS
+  security_protocol: "PLAINTEXT"        # SSL / SASL_SSL in production (BTI_KAFKA_SECURITY_PROTOCOL)
+  group_id: "bti-scoring"
+  topics:                               # input topic -> message format; producers key by customer/card/account
+    bti.transactions.json: json
+    bti.transactions.iso8583: iso8583
+    bti.transactions.iso20022: iso20022
+  decisions_topic: "bti.decisions"
+  dlq_topic: "bti.dlq"
+  partitions: 6
+  default_country: null                 # the bank's jurisdiction when a message carries none (e.g. "IN")
+  max_retries: 3
+  metrics_port: 9308
+  dlq_include_json_payload: false       # card and payment payloads are never copied to the DLQ
+
+residency:                       # Phase 7 data-residency guard (bti.operations.residency)
+  jurisdiction: null             # e.g. "IN" for an India in-country deployment (or BTI_RESIDENCY_JURISDICTION)
+  mode: "warn"                   # warn | enforce (enforce: the API and stream consumer refuse to start)
+  in_country_hosts:              # hosts / suffixes / CIDRs the bank attests are inside the jurisdiction
+    - localhost
+    - 127.0.0.0/8
+    - "::1"
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - "*.internal"
+    # - "*.ap-south-1.rds.amazonaws.com"   # Mumbai
+    # - "*.ap-south-2.rds.amazonaws.com"   # Hyderabad (DR)

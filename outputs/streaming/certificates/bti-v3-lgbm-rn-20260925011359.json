@@ -1,0 +1,15 @@
+{
+  "model_id": "bti-v3-lgbm-rn-20260925011359",
+  "feature_version": 2,
+  "rows": 5000,
+  "rows_with_different_probability": 0,
+  "max_abs_probability_difference": 0.0,
+  "inexact_features_used": [
+    "cust_amount_usd_24h",
+    "cust_amount_usd_7d"
+  ],
+  "certified": true,
+  "certified_at": "2026-10-04T12:13:58+00:00",
+  "data_rows": 50000,
+  "history": "in-memory"
+}

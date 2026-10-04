@@ -93,6 +93,10 @@ def _score_one(txn_model: V3Transaction, db: Session, explain: bool = True) -> d
         "amount_usd": round(sd.amount_usd, 2),
         "decision": asdict(decision),
         "reason_codes": live.reason_codes,
+        "explanation": {"status": sd.explanation,
+                        **({"url": f"/api/v1/v3/explanations/{live.transaction_id}"}
+                           if sd.explanation == "pending" else {})},
+        "feature_path": live.feature_path,
         "jurisdiction": {"iso2": policy.iso2 if policy else None, "country": policy.country if policy else None,
                          "loss_given_fraud": decision.cost_model["loss_given_fraud"],
                          "decline_requires_human_review_route": bool(policy and
@@ -120,6 +124,16 @@ def score_v3_batch(txns: List[V3Transaction], explain: bool = Query(False), db: 
     results = [_score_one(t, db, explain=explain) for t in txns]
     actions = pd.Series([r["decision"]["action"] for r in results]).value_counts().to_dict()
     return {"count": len(results), "action_mix": actions, "results": results}
+
+
+@router.get("/explanations/{transaction_id}")
+def v3_explanation(transaction_id: str, db: Session = Depends(get_db)):
+    """Reason codes for a scored transaction; `pending` while an asynchronous explanation is computed."""
+    from bti.operations import explanations
+    out = explanations.get(transaction_id, db)
+    if out["status"] == "unknown":
+        raise HTTPException(status_code=404, detail=f"No score found for transaction {transaction_id}")
+    return out
 
 
 @router.get("/model")

@@ -4,6 +4,7 @@ Banking Transaction Intelligence — FastAPI Application Entry Point
 
 Endpoints:
   GET  /health                     — liveness probe
+  GET  /readyz                     — readiness probe (model, database, residency; degraded dependencies)
   GET  /api/v1/transactions/       — paginated transaction listing
   GET  /api/v1/transactions/{id}   — single transaction
   GET  /api/v1/transactions/customer/{id}
@@ -57,6 +58,8 @@ _start_time = time.time()
 async def lifespan(app: FastAPI):
     log.info("BTI API starting up", extra={"version": settings.app_version,
                                             "env": settings.environment})
+    from bti.operations.residency import enforce_at_startup
+    enforce_at_startup("api")                     # enforce mode: refuse to start with an out-of-country endpoint
     create_tables()
     try:
         from bti.operations.scoring_service import warm_up
@@ -144,6 +147,15 @@ def health():
         "database": db_status,
         "uptime_seconds": round(time.time() - _start_time, 1),
     }
+
+
+@app.get("/readyz", tags=["Health"])
+def readyz():
+    """Readiness: database, scoring model and data residency (critical); feature store, graph snapshot,
+    explanation backlog and tokenisation key (degraded). 503 when not ready."""
+    from bti.operations.readiness import readiness
+    result = readiness()
+    return JSONResponse(status_code=200 if result["ready"] else 503, content=result)
 
 
 # ── Routers ────────────────────────────────────────────────────────────────────

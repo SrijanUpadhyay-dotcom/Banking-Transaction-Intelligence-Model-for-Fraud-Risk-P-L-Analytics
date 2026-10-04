@@ -8,6 +8,7 @@ import os
 import yaml
 from pathlib import Path
 from functools import lru_cache
+from typing import Optional
 from pydantic_settings import BaseSettings
 from pydantic import Field
 
@@ -127,6 +128,41 @@ class Settings(BaseSettings):
                                                                     {"sms_otp": 0.05, "push": 0.01, "3ds": 0.10})
     cost_v2_margin_rate: float = _yaml.get("decisioning", {}).get("transaction_margin_rate", 0.01)
     customer_value_cron: str = _yaml.get("decisioning", {}).get("customer_value_cron", "30 1 * * *")
+
+    # Online feature store (Phase 7): Redis URL; empty means live scoring reads history from the database
+    feature_store_url: str = Field(default=_yaml.get("feature_store", {}).get("url", ""), alias="BTI_FEATURE_STORE_URL")
+    # Streaming (Phase 7): Kafka ingestion
+    streaming_bootstrap_servers: str = Field(default=_yaml.get("streaming", {}).get("bootstrap_servers",
+                                                                                    "localhost:9092"),
+                                             alias="BTI_KAFKA_BOOTSTRAP_SERVERS")
+    streaming_group_id: str = _yaml.get("streaming", {}).get("group_id", "bti-scoring")
+    streaming_topics: dict = _yaml.get("streaming", {}).get("topics", {
+        "bti.transactions.json": "json", "bti.transactions.iso8583": "iso8583",
+        "bti.transactions.iso20022": "iso20022"})
+    streaming_decisions_topic: str = _yaml.get("streaming", {}).get("decisions_topic", "bti.decisions")
+    streaming_dlq_topic: str = _yaml.get("streaming", {}).get("dlq_topic", "bti.dlq")
+    streaming_partitions: int = _yaml.get("streaming", {}).get("partitions", 6)
+    streaming_default_country: Optional[str] = _yaml.get("streaming", {}).get("default_country")
+    streaming_max_retries: int = _yaml.get("streaming", {}).get("max_retries", 3)
+    streaming_metrics_port: int = _yaml.get("streaming", {}).get("metrics_port", 9308)
+    streaming_dlq_include_json_payload: bool = _yaml.get("streaming", {}).get("dlq_include_json_payload", False)
+    streaming_security_protocol: str = Field(default=_yaml.get("streaming", {}).get("security_protocol", "PLAINTEXT"),
+                                             alias="BTI_KAFKA_SECURITY_PROTOCOL")
+
+    # Data residency (Phase 7): every endpoint that receives customer data must be in-country.
+    residency_jurisdiction: Optional[str] = Field(default=_yaml.get("residency", {}).get("jurisdiction"),
+                                                  alias="BTI_RESIDENCY_JURISDICTION")
+    residency_mode: str = Field(default=_yaml.get("residency", {}).get("mode", "warn"), alias="BTI_RESIDENCY_MODE")
+    residency_in_country_hosts: list = _yaml.get("residency", {}).get("in_country_hosts", [
+        "localhost", "127.0.0.0/8", "::1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "*.internal"])
+
+    # Tokenisation key for card numbers and account identifiers from payment messages (HMAC-SHA256).
+    # Keep it in the bank's secret store / HSM; rotating it changes every token, so plan rotation as a re-key.
+    token_key: str = Field(default="", alias="BTI_TOKEN_KEY")
+    # Explanations: "inline" computes SHAP reason codes before responding (~2 ms for the current model);
+    # "async" responds first and fills reason codes on the score log and case from a worker pool.
+    explain_mode: str = Field(default=_yaml.get("scoring", {}).get("explain_mode", "inline"), alias="BTI_EXPLAIN_MODE")
+    explain_workers: int = _yaml.get("scoring", {}).get("explain_workers", 2)
 
     # Graph intelligence (Phase 6): assumed fraud-confirmation delay when the data has no confirmation time
     graph_label_delay_days: int = _yaml.get("graph", {}).get("label_delay_days", 30)

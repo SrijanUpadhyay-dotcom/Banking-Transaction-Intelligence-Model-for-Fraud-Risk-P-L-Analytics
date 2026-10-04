@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Optional
 
+from sqlalchemy import null
 from sqlalchemy.orm import Session
 
 from bti.config import get_settings
@@ -42,6 +43,7 @@ class ScoredDecision:
     shadow: Optional[dict]
     rules: list = field(default_factory=list)
     step_up: Optional[dict] = None
+    explanation: str = "inline"          # inline | pending (async, see bti.operations.explanations) | none
 
 
 def model_available() -> bool:
@@ -84,12 +86,14 @@ def prepare_transaction(txn: dict) -> dict:
 
 
 def _log(db: Session, s: V3Score, txn: dict, decision: Decision, jurisdiction: Optional[str],
-         amount_usd: float, shadow: bool) -> None:
+         amount_usd: float, shadow: bool, pending: bool = False) -> None:
+    """Score-log row; `pending` leaves reason_codes null until the asynchronous explanation fills it."""
     db.add(ScoreLog(
         transaction_id=s.transaction_id, customer_id=txn.get("customer_id"), model_id=s.model_id,
         model_role=s.model_role, is_shadow=shadow, fraud_probability=s.fraud_probability, score=s.score,
         decision=decision.action, jurisdiction=jurisdiction, amount_usd=amount_usd,
-        reason_codes=[{k: r[k] for k in ("code", "rank", "share_of_risk")} for r in s.reason_codes],
+        reason_codes=(null() if pending else [{k: r[k] for k in ("code", "rank", "share_of_risk")}
+                                            for r in s.reason_codes]),
         features=s.features, guardrails=decision.guardrails_applied, latency_ms=s.latency_ms,
         monitoring_attributes={k: txn[k] for k in MONITORING_ATTRIBUTES if txn.get(k)} or None,
         model_probability=s.model_probability, calibration_overlay=s.calibration_overlay,
@@ -102,7 +106,9 @@ def score_and_decide(txn: dict, db: Optional[Session] = None, explain: bool = Tr
     txn = prepare_transaction(txn)
     policy = policy_for(txn.get("country"))
     amount_usd = to_usd(float(txn.get("transaction_amount") or 0), txn["currency"])
-    live = scorer.score(txn, db_session=db, explain=explain)
+    from bti.operations import explanations
+    deferred = explain and explanations.async_enabled()
+    live = scorer.score(txn, db_session=db, explain=explain and not deferred, record=log_scores and db is not None)
     capacity = capacity_overrides(live.model_id)
     from bti.operations.cost_model import overrides_for
     decision = decide(live.fraud_probability, amount_usd, policy, txn.get("channel"), txn.get("transaction_type"),
@@ -137,7 +143,7 @@ def score_and_decide(txn: dict, db: Optional[Session] = None, explain: bool = Tr
     step_up = None
     if db is not None and log_scores:
         try:
-            _log(db, live, txn, decision, iso, amount_usd, shadow=False)
+            _log(db, live, txn, decision, iso, amount_usd, shadow=False, pending=deferred)
             if rule_hits:
                 from bti.rules.lifecycle import record_hits
                 record_hits(db, live.transaction_id, rule_hits)
@@ -147,7 +153,8 @@ def score_and_decide(txn: dict, db: Optional[Session] = None, explain: bool = Tr
                 open_case(db, live.transaction_id, f"live_{decision.action.lower()}", customer_id=txn.get("customer_id"),
                           model_id=live.model_id, fraud_probability=live.fraud_probability, amount_usd=amount_usd,
                           decision=decision.action,
-                          reason_codes=[{k: r[k] for k in ("code", "analyst_text")} for r in live.reason_codes],
+                          reason_codes=(None if deferred else
+                                        [{k: r[k] for k in ("code", "analyst_text")} for r in live.reason_codes]),
                           commit=False)
             db.commit()
         except Exception as exc:
@@ -163,5 +170,10 @@ def score_and_decide(txn: dict, db: Optional[Session] = None, explain: bool = Tr
             if step_up.get("status") in ("send_failed", "not_issued"):
                 decision.guardrails_applied.append("Step-up could not be issued; route the transaction to REVIEW")
 
+    explanation = "inline" if explain else "none"
+    if deferred:
+        explanations.submit(live.transaction_id, live.model_id, live.model_input, live.features,
+                            db if (db is not None and log_scores) else None)
+        explanation = "pending"
     return ScoredDecision(live=live, decision=decision, policy=policy, amount_usd=amount_usd, shadow=shadow,
-                          rules=rule_hits, step_up=step_up)
+                          rules=rule_hits, step_up=step_up, explanation=explanation)

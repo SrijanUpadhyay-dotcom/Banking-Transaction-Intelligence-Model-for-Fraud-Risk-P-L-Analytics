@@ -76,7 +76,15 @@ python main.py pipeline --force
 BTI_SECRET_KEY=your-32-char-secret-key    # required in production
 BTI_API_KEY=your-pipeline-api-key         # guards POST /pipeline/run
 BTI_DATABASE_URL=postgresql://...         # optional; defaults to SQLite
+BTI_FEATURE_STORE_URL=redis://host:6379/0 # online feature store (Phase 7); empty = history from the database
+BTI_TOKEN_KEY=...                         # HMAC key for card/account tokens; required for ISO 8583 / 20022
+BTI_KAFKA_BOOTSTRAP_SERVERS=host:9092     # streaming service (python -m bti.streaming.consumer run)
+BTI_RESIDENCY_JURISDICTION=IN             # data-residency guard; BTI_RESIDENCY_MODE=enforce to block
 ```
+
+Streaming, the feature store, latency and the HA/DR and India in-country design are described in
+[docs/HA_DR_AND_RESIDENCY.md](docs/HA_DR_AND_RESIDENCY.md) and Phase 7 of
+[docs/BANK_READINESS_DOCKET.md](docs/BANK_READINESS_DOCKET.md).
 
 ---
 
@@ -87,7 +95,8 @@ Interactive docs at `/docs` (Swagger) and `/redoc`.
 ### Health
 
 ```
-GET /health
+GET /health      # liveness
+GET /readyz      # readiness: model, database, residency (503 if not ready); degraded dependencies listed
 ```
 ```json
 { "status": "ok", "version": "2.0.0", "database": "ok", "uptime_seconds": 142.3 }

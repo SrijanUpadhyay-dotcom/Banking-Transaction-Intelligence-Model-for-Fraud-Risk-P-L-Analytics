@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Iterable, List, Optional, Tuple
 
+import math
+
 import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
@@ -312,7 +314,11 @@ DEFAULT_LOOKBACK_DAYS = 365
 #   2 — novelty flags are unknown (NaN) when the customer has no prior
 #       transactions; v1 conflated "never seen this customer" with "new device",
 #       penalising thin-history and new-to-bank customers
-FEATURE_VERSION = 2
+#   3 — window sums are exact per customer (v2 subtracted running totals over the whole frame, so values
+#       drifted by ~1e-5 with the row's position); hour deviation is unknown when past hours have no usual
+#       time (resultant ~0), and the amount z-score is unknown when past amounts have no spread. Matches the
+#       online feature store (bti.streaming.online_features) exactly.
+FEATURE_VERSION = 3
 _ALLOWED = {_A.PRE_AUTH, _A.IDENTIFIER}
 
 
@@ -355,9 +361,14 @@ def _group_ids(df: pd.DataFrame, cols: List[str]) -> np.ndarray:
 
 
 def _prior_window(
-    gid: np.ndarray, ts: np.ndarray, window_s: int, values: Optional[np.ndarray] = None
+    gid: np.ndarray, ts: np.ndarray, window_s: int, values: Optional[np.ndarray] = None, exact: bool = False
 ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
-    """Count (and optionally sum) events in the same group with ts in [t - window, t)."""
+    """Count (and optionally sum) events in the same group with ts in [t - window, t).
+
+    exact=True (feature version 3) sums each window from per-group running totals, so a value does not depend
+    on how many other rows precede the group in the frame. exact=False is the version 1–2 arithmetic, kept
+    bit-identical for registered models.
+    """
     order = np.lexsort((ts, gid))
     key = gid[order] * _SPAN + ts[order]
     start = np.searchsorted(key, key - window_s, side="left")
@@ -366,9 +377,19 @@ def _prior_window(
     count[order] = end - start
     total = None
     if values is not None:
-        cs = np.concatenate([[0.0], np.cumsum(np.nan_to_num(values[order]))])
+        v = np.nan_to_num(values[order])
         total = np.empty(len(ts), dtype=float)
-        total[order] = cs[end] - cs[start]
+        if exact:
+            g = gid[order]
+            within = pd.Series(v).groupby(g).cumsum().to_numpy()
+            before = np.concatenate([[0.0], within])          # before[i] = running total up to i-1 in its group
+            group_start = np.searchsorted(key, g * _SPAN, side="left")
+            upto_end = np.where(end > group_start, before[end], 0.0)
+            upto_start = np.where(start > group_start, before[start], 0.0)
+            total[order] = np.where(end > start, upto_end - upto_start, 0.0)
+        else:
+            cs = np.concatenate([[0.0], np.cumsum(v)])
+            total[order] = cs[end] - cs[start]
     return count, total
 
 
@@ -404,7 +425,7 @@ def build_features(df: pd.DataFrame, lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     `security_events` (customer_id, event_time, event_type) is the bank's
     security-event log; without it the security-event features are unknown.
     """
-    if feature_version not in (1, 2):
+    if feature_version not in (1, 2, 3):
         raise ValueError(f"Unknown feature_version {feature_version}")
     df = df.copy()
     for col in ("device_id", "ip_location", "merchant_name", "customer_id", "currency", "payee_id",
@@ -419,6 +440,7 @@ def build_features(df: pd.DataFrame, lookback_days: int = DEFAULT_LOOKBACK_DAYS,
         raise ValueError(f"{int(ts_dt.isna().sum())} rows have an unparseable transaction_date/transaction_time")
     ts = (ts_dt - pd.Timestamp("1970-01-01")).dt.total_seconds().to_numpy().astype(np.int64)
     lookback_s = int(lookback_days) * 86_400
+    exact = feature_version >= 3
 
     out = pd.DataFrame(index=df.index)
     amount = pd.to_numeric(df["transaction_amount"], errors="coerce")
@@ -442,8 +464,8 @@ def build_features(df: pd.DataFrame, lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     cust = _group_ids(df, ["customer_id"])
     usd = amount_usd.to_numpy(float)
     out["cust_txn_count_1h"], _ = _prior_window(cust, ts, 3_600)
-    out["cust_txn_count_24h"], out["cust_amount_usd_24h"] = _prior_window(cust, ts, 86_400, usd)
-    out["cust_txn_count_7d"], out["cust_amount_usd_7d"] = _prior_window(cust, ts, 7 * 86_400, usd)
+    out["cust_txn_count_24h"], out["cust_amount_usd_24h"] = _prior_window(cust, ts, 86_400, usd, exact=exact)
+    out["cust_txn_count_7d"], out["cust_amount_usd_7d"] = _prior_window(cust, ts, 7 * 86_400, usd, exact=exact)
     out["secs_since_last_txn"] = _seconds_since_prior(cust, ts, lookback_s)
     cust_prior, _ = _prior_window(cust, ts, lookback_s)
     knowable = (cust_prior > 0) if feature_version >= 2 else np.ones(len(ts), dtype=bool)
@@ -473,11 +495,14 @@ def build_features(df: pd.DataFrame, lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     out["device_txn_count_24h"] = np.where(device_present, d24h, np.nan)
 
     usd_clean = np.nan_to_num(usd)
-    n_lb, s1 = _prior_window(cust, ts, lookback_s, usd_clean)
-    _, s2 = _prior_window(cust, ts, lookback_s, usd_clean ** 2)
+    n_lb, s1 = _prior_window(cust, ts, lookback_s, usd_clean, exact=exact)
+    _, s2 = _prior_window(cust, ts, lookback_s, usd_clean ** 2, exact=exact)
     with np.errstate(invalid="ignore", divide="ignore"):
         mean = s1 / n_lb
-        std = np.sqrt(np.clip(s2 / n_lb - mean ** 2, 0, None))
+        var = s2 / n_lb - mean ** 2
+        if exact:                                   # no spread (to rounding) means no z-score
+            var = np.where(var > 1e-9 * (mean ** 2 + 1.0), var, 0.0)
+        std = np.sqrt(np.clip(var, 0, None))
         z = (usd - mean) / std
     out["amount_zscore_customer"] = np.where((n_lb >= 2) & (std > 0), np.clip(z, -50, 50), np.nan)
 
@@ -485,18 +510,19 @@ def build_features(df: pd.DataFrame, lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     for t in STRUCTURING_THRESHOLDS_USD:
         near |= (usd >= 0.9 * t) & (usd < t)
     out["just_below_threshold"] = near.astype(float)
-    _, near_7d = _prior_window(cust, ts, 7 * 86_400, near.astype(float))
+    _, near_7d = _prior_window(cust, ts, 7 * 86_400, near.astype(float), exact=exact)
     out["cust_near_threshold_7d"] = near_7d
 
     angle = 2 * np.pi * hour.to_numpy(float) / 24
-    n_h, s_sin = _prior_window(cust, ts, lookback_s, np.sin(angle))
-    _, s_cos = _prior_window(cust, ts, lookback_s, np.cos(angle))
+    n_h, s_sin = _prior_window(cust, ts, lookback_s, np.sin(angle), exact=exact)
+    _, s_cos = _prior_window(cust, ts, lookback_s, np.cos(angle), exact=exact)
     usual = np.arctan2(s_sin, s_cos)
     gap = np.abs(np.angle(np.exp(1j * (angle - usual)))) * 24 / (2 * np.pi)
-    out["hour_deviation"] = np.where(n_h >= 3, gap, np.nan)
+    defined = (np.hypot(s_sin, s_cos) > 1e-6 * np.maximum(n_h, 1)) if exact else np.ones(len(gap), dtype=bool)
+    out["hour_deviation"] = np.where((n_h >= 3) & defined, gap, np.nan)
 
     share = out["amount_to_balance"].to_numpy(float)
-    n_share, s_share = _prior_window(cust, ts, lookback_s, np.nan_to_num(share))
+    n_share, s_share = _prior_window(cust, ts, lookback_s, np.nan_to_num(share), exact=exact)
     with np.errstate(invalid="ignore", divide="ignore"):
         own = share / np.maximum(s_share / n_share, 1e-6)
     out["balance_share_vs_own"] = np.where((n_share >= 1) & ~np.isnan(share), np.clip(own, 0, 1000), np.nan)
@@ -516,7 +542,7 @@ def build_features(df: pd.DataFrame, lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     cust_payee, _ = _prior_window(_group_ids(df, ["customer_id", "payee_id"]), ts, lookback_s)
     new_payee = np.where(payee_present & knowable, (cust_payee == 0).astype(float), np.nan)
     out["payee_new_for_customer"] = new_payee
-    _, new_24h = _prior_window(cust, ts, 86_400, np.nan_to_num(new_payee))
+    _, new_24h = _prior_window(cust, ts, 86_400, np.nan_to_num(new_payee), exact=exact)
     out["cust_new_payees_24h"] = np.where(payee_present, new_24h, np.nan)
     payee_7d, _ = _prior_window(_group_ids(df, ["payee_id"]), ts, 7 * 86_400)
     cust_payee_7d, _ = _prior_window(_group_ids(df, ["customer_id", "payee_id"]), ts, 7 * 86_400)
@@ -664,6 +690,33 @@ def to_model_matrix(features: pd.DataFrame, encodings: Dict[str, Dict],
     cats = [c for c in CATEGORICAL_FEATURES if c in names]
     X[cats] = _apply_encodings(features, encodings)[cats]
     return X.astype(float)
+
+
+_CATEGORICAL_SET = frozenset(CATEGORICAL_FEATURES)
+
+
+def model_row(values: Dict[str, object], encodings: Dict[str, Dict], feature_names: List[str]) -> np.ndarray:
+    """
+    One-row model input (1 × n) from a feature dict, for live scoring.
+
+    Identical to `to_model_matrix` on the same values (tested), without the
+    pandas overhead (~20 ms per row).
+    """
+    x = np.empty((1, len(feature_names)), dtype=float)
+    for j, col in enumerate(feature_names):
+        v = values.get(col)
+        missing = v is None or v is pd.NA or (isinstance(v, float) and v != v)
+        if col in _CATEGORICAL_SET:
+            enc = encodings[col]
+            rate = enc["rates"].get("(missing)" if missing else str(v))
+            x[0, j] = enc["prior"] if rate is None or rate != rate else float(rate)
+        else:
+            try:
+                f = np.nan if missing else float(v)
+            except (TypeError, ValueError):
+                f = np.nan
+            x[0, j] = f if math.isfinite(f) else np.nan
+    return x
 
 
 def leakage_audit(df: pd.DataFrame, label_col: str = "fraud_flag", threshold: float = 0.97) -> List[dict]:

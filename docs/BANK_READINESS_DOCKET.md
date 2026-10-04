@@ -595,12 +595,120 @@ time, a one-day lag in both training and serving. `GET /operations/graph/status`
 
 ## Phase 7 — Streaming and scale
 
-| Item | Status | Scope |
+Built and tested against a real Kafka 3.9.1 broker (KRaft) and Redis 7.0 on the development container. The HA,
+DR and India deployment design is in [HA_DR_AND_RESIDENCY.md](HA_DR_AND_RESIDENCY.md).
+
+| Item | Status | Notes |
 |---|---|---|
-| Kafka ingestion with ISO 8583 / ISO 20022 adapters | New | |
-| Online feature store | New | Redis, with parity tests against training features. |
-| Inline latency | Extend | 70 ms p50 / 78 ms p95 with explanations today; target p99 < 50 ms, explanations async. |
-| High availability and residency | New | Failover, DR targets, India in-country deployment. |
+| ISO 8583 / ISO 20022 adapters | **Done** | `bti.streaming.iso8583`, `bti.streaming.iso20022`; see *Adapters* below. |
+| Kafka ingestion | **Done** | `bti.streaming.consumer`; see *Streaming service* below. |
+| Online feature store | **Done** | Redis, `bti.streaming.feature_store`; parity proven, see *Feature store and parity* below. |
+| Inline latency | **Done** | p99 12.8 ms end to end with explanations inline (target < 50 ms); see *Latency* below. |
+| High availability and residency | **Done — design and guards; drills are bank-run** | Readiness probe, residency guard, store rebuild, RPO/RTO targets; see *HA, DR and residency* below. |
+
+**Adapters.**
+
+- **ISO 8583 (1987).** An ASCII dialect with hex bitmaps (primary and secondary) and LLVAR/LLLVAR fields. A bank
+  passes its own switch's `Spec`.
+  - The PAN (field 2, or the PAN inside track 2) is Luhn-checked and replaced by a keyed HMAC-SHA256 token.
+    Only the last four digits are kept.
+  - Track data, the PIN block and ICC data are dropped after parsing (PCI DSS: no sensitive authentication data
+    after authorisation).
+  - Mapping: amount with the currency exponent (JPY 0, KWD 3); local date and time with the year inferred
+    across New Year; processing code to type and debit/credit; POS entry mode to channel and authorisation
+    method; MCC to the trained merchant categories.
+  - A shared terminal is not treated as a customer device.
+  - Responses and reversals are recognised and skipped.
+- **ISO 20022.** `pacs.008` and `pain.001`, any schema version, one transaction per `CdtTrfTxInf`.
+  - XML is parsed with defusedxml: DTDs, entity expansion and external entities are rejected; size and count
+    are capped.
+  - Debtor and creditor accounts are tokenised with the same key, so a payee links across customers and
+    messages. This feeds the payee and mule features.
+  - Private names and remittance text are never kept. A creditor name is kept only for organisations.
+  - Inbound direction is supported, for mule monitoring.
+- **Tokenisation key.** `BTI_TOKEN_KEY`, from the bank's HSM or secret store. Without it tokenisation refuses to
+  run, except in development.
+
+**Streaming service** (`python -m bti.streaming.consumer run | topics | replay | rebuild-store | simulate`).
+
+- **Topics.** Input topics carry JSON, ISO 8583 or ISO 20022. Decisions go to `bti.decisions`, keyed by customer.
+  Failures go to `bti.dlq`.
+- **Delivery.** At least once, with idempotent scoring. Offsets are committed only after decisions are flushed.
+  A redelivered transaction is not rescored: its stored decision is republished with `duplicate: true`. So there
+  is no double score, no duplicate case and no double feature-store write.
+- **Failures.** Decode and validation failures are dead-lettered at once. Transient scoring failures are retried
+  with backoff, then dead-lettered. DLQ records carry a hash and length, never a card or payment payload. Replay
+  re-reads source offsets.
+- **Store rebuild.** `rebuild-store --since` re-feeds the feature store from the retained topics without scoring.
+  Live transactions are not written to the transactions table, so this covers the gap since the last
+  extract.
+- **Metrics.** Prometheus text at `:9308/metrics`, plus `/healthz`.
+- **Live run.** 800 simulated transactions (600 JSON, 200 ISO 8583) went through the real broker: all scored, none
+  dead-lettered. Per-message p50 6.7 ms, p99 20 ms. About 90 messages/s per consumer process; throughput scales
+  with partitions and instances.
+
+**Feature store and parity.**
+
+- **Keys.** Redis sorted sets per customer, device, IP, merchant and payee, scored by event time. Reads stop
+  strictly before the transaction's second; per-kind retention.
+- **Online computation.** `bti.streaming.online_features` mirrors `build_features` in pure Python.
+- **Feature version 3.** Per-customer exact window sums. Version 2 subtracted running totals over the whole
+  frame, so values drifted by about 1e-8 with the row's position. Version 3 also returns unknown for degenerate
+  cases: no usual hour, no spread in past amounts. Versions 1–2 stay bit-identical (verified on all 50,000 rows),
+  so registered models reproduce their scores.
+- **Parity results** (`python -m bti.streaming.parity`):
+  - Version 3: 52 of 52 features exact (relative 1e-9) on 3,000 transactions, both in-memory and through real
+    Redis.
+  - Version 2: exact except five rounding-sensitive features.
+- **Model certificates.** `parity certify` compares calibrated probabilities. The current challenger (version 2,
+  which uses two of those five) is **certified**: 0 of 5,000 probabilities differ. That makes it eligible for the
+  fast path.
+- **Fallback.** If Redis is unreachable, the scorer falls back to the database path and `/readyz` reports
+  degraded.
+- **Skew fixed.** The database path could not see other customers' merchant rows, so merchant velocity was
+  undercounted live. The store counts them.
+
+**Latency.**
+
+- **What changed.**
+  - The store replaces the history query (42 ms) and the pandas feature build (33 ms).
+  - A numpy model row (identical to `to_model_matrix`, tested) and a direct LightGBM booster call (identical to
+    `predict_proba`, tested) replace about 20 ms of single-row pandas overhead.
+- **Results** (`python -m bti.streaming.latency`, 1,000 transactions end to end, including the challenger shadow
+  score, rules and database writes):
+
+  | Path | p50 | p95 | p99 |
+  |---|---|---|---|
+  | Database history (Phase 6 path; now the fallback) | 58.8 ms | 75.8 ms | 86.8 ms |
+  | Feature store, explanations inline (**default**) | 5.2 ms | 10.7 ms | 12.8 ms |
+  | Feature store, explanations async | 10.3 ms | 17.4 ms | 20.7 ms |
+
+- **Async explanations** (`scoring.explain_mode: async`).
+  - The decision is returned first. SHAP reason codes fill the score log, case and audit log from a worker pool,
+    and `GET /v3/explanations/{id}` serves them.
+  - All 1,000 arrived, p99 16 ms after the response.
+  - On this model it is *slower* end to end: the workers compete with scoring for the CPU and the database, and
+    inline SHAP costs only about 2 ms. So inline stays the default; async is for heavier models.
+- **Caveat.** These figures are from one process on a 4-CPU development container with SQLite and local Redis.
+  Re-measure on the bank's platform.
+
+**HA, DR and residency.**
+
+- **Readiness.** `/readyz` checks the database, the scoring model and residency (critical: 503 if any fails). It
+  also reports the feature store, graph snapshot, explanation backlog and tokenisation key (degraded only).
+- **Residency guard** (`residency.jurisdiction`, `mode: warn | enforce`).
+  - It lists every outbound endpoint: database, Redis, Kafka, SMTP, webhooks, and the copilot LLM. Each host is
+    checked against the bank's attested in-country hosts and CIDRs.
+  - In enforce mode the API and consumer refuse to start, and the copilot refuses calls. With `IN`, the public
+    LLM endpoint is blocked unless routed through an in-region gateway.
+- **Guide.** The guide sets RPO/RTO targets and maps the components, with regulatory notes for India: RBI payment-data
+  localisation, the DPDP Act, CERT-In 6-hour reporting and 180-day logs, and TRAI DLT for OTP SMS. It gives a
+  reference topology (Mumbai/Hyderabad, Pune/Chennai, Mumbai/Delhi) and a bank-run DR drill checklist.
+- **What is not demonstrated here.** Multi-zone failover and cross-region RPO/RTO. The container is a single node,
+  so these are targets until the bank's drills measure them.
+
+Tests: 10 for features, parity, store and latency paths; 16 for adapters; 5 for Kafka on the real broker; 5 for
+operations.
 
 ## Phase 8 — Forecasting and planning
 

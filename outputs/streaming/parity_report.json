@@ -1,0 +1,10 @@
+{
+  "feature_version": 3,
+  "rows": 3000,
+  "features": 52,
+  "rtol": 1e-09,
+  "passing": 52,
+  "mismatches": {},
+  "examples": {},
+  "exact": true
+}

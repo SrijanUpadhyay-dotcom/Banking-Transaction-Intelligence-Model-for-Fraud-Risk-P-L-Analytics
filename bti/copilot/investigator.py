@@ -184,8 +184,10 @@ def _get_client():
             "ANTHROPIC_API_KEY environment variable is not set. "
             "Set it to your Anthropic API key to enable the AI Copilot."
         )
+    from bti.operations.residency import allow_endpoint
+    allow_endpoint("copilot_llm")          # in-country deployments: refuse an LLM endpoint outside the jurisdiction
     import anthropic
-    return anthropic.Anthropic(api_key=api_key)
+    return anthropic.Anthropic(api_key=api_key)   # honours ANTHROPIC_BASE_URL (e.g. an in-region gateway)
 
 
 def ask(
