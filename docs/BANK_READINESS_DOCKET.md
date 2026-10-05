@@ -487,7 +487,8 @@ out-of-time):
 - **No segment pricing.** Segment is not priced (it is a protected proxy). This is a deliberate departure from
   the original "segment friction" wording.
 - **Backtest.** `POST /operations/cost-model/backtest` replays v1 and v2 on history. v2 lowered realised cost by
-  about $11.9k (0.6%) and added no decision disparity.
+  about $9.2k (0.5%) and added no decision disparity. Corrected in Phase 8: the first figure, $11.9k (0.6%),
+  counted capacity shadow prices as money spent.
 - **Default.** The default stays **v1** until the bank approves the switch (`decisioning.cost_model`).
 
 **Decision-level fairness** (found in the backtest). Earlier fairness tests checked scores at thresholds; this
@@ -712,12 +713,124 @@ operations.
 
 ## Phase 8 — Forecasting and planning
 
-| Item | Status | Scope |
+All four pieces are in `bti.planning`, served under `/api/v1/planning`, with two scheduled jobs (14 in all): weekly
+forecasts and daily early warning. Results below are on the synthetic book: 730 days, 2,487 frauds, about 70
+transactions a day. They show the machinery works, not field accuracy.
+
+| Item | Status | Notes |
 |---|---|---|
-| Fraud-loss forecasting | New | 30/60/90-day forecasts with intervals, by jurisdiction and channel. |
-| Alert-volume and staffing forecast | New | Feeds rostering and the review-capacity setting. |
-| Attack early warning | New | Change-point detection by typology, merchant, corridor. |
-| Policy what-if simulator | New | Loss and friction impact of a policy change before making it. |
+| Fraud-loss forecasting | **Done** | `bti.planning.forecast`; see *Loss forecast* below. |
+| Alert-volume and staffing forecast | **Done** | `bti.planning.staffing`; see *Staffing* below. |
+| Attack early warning | **Done** | `bti.planning.early_warning`; see *Early warning* below. |
+| Policy what-if simulator | **Done** | `bti.planning.whatif`; see *What-if* below. |
+
+**Loss forecast** (`python -m bti.planning.forecast`, `GET /planning/forecast/loss`).
+
+- **Frequency.** Daily confirmed-fraud counts per country and channel, from an over-dispersed Poisson model
+  (day-of-week plus a shrunk trend), fitted on the trailing year.
+- **Severity.**
+  - Fraud losses are extremely heavy-tailed: the largest 1% of frauds carry 45% of the loss, and half are
+    fully recovered.
+  - Severity is drawn from the trailing year's losses, with a generalised Pareto tail above the 90th percentile.
+    A future loss can then exceed the worst seen so far, capped at 3× it as a stand-in for transaction limits.
+  - Each path also draws the coefficients and the mean loss level, so the intervals carry estimation error too.
+- **Coherence.** The total is the path-by-path sum of the countries, so they add up.
+- **Label maturity (IBNR).** With confirmation dates, recent days are grossed up by completion factors from the
+  confirmation-delay distribution, and days under half complete are left out of the fit. Tested on synthetic
+  delays: the 30-day forecast is within 15% of the truth, even though the last two weeks look 30%+ quieter. The
+  synthetic book has no confirmation dates, so the report says history is treated as complete.
+- **Forecast at 30 December 2024:**
+
+  | Horizon | Median loss | 80% interval | Frauds (median) |
+  |---|---|---|---|
+  | 30 days | $1.31M | $0.58M – $2.87M | 107 |
+  | 60 days | $2.82M | $1.59M – $5.25M | 217 |
+  | 90 days | $4.41M | $2.64M – $7.45M | 327 |
+
+- **Backtest** (10 monthly origins in 2024; each uses only what was known then):
+
+  | Horizon | Total: 80% interval coverage | Total: median error, forecast vs naive | Countries pooled: 80% / 90% coverage |
+  |---|---|---|---|
+  | 30 days | 0.80 | 43% vs 47% | 0.78 / 0.84 |
+  | 60 days | 0.80 | 39% vs 55% | 0.68 / 0.81 |
+  | 90 days | 0.70 | 42% vs 58% | 0.59 / 0.84 |
+
+- **Reading.** The total is reasonably calibrated and beats the naive trailing mean. Country intervals at
+  60–90 days are too narrow at the 80% level (0.59–0.68), though the 90% level holds. Only 10 overlapping origins
+  exist, so treat coverage as approximate.
+- **What the backtest changed.** Two fixes came from the backtest. An all-history severity pool missed a rise in
+  loss size, so the forecast now uses the trailing year. A severity bootstrap with no tail had 90-day coverage of
+  only 0.4. Errors around 40% at portfolio level reflect how lumpy fraud loss is; they are not a modelling
+  failure.
+
+**Staffing** (`python -m bti.planning.staffing --analysts N [--scale k]`, `GET /planning/forecast/staffing`).
+
+- **Volume and cases.** Volume paths are thinned into case paths. Every review and every decline opens a case,
+  routed to queues as live, with rates from replaying the live policy on the out-of-time window.
+- **Handling times.** From closed cases once a queue has 30. Until then, configured defaults (illustrative).
+- **Staffing method.**
+  - Workload FTE (case work ÷ occupancy ÷ productive hours).
+  - Pooled Erlang C per hour, meeting the strictest SLA for 90% of cases at ≤ 85% occupancy.
+  - 30% shrinkage.
+- **Book.** 4 cases a day (P90: 7), a workload of 0.3 FTE, but 4.3 FTE for round-the-clock cover.
+- **Projected to about 1M transactions a month** (`--scale 470`): 1,940 cases a day, 139 workload FTE, 141 Erlang
+  FTE; plan to the P90 day at about 164.
+- **Review capacity.** Given rostered analysts, staffing proposes a `max_review_rate`. It is only a proposal;
+  applying it is a named capacity refit.
+- **Finding.** The provisional model's declines (4.05% of transactions) become reviews, and with 1.88% reviews
+  that is 5.9% case volume against the 2% review target. At the 1M scale, 25 analysts cannot clear the declines
+  alone, and the proposal says so. The capacity fit limits reviews, not declines. Promoting an approved champion,
+  or pricing declines, is the lever.
+
+**Early warning** (`python -m bti.planning.early_warning evaluate`; daily job; `GET /planning/early-warning`).
+
+- **What is watched.** Rate-based Poisson CUSUMs on two signals:
+  - confirmed fraud, by typology (10), merchant category (20), merchant (98) and corridor (64, country ×
+    channel)
+  - model interventions, by merchant category, merchant and corridor. These are available the same day, before
+    any dispute.
+- **Baselines.** 90 days before a 7-day guard band, shrunk to the portfolio rate, so a rise in volume alone does not
+  alarm.
+- **Thresholds.**
+  - Each segment's threshold comes from a simulated table, for the in-control run length implied by a budget of 1
+    false alarm per family per month.
+  - Calibrated on clean history, because estimating baselines adds noise: typology ×1.5 and corridor ×2. The
+    false-alarm rates are then 1.0, 0.81, 0.38 and 0.90 a month.
+- **Injected attacks** (all detected):
+
+  | Attack | Detection delay |
+  |---|---|
+  | Card testing: 30 small frauds at one merchant over 3 days | same day, on both signals |
+  | Authorised-push-payment surge, 3× for 3 weeks | 8 days |
+  | Merchant-category compromise, 2× for a month | 6 days (alerts), 7 (fraud) |
+  | Nigeria × USSD corridor spike, 5× for 2 weeks | 13 days, late; thin corridor |
+
+- **Live.** Alarms go to `early_warnings` with an audit event and the webhook. They are acknowledged or closed
+  through the API, and closing needs a note. On a copy of the live database the first run raised Card Not Present
+  fraud (×4.0) and DoorDash (×3.0). A re-run added no duplicates.
+
+**What-if** (`python -m bti.planning.whatif '{...}'`, `POST /planning/whatif`).
+
+- **Method.** A proposal is replayed against the live policy on the labelled out-of-time window (12,500
+  transactions, 181 days), with the production decision function. A proposal can change cost figures, capacity
+  targets (refitted, nothing saved), step-up channels, the model, or provisional status.
+- **Outputs.** Loss, genuine customers disturbed, realised cost, cases a day, analyst FTE and intervention ratios by
+  segment and age band. Differences carry 95% intervals from a day-block bootstrap. Each report is saved with an id
+  as change-request evidence.
+- **Scenarios.**
+
+  | Proposal | Realised cost (95% CI) | Customer impact |
+  |---|---|---|
+  | Double review capacity (2% → 4%) | −$39.7k (−$73.8k to −$11.1k) | 304 more genuine customers held; 1.7 more cases a day |
+  | Step-up at POS and ATM | −$3.8k (CI spans 0) | 278 more genuine customers challenged |
+  | Loss-given-fraud stress at 95% | Loss and cost rise as expected | — |
+
+- **Accounting fix.** Decisions use the capacity shadow prices; realised cost uses the economic figures. Building
+  this found that the Phase 5 cost-model backtest had counted the shadow prices ($107 per review instead of $8) as
+  money spent. Corrected, cost model v2 still lowers realised cost: by $9.2k (0.5%), not the $11.9k (0.6%) reported
+  before. The recommendation stands.
+
+Tests: 9 unit tests (Phase 8) and 3 API tests.
 
 ## Phase 9 — Scam and mule models
 

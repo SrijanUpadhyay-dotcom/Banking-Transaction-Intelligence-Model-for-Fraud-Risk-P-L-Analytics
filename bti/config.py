@@ -192,6 +192,17 @@ class Settings(BaseSettings):
     case_checker_threshold_usd: float = _yaml.get("cases", {}).get("checker_threshold_usd", 10000.0)
     case_sla_check_cron: str = _yaml.get("cases", {}).get("sla_check_cron", "*/15 * * * *")
 
+    # Planning (Phase 8): staffing assumptions (illustrative; replace with the bank's operations data)
+    planning_aht_minutes: dict = _yaml.get("planning", {}).get("aht_minutes", {"urgent": 20, "high_value": 30,
+                                                                               "standard": 15})
+    planning_service_level_target: float = _yaml.get("planning", {}).get("service_level_target", 0.90)
+    planning_max_occupancy: float = _yaml.get("planning", {}).get("max_occupancy", 0.85)
+    planning_shrinkage: float = _yaml.get("planning", {}).get("shrinkage", 0.30)
+    planning_paid_hours_per_day: float = _yaml.get("planning", {}).get("paid_hours_per_day", 8.0)
+    planning_analysts_fte: Optional[float] = _yaml.get("planning", {}).get("analysts_fte")
+    planning_forecast_cron: str = _yaml.get("planning", {}).get("forecast_cron", "30 6 * * mon")
+    early_warning_cron: str = _yaml.get("planning", {}).get("early_warning_cron", "45 5 * * *")
+
     # Parallel run alongside the incumbent platform (Phase 2)
     incumbent_system: str = _yaml.get("parallel_run", {}).get("incumbent_system", "SAS")
     incumbent_decision_map: dict = _yaml.get("parallel_run", {}).get("decision_map", {})

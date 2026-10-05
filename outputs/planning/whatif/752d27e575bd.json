@@ -1,0 +1,272 @@
+{
+  "id": "752d27e575bd",
+  "generated_at": "2026-10-05T03:28:50+00:00",
+  "proposal": {
+    "max_review_rate": 0.04,
+    "label": "double review capacity"
+  },
+  "status": "simulation only \u2014 nothing has been changed",
+  "window": {
+    "transactions": 12500,
+    "days": 181,
+    "from": "2024-07-03",
+    "to": "2024-12-30",
+    "frauds": 622
+  },
+  "current_policy": {
+    "model_id": "bti-v3-lgbm-rn-20260925011359",
+    "provisional": true,
+    "capacity_prices": {
+      "review_cost_usd": 281.24,
+      "step_up_friction_usd": 25.22
+    },
+    "fraud_loss_prevented_usd": 15269534.0,
+    "residual_fraud_loss_usd": 1806491.0,
+    "frauds_intervened": 524,
+    "genuine_declined": 0,
+    "genuine_challenged": 732,
+    "genuine_held_for_review": 267,
+    "genuine_disturbed": 999,
+    "realised_total_cost_usd": 1815939.0,
+    "cases_per_day": 4.27,
+    "analyst_workload_fte": 0.3,
+    "action_mix": {
+      "APPROVE": 0.8782,
+      "STEP_UP": 0.06,
+      "REVIEW": 0.0618,
+      "DECLINE": 0.0
+    },
+    "fairness": {
+      "customer_segment": {
+        "Corporate": {
+          "genuine_intervention_rate": 0.3435,
+          "ratio_to_overall": 4.08,
+          "genuine_customers": 917
+        },
+        "NRI / Diaspora": {
+          "genuine_intervention_rate": 0.0647,
+          "ratio_to_overall": 0.77,
+          "genuine_customers": 309
+        },
+        "Premium": {
+          "genuine_intervention_rate": 0.068,
+          "ratio_to_overall": 0.81,
+          "genuine_customers": 2412
+        },
+        "Private Banking": {
+          "genuine_intervention_rate": 0.2338,
+          "ratio_to_overall": 2.78,
+          "genuine_customers": 663
+        },
+        "Retail": {
+          "genuine_intervention_rate": 0.0258,
+          "ratio_to_overall": 0.31,
+          "genuine_customers": 5341
+        },
+        "SME": {
+          "genuine_intervention_rate": 0.1446,
+          "ratio_to_overall": 1.72,
+          "genuine_customers": 1404
+        },
+        "Student": {
+          "genuine_intervention_rate": 0.0048,
+          "ratio_to_overall": 0.06,
+          "genuine_customers": 832
+        }
+      },
+      "customer_age_band": {
+        "18\u201325": {
+          "genuine_intervention_rate": 0.0782,
+          "ratio_to_overall": 0.93,
+          "genuine_customers": 1471
+        },
+        "26\u201335": {
+          "genuine_intervention_rate": 0.0845,
+          "ratio_to_overall": 1.01,
+          "genuine_customers": 3324
+        },
+        "36\u201345": {
+          "genuine_intervention_rate": 0.0854,
+          "ratio_to_overall": 1.02,
+          "genuine_customers": 3056
+        },
+        "46\u201355": {
+          "genuine_intervention_rate": 0.091,
+          "ratio_to_overall": 1.08,
+          "genuine_customers": 2034
+        },
+        "56\u201365": {
+          "genuine_intervention_rate": 0.0822,
+          "ratio_to_overall": 0.98,
+          "genuine_customers": 1156
+        },
+        "65+": {
+          "genuine_intervention_rate": 0.0741,
+          "ratio_to_overall": 0.88,
+          "genuine_customers": 837
+        }
+      }
+    }
+  },
+  "proposed_policy": {
+    "model_id": "bti-v3-lgbm-rn-20260925011359",
+    "provisional": true,
+    "refitted_capacity_prices": {
+      "targets": {
+        "max_review_rate": 0.04,
+        "max_step_up_rate": 0.05
+      },
+      "review_cost_usd": 106.91,
+      "step_up_friction_usd": 19.35
+    },
+    "step_up_channels": [
+      "API/Open Banking",
+      "Internet Banking",
+      "Mobile Banking"
+    ],
+    "fraud_loss_prevented_usd": 15312898.0,
+    "residual_fraud_loss_usd": 1763127.0,
+    "frauds_intervened": 531,
+    "genuine_declined": 0,
+    "genuine_challenged": 739,
+    "genuine_held_for_review": 564,
+    "genuine_disturbed": 1303,
+    "realised_total_cost_usd": 1776248.0,
+    "cases_per_day": 5.97,
+    "analyst_workload_fte": 0.43,
+    "action_mix": {
+      "APPROVE": 0.8533,
+      "STEP_UP": 0.0602,
+      "REVIEW": 0.0865,
+      "DECLINE": 0.0
+    },
+    "fairness": {
+      "customer_segment": {
+        "Corporate": {
+          "genuine_intervention_rate": 0.4231,
+          "ratio_to_overall": 3.86,
+          "genuine_customers": 917
+        },
+        "NRI / Diaspora": {
+          "genuine_intervention_rate": 0.0841,
+          "ratio_to_overall": 0.77,
+          "genuine_customers": 309
+        },
+        "Premium": {
+          "genuine_intervention_rate": 0.0966,
+          "ratio_to_overall": 0.88,
+          "genuine_customers": 2412
+        },
+        "Private Banking": {
+          "genuine_intervention_rate": 0.2941,
+          "ratio_to_overall": 2.68,
+          "genuine_customers": 663
+        },
+        "Retail": {
+          "genuine_intervention_rate": 0.0339,
+          "ratio_to_overall": 0.31,
+          "genuine_customers": 5341
+        },
+        "SME": {
+          "genuine_intervention_rate": 0.193,
+          "ratio_to_overall": 1.76,
+          "genuine_customers": 1404
+        },
+        "Student": {
+          "genuine_intervention_rate": 0.0108,
+          "ratio_to_overall": 0.1,
+          "genuine_customers": 832
+        }
+      },
+      "customer_age_band": {
+        "18\u201325": {
+          "genuine_intervention_rate": 0.0986,
+          "ratio_to_overall": 0.9,
+          "genuine_customers": 1471
+        },
+        "26\u201335": {
+          "genuine_intervention_rate": 0.1062,
+          "ratio_to_overall": 0.97,
+          "genuine_customers": 3324
+        },
+        "36\u201345": {
+          "genuine_intervention_rate": 0.1126,
+          "ratio_to_overall": 1.03,
+          "genuine_customers": 3056
+        },
+        "46\u201355": {
+          "genuine_intervention_rate": 0.1214,
+          "ratio_to_overall": 1.11,
+          "genuine_customers": 2034
+        },
+        "56\u201365": {
+          "genuine_intervention_rate": 0.1151,
+          "ratio_to_overall": 1.05,
+          "genuine_customers": 1156
+        },
+        "65+": {
+          "genuine_intervention_rate": 0.0968,
+          "ratio_to_overall": 0.88,
+          "genuine_customers": 837
+        }
+      }
+    }
+  },
+  "difference_with_95pct_ci": {
+    "prevented": {
+      "change": 43363.8,
+      "ci95": [
+        14519.5,
+        77501.0
+      ]
+    },
+    "residual_loss": {
+      "change": -43363.8,
+      "ci95": [
+        -77501.0,
+        -14519.5
+      ]
+    },
+    "disturbed_genuine": {
+      "change": 304.0,
+      "ci95": [
+        267.5,
+        344.0
+      ]
+    },
+    "declined_genuine": {
+      "change": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    "challenged_genuine": {
+      "change": 7.0,
+      "ci95": [
+        -28.0,
+        38.5
+      ]
+    },
+    "cases": {
+      "change": 308.0,
+      "ci95": [
+        269.9,
+        342.5
+      ]
+    },
+    "total_cost": {
+      "change": -39690.8,
+      "ci95": [
+        -73805.0,
+        -11075.8
+      ]
+    }
+  },
+  "fairness_check": {
+    "current_max_ratio": 4.08,
+    "proposed_max_ratio": 3.86,
+    "flag": false
+  },
+  "how_to_apply": "Capacity targets: python -m bti.operations.capacity --fitted-by '<name>' ...; cost-model changes: settings review and approval; model change: registry promotion with four-eyes."
+}

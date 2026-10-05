@@ -541,3 +541,25 @@ class ModelRegistry(Base):
 
 # Hash-chain every audit row on insert (the listener lives with the rest of the audit controls).
 import bti.governance.audit_chain  # noqa: E402,F401
+
+
+class EarlyWarning(Base):
+    """Attack early-warning alarms (Phase 8): a segment whose fraud or alert rate has shifted (Poisson CUSUM)."""
+    __tablename__ = "early_warnings"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    family      = Column(String(30), nullable=False, index=True)      # typology | merchant_category | merchant | corridor
+    segment     = Column(String(200), nullable=False, index=True)
+    signal      = Column(String(20), nullable=False)                  # fraud | alerts
+    started_on  = Column(String(10), nullable=False)                  # first day of the run that raised the alarm
+    alarmed_on  = Column(String(10), nullable=False, index=True)
+    observed    = Column(Integer)
+    expected    = Column(Float)
+    ratio       = Column(Float)
+    cusum       = Column(Float)
+    threshold   = Column(Float)
+    status      = Column(String(20), nullable=False, default="open", index=True)   # open | acknowledged | closed
+    created_at  = Column(DateTime, default=datetime.utcnow, nullable=False)
+    reviewed_by = Column(String(100))
+    reviewed_at = Column(DateTime)
+    note        = Column(Text)

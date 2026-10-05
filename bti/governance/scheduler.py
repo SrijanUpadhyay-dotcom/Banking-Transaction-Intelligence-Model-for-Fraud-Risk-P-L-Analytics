@@ -32,6 +32,8 @@ RECALIBRATION_JOB_ID = "daily_recalibration"
 STEPUP_JOB_ID = "stepup_expiry"
 VALUES_JOB_ID = "daily_customer_values"
 GRAPH_JOB_ID = "nightly_graph_snapshot"
+FORECAST_JOB_ID = "weekly_planning_forecast"
+EARLY_WARNING_JOB_ID = "daily_early_warning"
 _scheduler: Optional[BackgroundScheduler] = None
 
 
@@ -101,6 +103,16 @@ def _graph_job() -> None:
     _run("graph snapshot", build_snapshot)
 
 
+def _forecast_job() -> None:
+    from bti.planning.jobs import weekly_forecasts
+    _run("planning forecast", weekly_forecasts)
+
+
+def _early_warning_job() -> None:
+    from bti.planning.early_warning import run_daily
+    _run("early warning", run_daily)
+
+
 def _recalibration_job() -> None:
     from bti.modeling import registry
     from bti.modeling.recalibration import recalibrate
@@ -130,7 +142,9 @@ def start() -> Optional[BackgroundScheduler]:
                              (_recalibration_job, settings.recalibration_cron, RECALIBRATION_JOB_ID),
                              (_stepup_job, settings.stepup_expiry_cron, STEPUP_JOB_ID),
                              (_values_job, settings.customer_value_cron, VALUES_JOB_ID),
-                             (_graph_job, settings.graph_snapshot_cron, GRAPH_JOB_ID)):
+                             (_graph_job, settings.graph_snapshot_cron, GRAPH_JOB_ID),
+                             (_forecast_job, settings.planning_forecast_cron, FORECAST_JOB_ID),
+                             (_early_warning_job, settings.early_warning_cron, EARLY_WARNING_JOB_ID)):
         _scheduler.add_job(fn, CronTrigger.from_crontab(cron, timezone="UTC"), id=job_id, max_instances=1,
                            coalesce=True, misfire_grace_time=3600)
     _scheduler.start()
@@ -169,5 +183,8 @@ def status() -> dict:
             STEPUP_JOB_ID: {"cron_utc": settings.stepup_expiry_cron, "next_run": next_run(STEPUP_JOB_ID)},
             VALUES_JOB_ID: {"cron_utc": settings.customer_value_cron, "next_run": next_run(VALUES_JOB_ID)},
             GRAPH_JOB_ID: {"cron_utc": settings.graph_snapshot_cron, "next_run": next_run(GRAPH_JOB_ID)},
+            FORECAST_JOB_ID: {"cron_utc": settings.planning_forecast_cron, "next_run": next_run(FORECAST_JOB_ID)},
+            EARLY_WARNING_JOB_ID: {"cron_utc": settings.early_warning_cron,
+                                   "next_run": next_run(EARLY_WARNING_JOB_ID)},
         },
     }

@@ -1,0 +1,25 @@
+{
+  "calibrated_at": "2026-10-05T03:25:48+00:00",
+  "history": [
+    "2023-01-01",
+    "2024-12-30"
+  ],
+  "families": {
+    "merchant": {
+      "multiplier": 1.0,
+      "false_alarms_per_month": 0.38
+    },
+    "merchant_category": {
+      "multiplier": 1.0,
+      "false_alarms_per_month": 0.81
+    },
+    "typology": {
+      "multiplier": 1.5,
+      "false_alarms_per_month": 1.0
+    },
+    "corridor": {
+      "multiplier": 2.0,
+      "false_alarms_per_month": 0.9
+    }
+  }
+}

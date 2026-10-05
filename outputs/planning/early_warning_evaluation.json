@@ -1,0 +1,80 @@
+{
+  "generated_at": "2026-10-05T03:25:48+00:00",
+  "model_intervention_rate_on_fraud": 0.813,
+  "false_alarms": {
+    "typology": {
+      "segments": 10,
+      "uncalibrated_per_month": 1.33,
+      "arl_multiplier": 1.5,
+      "calibrated_per_month": 1.0
+    },
+    "merchant_category": {
+      "segments": 20,
+      "uncalibrated_per_month": 0.81,
+      "arl_multiplier": 1.0,
+      "calibrated_per_month": 0.81
+    },
+    "merchant": {
+      "segments": 98,
+      "uncalibrated_per_month": 0.38,
+      "arl_multiplier": 1.0,
+      "calibrated_per_month": 0.38
+    },
+    "corridor": {
+      "segments": 64,
+      "uncalibrated_per_month": 1.42,
+      "arl_multiplier": 2.0,
+      "calibrated_per_month": 0.9
+    }
+  },
+  "months_monitored": 21.1,
+  "injected_attacks": [
+    {
+      "scenario": "card testing at one merchant",
+      "segment": "Hyatt",
+      "start": "2024-06-13",
+      "duration_days": 3,
+      "injected_frauds": 30,
+      "detected": true,
+      "delay_days_by_signal": {
+        "fraud": 0,
+        "alerts": 0
+      }
+    },
+    {
+      "scenario": "authorised push payment surge (3x for 3 weeks)",
+      "segment": "Authorised Push Payment",
+      "start": "2024-08-02",
+      "duration_days": 21,
+      "injected_frauds": 14,
+      "detected": true,
+      "delay_days_by_signal": {
+        "fraud": 8
+      }
+    },
+    {
+      "scenario": "corridor spike: Nigeria \u00d7 USSD (5x for 2 weeks)",
+      "segment": "Nigeria \u00d7 USSD",
+      "start": "2024-09-21",
+      "duration_days": 14,
+      "injected_frauds": 6,
+      "detected": true,
+      "delay_days_by_signal": {
+        "fraud": 13
+      }
+    },
+    {
+      "scenario": "merchant-category compromise: electronics (2x for a month)",
+      "segment": "Electronics & Technology",
+      "start": "2024-10-31",
+      "duration_days": 30,
+      "injected_frauds": 18,
+      "detected": true,
+      "delay_days_by_signal": {
+        "fraud": 7,
+        "alerts": 6
+      }
+    }
+  ],
+  "note": "Synthetic data and injected attacks: capability evidence, not field performance. Thresholds are calibrated on the clean history (treated as attack-free). Alert-signal delays assume injected frauds are intervened on at the model's real rate on fraud."
+}

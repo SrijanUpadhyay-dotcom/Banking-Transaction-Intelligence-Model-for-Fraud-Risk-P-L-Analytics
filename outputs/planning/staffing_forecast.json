@@ -1,0 +1,192 @@
+{
+  "as_of": "2024-12-30",
+  "volume_scale": 1.0,
+  "volume_model": {
+    "mean_frauds_per_day": 68.729,
+    "dispersion": 1.0,
+    "day_of_week": true,
+    "trend_per_year_pct": 3.2
+  },
+  "case_rates": {
+    "model_id": "bti-v3-lgbm-rn-20260925011359",
+    "provisional": true,
+    "transactions": 12500,
+    "case_rate": 0.05928,
+    "rates_by_queue": {
+      "urgent": 0.05048,
+      "high_value": 0.00432,
+      "standard": 0.00448
+    },
+    "action_mix": {
+      "APPROVE": 0.88336,
+      "STEP_UP": 0.05736,
+      "REVIEW": 0.0188,
+      "DECLINE": 0.04048
+    },
+    "capacity_policy": {
+      "review_cost_usd": 281.24,
+      "step_up_friction_usd": 25.22
+    }
+  },
+  "handling_minutes": {
+    "urgent": {
+      "minutes": 20.0,
+      "source": "default"
+    },
+    "high_value": {
+      "minutes": 30.0,
+      "source": "default"
+    },
+    "standard": {
+      "minutes": 15.0,
+      "source": "default"
+    }
+  },
+  "assumptions": {
+    "service_level_target": 0.9,
+    "max_occupancy": 0.85,
+    "shrinkage": 0.3,
+    "paid_hours_per_day": 8.0,
+    "sla_minutes": {
+      "urgent": 60,
+      "high_value": 120,
+      "standard": 480
+    }
+  },
+  "plans": {
+    "30d": {
+      "transactions_per_day": {
+        "p50": 70.0,
+        "p90": 81.0
+      },
+      "cases_per_day": {
+        "p50": 4.0,
+        "p90": 7.0
+      },
+      "cases_total": {
+        "p50": 124,
+        "p90": 139
+      },
+      "staffing_at_mean_day": {
+        "cases_per_day": 4.15,
+        "by_queue": {
+          "urgent": 3.53,
+          "high_value": 0.3,
+          "standard": 0.31
+        },
+        "workload_hours_per_day": 1.65,
+        "workload_fte": 0.3,
+        "erlang_analyst_hours_per_day": 24,
+        "peak_hour_analysts": 1,
+        "erlang_fte": 4.29
+      },
+      "staffing_at_p90_day": {
+        "cases_per_day": 8.0,
+        "by_queue": {
+          "urgent": 6.0,
+          "high_value": 1.0,
+          "standard": 1.0
+        },
+        "workload_hours_per_day": 3.24,
+        "workload_fte": 0.58,
+        "erlang_analyst_hours_per_day": 24,
+        "peak_hour_analysts": 1,
+        "erlang_fte": 4.29
+      }
+    },
+    "60d": {
+      "transactions_per_day": {
+        "p50": 70.0,
+        "p90": 81.0
+      },
+      "cases_per_day": {
+        "p50": 4.0,
+        "p90": 7.0
+      },
+      "cases_total": {
+        "p50": 249,
+        "p90": 270
+      },
+      "staffing_at_mean_day": {
+        "cases_per_day": 4.15,
+        "by_queue": {
+          "urgent": 3.54,
+          "high_value": 0.3,
+          "standard": 0.31
+        },
+        "workload_hours_per_day": 1.66,
+        "workload_fte": 0.3,
+        "erlang_analyst_hours_per_day": 24,
+        "peak_hour_analysts": 1,
+        "erlang_fte": 4.29
+      },
+      "staffing_at_p90_day": {
+        "cases_per_day": 8.0,
+        "by_queue": {
+          "urgent": 6.0,
+          "high_value": 1.0,
+          "standard": 1.0
+        },
+        "workload_hours_per_day": 3.24,
+        "workload_fte": 0.58,
+        "erlang_analyst_hours_per_day": 24,
+        "peak_hour_analysts": 1,
+        "erlang_fte": 4.29
+      }
+    },
+    "90d": {
+      "transactions_per_day": {
+        "p50": 70.0,
+        "p90": 81.0
+      },
+      "cases_per_day": {
+        "p50": 4.0,
+        "p90": 7.0
+      },
+      "cases_total": {
+        "p50": 374,
+        "p90": 402
+      },
+      "staffing_at_mean_day": {
+        "cases_per_day": 4.16,
+        "by_queue": {
+          "urgent": 3.54,
+          "high_value": 0.3,
+          "standard": 0.31
+        },
+        "workload_hours_per_day": 1.66,
+        "workload_fte": 0.3,
+        "erlang_analyst_hours_per_day": 24,
+        "peak_hour_analysts": 1,
+        "erlang_fte": 4.29
+      },
+      "staffing_at_p90_day": {
+        "cases_per_day": 8.0,
+        "by_queue": {
+          "urgent": 6.0,
+          "high_value": 1.0,
+          "standard": 1.0
+        },
+        "workload_hours_per_day": 3.24,
+        "workload_fte": 0.58,
+        "erlang_analyst_hours_per_day": 24,
+        "peak_hour_analysts": 1,
+        "erlang_fte": 4.29
+      }
+    }
+  },
+  "around_the_clock_floor_fte": 4.29,
+  "note": "workload_fte is the case work itself; erlang_fte also keeps the strictest queue's SLA every hour (pooled analysts). For a small book the Erlang figure is set by around-the-clock cover; for a large one it converges to the workload plus a queueing margin.",
+  "review_capacity": {
+    "analysts_fte": 3.0,
+    "weighted_handling_minutes": 20.4,
+    "warning": null,
+    "sustainable_cases_per_day": 42.1,
+    "planning_volume_p90_per_day": 81.0,
+    "current_max_review_rate": 0.02,
+    "proposed_max_review_rate": 0.25,
+    "status": "proposal \u2014 not applied",
+    "apply_with": "python -m bti.operations.capacity --fitted-by '<name>' --max-review-rate 0.2500"
+  },
+  "generated_at": "2026-10-05T03:32:29+00:00"
+}

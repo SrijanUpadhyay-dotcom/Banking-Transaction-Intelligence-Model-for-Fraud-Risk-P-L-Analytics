@@ -207,3 +207,13 @@ residency:                       # Phase 7 data-residency guard (bti.operations.
     - "*.internal"
     # - "*.ap-south-1.rds.amazonaws.com"   # Mumbai
     # - "*.ap-south-2.rds.amazonaws.com"   # Hyderabad (DR)
+
+planning:                        # Phase 8 staffing assumptions (illustrative: replace with the bank's own)
+  aht_minutes: {urgent: 20, high_value: 30, standard: 15}   # used until the case table holds 30 closed cases per queue
+  service_level_target: 0.90     # share of cases picked up within the queue SLA
+  max_occupancy: 0.85
+  shrinkage: 0.30                # leave, training, meetings
+  paid_hours_per_day: 8
+  analysts_fte: null             # rostered analysts, for the review-capacity proposal
+  forecast_cron: "30 6 * * mon"  # weekly loss and staffing forecasts (UTC)
+  early_warning_cron: "45 5 * * *"   # daily attack early warning (UTC)

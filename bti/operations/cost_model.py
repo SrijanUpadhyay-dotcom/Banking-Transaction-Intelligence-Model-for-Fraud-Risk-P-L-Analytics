@@ -197,7 +197,12 @@ def backtest(model_id: Optional[str] = None) -> Dict:
             d = decide(float(prob[i]), float(amt[i]), policy, row["channel"], row["transaction_type"],
                        provisional_model=provisional, cost_overrides=ov)
             actions.append(d.action)
-            cm = cost_model_for(policy, ov)
+            # account at economic costs: the capacity prices ration analyst and challenge capacity in the decision,
+            # they are not money spent (v2's own figures, customer value and step-up friction, are economic)
+            econ = None if version == "v1" else v2_overrides(
+                amt[i], values.get(row["customer_id"]), choose_method(row["channel"], row["transaction_type"]),
+                rates, None)
+            cm = cost_model_for(policy, econ)
             loss = amt[i] * cm.loss_given_fraud
             a, fraud = d.action, y[i] == 1
             costs[i] = ((loss if fraud else 0) if a == "APPROVE" else
