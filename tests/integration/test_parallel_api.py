@@ -22,6 +22,8 @@ from bti.database.connection import get_db
 from bti.database.models import Base, RoutedDecision, ScoreLog
 from bti.modeling import registry
 
+NOKEY = {"X-API-Key": ""}      # explicitly anonymous (the client sends the test key by default)
+
 SOURCE_REGISTRY = Path("models/registry")
 pytestmark = pytest.mark.skipif(not (SOURCE_REGISTRY / "index.json").exists(), reason="No v3 model registered")
 
@@ -57,7 +59,7 @@ def client(tmp_path_factory):
     from api.main import app
     app.dependency_overrides[get_db] = _db
     Base.metadata.create_all(bind=ENGINE)
-    with TestClient(app) as c:
+    with TestClient(app, headers={"X-API-Key": os.environ["BTI_API_KEY"]}) as c:
         yield c
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=ENGINE)
@@ -69,7 +71,7 @@ def client(tmp_path_factory):
 
 
 def test_incumbent_feed_accepts_json_and_files(client):
-    assert client.post("/api/v1/parallel/incumbent/decisions",
+    assert client.post("/api/v1/parallel/incumbent/decisions", headers=NOKEY,
                        json={"records": [{"transaction_id": "X", "decision": "ACCEPT"}]}).status_code == 401
     r = client.post("/api/v1/parallel/incumbent/decisions", headers=KEY, json={"system": "SAS", "records": [
         {"transaction_id": f"P-{i:04d}", "decision": "ACCEPT", "score": 100 + i, "latency_ms": 35}

@@ -343,13 +343,23 @@ BTI_FAILED_AUTH_THRESHOLD=3
 
 ## Security
 
-- Pipeline API protected by `X-API-Key` header with `hmac.compare_digest` (timing-safe)
-- Webhook alert dispatch signed with HMAC-SHA256 (`X-BTI-Signature` header), 3× retry with exponential backoff
-- Append-only JSONL audit trail for all scoring decisions and alert state changes (AML/BSA/FCA compliance pattern)
-- Non-root Docker user (`bti:bti`)
-- PostgreSQL-ready for production deployment
+- **Access control** (Phase 10). Every caller is a principal with its own key, stored hashed, and roles:
+  scoring, analyst, operations, model_risk, auditor, admin. One default-deny table covers every route.
+  Approver, reviewer and validator fields must be the authenticated caller.
 
----
+  ```bash
+  python -m bti.security.principals add --id jane.doe --name "Jane Doe" --roles analyst   # prints the key once
+  ```
+
+  The old shared `BTI_API_KEY` works only with `BTI_ALLOW_LEGACY_API_KEY=true` (tests); production refuses
+  the default key. People should reach BTI through the bank's SSO with MFA (a `system` principal).
+- **Self-assessment and evidence.** `python -m bti.security.assessment` probes every route, runs SAST,
+  dependency, secret and card-number scans, and is gated in CI. `python -m bti.security.evidence build`
+  writes a hash-anchored pack for auditors.
+- **Card data.** PANs are tokenised at the ISO 8583 adapter and redacted from logs. `python -m
+  bti.security.pan_scan` proves none is stored.
+- **Certification.** See [docs/CERTIFICATION_READINESS.md](docs/CERTIFICATION_READINESS.md). BTI is not
+  certified; that requires external auditors and the operating organisation's own controls.
 
 ## Tech Stack
 

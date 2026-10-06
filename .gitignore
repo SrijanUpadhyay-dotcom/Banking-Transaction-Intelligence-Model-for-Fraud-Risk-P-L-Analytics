@@ -31,3 +31,9 @@ Thumbs.db
 logs/*.log
 logs/*.jsonl
 audit_archive/
+
+# Phase 10 evidence packs are per deployment (anchored in that deployment's audit log)
+outputs/evidence/
+# API principals (hashed keys) live outside version control
+config/principals.json
+tests/.principals.test.json

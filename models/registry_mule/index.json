@@ -18,5 +18,19 @@
       "approver": "bti.scams.mule",
       "rationale": "Registered for shadow mule scans; promotion needs validation and four-eyes"
     }
+  ],
+  "notes": [
+    {
+      "at": "2026-10-06T13:46:54.510555+00:00",
+      "model_id": "*",
+      "author": "Srijan Upadhyay (Phase 10 sealing)",
+      "subject": "Artifact hashes sealed",
+      "detail": "SHA-256 recorded for artifacts registered before integrity checks existed (trust on first use); later loads are verified against these hashes.",
+      "data": {
+        "models": [
+          "bti-mule-lgbm-20261006104223"
+        ]
+      }
+    }
   ]
 }

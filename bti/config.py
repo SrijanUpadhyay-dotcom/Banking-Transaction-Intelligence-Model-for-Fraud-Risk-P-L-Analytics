@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     # Security
     secret_key: str = Field(default="CHANGE_ME_IN_PRODUCTION", alias="BTI_SECRET_KEY")
     api_key: str = Field(default="CHANGE_ME_API_KEY", alias="BTI_API_KEY")
+    # Phase 10 access control: per-principal hashed keys and roles (bti.security); the shared key is legacy only
+    principals_file: str = Field(default=str(BASE_DIR / "config" / "principals.json"), alias="BTI_PRINCIPALS_FILE")
+    allow_legacy_api_key: bool = Field(default=False, alias="BTI_ALLOW_LEGACY_API_KEY")
+    api_docs_enabled: bool = Field(default=_yaml.get("api", {}).get("docs_enabled", False), alias="BTI_API_DOCS")
+    max_request_bytes: int = _yaml.get("api", {}).get("max_request_bytes", 25 * 1024 * 1024)
+    rate_limit_per_minute: dict = _yaml.get("api", {}).get("rate_limit_per_minute",
+                                                         {"scoring": 120000, "default": 600, "anonymous": 60})
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
@@ -86,7 +93,8 @@ class Settings(BaseSettings):
     webhook_secret: str = Field(default="", alias="BTI_WEBHOOK_SECRET")
 
     # API
-    api_host: str = _yaml.get("api", {}).get("host", "0.0.0.0")
+    # Security review: container listens behind ingress
+    api_host: str = _yaml.get("api", {}).get("host", "0.0.0.0")  # nosec B104
     api_port: int = _yaml.get("api", {}).get("port", 8000)
     cors_origins: list = _yaml.get("api", {}).get("cors_origins", ["http://localhost:8501"])
 

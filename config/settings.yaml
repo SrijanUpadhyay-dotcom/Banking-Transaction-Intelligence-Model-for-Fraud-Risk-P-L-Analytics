@@ -79,7 +79,12 @@ api:
   cors_origins:
     - "http://localhost:8501"
     - "http://localhost:3000"
-  rate_limit_per_minute: 100
+  rate_limit_per_minute:         # per principal, per process (Phase 10); the API gateway enforces the primary limit
+    scoring: 120000              # authorisation traffic
+    default: 600                 # people and other services
+    anonymous: 60                # public endpoints, per client IP
+  docs_enabled: false            # Swagger / OpenAPI off in production (BTI_API_DOCS=true to enable)
+  max_request_bytes: 26214400    # 25 MB (uploads)
   jwt_algorithm: "HS256"
   access_token_expire_minutes: 60
 

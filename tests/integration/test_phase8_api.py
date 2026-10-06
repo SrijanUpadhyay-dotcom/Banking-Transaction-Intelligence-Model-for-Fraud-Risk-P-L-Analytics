@@ -14,6 +14,8 @@ os.environ.setdefault("BTI_API_KEY", "test-api-key")
 from bti.database.connection import get_db
 from bti.database.models import AuditLog, Base, EarlyWarning
 
+NOKEY = {"X-API-Key": ""}      # explicitly anonymous (the client sends the test key by default)
+
 ENGINE = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 Session = sessionmaker(bind=ENGINE)
 KEY = {"X-API-Key": os.environ["BTI_API_KEY"]}
@@ -31,7 +33,7 @@ def client():
         finally:
             db.close()
     app.dependency_overrides[get_db] = _db
-    with TestClient(app) as c:
+    with TestClient(app, headers={"X-API-Key": os.environ["BTI_API_KEY"]}) as c:
         yield c
     app.dependency_overrides.pop(get_db, None)
 
@@ -45,7 +47,7 @@ def test_early_warning_review_needs_the_key_and_a_note_to_close(client):
     listed = client.get("/api/v1/planning/early-warning").json()
     assert [a["segment"] for a in listed] == ["M1"]
     url = f"/api/v1/planning/early-warning/{alarm_id}/review"
-    assert client.post(url, json={"status": "acknowledged", "reviewed_by": "A. Analyst"}).status_code in (401, 403)
+    assert client.post(url, headers=NOKEY, json={"status": "acknowledged", "reviewed_by": "A. Analyst"}).status_code in (401, 403)
     assert client.post(url, headers=KEY, json={"status": "closed", "reviewed_by": "A. Analyst"}).status_code == 422
     ok = client.post(url, headers=KEY, json={"status": "closed", "reviewed_by": "A. Analyst",
                                              "note": "Merchant confirmed a tokenisation outage; benign"})

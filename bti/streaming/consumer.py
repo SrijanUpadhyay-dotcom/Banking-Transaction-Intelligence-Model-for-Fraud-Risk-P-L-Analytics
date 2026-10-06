@@ -143,7 +143,8 @@ def serve_metrics(metrics: Metrics, port: int, stale_after_s: float = 60.0) -> T
         def log_message(self, *args):
             pass
 
-    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    # Security review: metrics port, network-policy scoped
+    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)  # nosec B104
     threading.Thread(target=server.serve_forever, daemon=True, name="bti-stream-metrics").start()
     return server
 

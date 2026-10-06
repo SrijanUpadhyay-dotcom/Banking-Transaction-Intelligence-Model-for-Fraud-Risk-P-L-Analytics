@@ -18,6 +18,7 @@ instance that is not ready.
 - the asynchronous explanation backlog is high
 - residency violations in warn mode
 - no tokenisation key, so card and account messages cannot be accepted
+- access control: the shared legacy key is enabled, or no principals exist
 """
 
 from __future__ import annotations
@@ -97,6 +98,12 @@ def readiness() -> Dict:
                                else "missing")}
     if checks["tokenisation"]["status"] == "missing":
         degraded.append("tokenisation")
+
+    from bti.security.principals import load as load_principals
+    active = sum(1 for pr in load_principals().values() if pr.active)
+    checks["access_control"] = {"active_principals": active, "legacy_shared_key": s.allow_legacy_api_key}
+    if s.allow_legacy_api_key or active == 0:
+        degraded.append("access_control")
 
     return {"ready": not critical_fail, "failed": critical_fail, "degraded": degraded, "checks": checks,
             "checked_in_ms": round((time.perf_counter() - t0) * 1000, 1)}

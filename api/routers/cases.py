@@ -96,10 +96,28 @@ def pending_customer(case_id: int, body: AssignIn, db: Session = Depends(get_db)
     return _call(cases.set_pending_customer, db, case_id, body.analyst)
 
 
+class CheckIn(BaseModel):
+    checker: str = Field(..., description="The second reviewer: must be the authenticated caller")
+    notes: Optional[str] = None
+
+
+@router.post("/{case_id}/check", dependencies=[Depends(require_api_key)])
+def check(case_id: int, body: CheckIn, db: Session = Depends(get_db)):
+    """Second reviewer's confirmation for clearing a high-value case, made with the checker's own credentials."""
+    return _call(cases.record_check, db, case_id, body.checker, body.notes)
+
+
 @router.post("/{case_id}/disposition", dependencies=[Depends(require_api_key)])
 def disposition(case_id: int, body: DispositionIn, db: Session = Depends(get_db)):
-    """Close the case. Confirmed fraud / confirmed genuine are written as labels automatically."""
-    return _call(cases.dispose, db, case_id, body.disposition, body.analyst, body.notes, body.checked_by,
+    """Close the case. Confirmed fraud / confirmed genuine are written as labels automatically.
+    High-value clears need a checker recorded through POST /cases/{id}/check by the checker themselves."""
+    from bti.database.models import FraudCase
+    case = db.get(FraudCase, case_id)
+    recorded = case.checked_by if case is not None else None
+    if body.checked_by and (not recorded or body.checked_by.strip().lower() != recorded.strip().lower()):
+        raise HTTPException(status_code=409, detail="The checker must confirm with their own credentials first "
+                                                    "(POST /cases/{case_id}/check)")
+    return _call(cases.dispose, db, case_id, body.disposition, body.analyst, body.notes, recorded,
                  body.fraud_type, body.loss_amount)
 
 

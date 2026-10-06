@@ -27,6 +27,8 @@ from bti.database.connection import get_db
 from bti.database.models import Base, ScoreLog, Transaction
 from bti.modeling import registry
 
+NOKEY = {"X-API-Key": ""}      # explicitly anonymous (the client sends the test key by default)
+
 SOURCE_REGISTRY = Path("models/registry")
 pytestmark = pytest.mark.skipif(not (SOURCE_REGISTRY / "index.json").exists(),
                                 reason="No v3 model registered — run python -m bti.modeling.train")
@@ -75,7 +77,7 @@ def client(tmp_path_factory):
                             merchant_name="Target", channel="Mobile Banking") for d in range(1, 15)])
     db.commit()
     db.close()
-    with TestClient(app) as c:
+    with TestClient(app, headers={"X-API-Key": os.environ["BTI_API_KEY"]}) as c:
         yield c
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=ENGINE)
@@ -183,7 +185,7 @@ class TestSasEnrichment:
 
 class TestMonitoring:
     def test_drift_run_requires_key_and_is_recorded(self, client):
-        assert client.post("/api/v1/governance/drift/run").status_code == 401
+        assert client.post("/api/v1/governance/drift/run", headers=NOKEY).status_code == 401
         run = client.post("/api/v1/governance/drift/run", headers=KEY).json()
         assert run["status"] in ("insufficient_data", "stable", "investigate", "escalate")
         history = client.get("/api/v1/governance/drift/history").json()["runs"]

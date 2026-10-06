@@ -175,6 +175,25 @@ def dispose(db: Session, case_id: int, disposition: str, analyst: str, notes: Op
     return _row(case)
 
 
+def record_check(db: Session, case_id: int, checker: str, notes: Optional[str] = None) -> Dict:
+    """
+    The second reviewer's own confirmation, made with their own credentials (Phase 10). Clearing a high-value
+    case then accepts only a checker recorded here, so the maker cannot name a checker who never looked.
+    """
+    case = db.get(FraudCase, case_id)
+    if case is None or case.status not in OPEN_STATES:
+        raise CaseError(f"Case {case_id} is not open")
+    if not checker or not checker.strip():
+        raise CaseError("checker is required")
+    if case.assigned_to and case.assigned_to.strip().lower() == checker.strip().lower():
+        raise CaseError("Maker-checker: the assigned analyst cannot also be the checker")
+    case.checked_by = checker.strip()
+    db.add(AuditLog(ts=datetime.utcnow(), event_type="CASE_CHECKED", transaction_id=case.transaction_id,
+                    payload={"case_id": case.id, "checker": checker.strip(), "notes": notes}))
+    db.commit()
+    return _row(case)
+
+
 def set_pending_customer(db: Session, case_id: int, analyst: str) -> Dict:
     case = db.get(FraudCase, case_id)
     if case is None or case.status not in OPEN_STATES:

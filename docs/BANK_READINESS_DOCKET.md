@@ -974,8 +974,81 @@ Tests: 8 unit tests (Phase 9) and 2 API tests.
 
 ## Phase 10 — Certification
 
-| Item | Status | Scope |
+**BTI is not certified, and no code can make it so.**
+- SOC 2 is attested by an independent CPA firm over a 3–12-month observation period.
+- ISO 27001 is certified by an accredited body.
+- PCI DSS is validated by a QSA or a self-assessment.
+- Penetration tests are done by independent testers.
+
+All of them also cover the organisation that operates BTI. Phase 10 builds what the software contributes and fixes
+what an auditor would have failed. The full mapping, scope and roadmap are in
+[CERTIFICATION_READINESS.md](CERTIFICATION_READINESS.md).
+
+| Item | Status | Notes |
 |---|---|---|
+| Access control fit for audit | **Done** | Principals, role table, identity binding, authenticated maker-checker; see below. |
+| Hardening | **Done** | Security headers, docs off in production, 25 MB limit, rate limits, readiness detail only when authenticated, startup refusal of default secrets. |
+| Model artifact integrity | **Done** | SHA-256 recorded at registration and verified before loading; 35 existing artifacts sealed (trust on first use, noted in each registry). |
+| PCI DSS scope reduction | **Done — deployment by the bank** | See *Card data* below. |
+| Security self-assessment and CI gate | **Done** | `python -m bti.security.assessment`: 12 pass, 2 open (per-deployment settings); see below. |
+| Evidence pack | **Done** | `python -m bti.security.evidence build \| verify`: ten system artefacts and a SHA-256 manifest anchored in the audit log; `verify` caught a one-file alteration in testing. |
+| SOC 2 / ISO 27001 mapping, threat model, pen-test scope | **Done — documents** | TSC CC1–CC9 / A1 / C1 / PI1 and an Annex A SoA draft, each marking what the software does and what the organisation must do; STRIDE threat model; penetration-test scope and rules of engagement. |
+| SOC 2 Type II, ISO 27001 certificate, PCI validation, penetration test | **Pending — external** | Needs the operating organisation's ISMS (policies, risk assessment, HR, suppliers, incident response, MFA via SSO), an auditor and a tester. Realistic path about 9–12 months. |
+
+**Access control** (`bti.security`).
+
+- **What was found.** Before Phase 10, 94 API routes had no authentication beyond the three meant to be public:
+  - 73 reads, including customer transactions, cases and per-customer risk
+  - 21 writes, including scoring, model reload and alert edits
+
+  Approvals carried a free-text approver behind one shared key, so four-eyes could not be enforced.
+- **Principals.** Each person or system has its own key, stored only as SHA-256, with roles and immediate
+  deactivation.
+- **Role table.** Every one of the 144 routes is in the table; anything unlisted is admin-only. Customer-level data is
+  for analysts and auditors; auditors cannot write.
+- **Identity binding.** Approver, author, validator, reviewer, analyst and checker must equal the authenticated
+  caller.
+- **Maker-checker.** A high-value clearance needs the checker's own authenticated confirmation
+  (`POST /cases/{id}/check`), and the workbench now works this way.
+- **Legacy key.** The shared key is off by default, and production refuses to start with the default one.
+
+**Card data.**
+
+- **The tokenisation edge.** The ISO 8583 adapter is the only component that sees a PAN. Deployed inside the bank's
+  CDE, it keeps the rest of BTI out of PCI scope.
+- **Redaction.** Logs redact PANs and IBANs.
+- **PAN discovery** (`bti.security.pan_scan`; Luhn, issuer prefixes, no decimals or hashes). It found none on the
+  development system, nor on a database that processed 200 ISO 8583 card messages. An early run's 18 hits were
+  decimals in reports and digits in audit hashes; the rule was tightened and those false-positive patterns are now
+  in the tests.
+
+**Self-assessment results.**
+
+- **Pass (12):**
+  - all 141 protected routes refuse anonymous callers
+  - the auditor role is refused on all 68 write routes
+  - injection and traversal payloads on every path parameter: no 5xx, no reflection
+  - SAST (bandit) clean of medium and high findings, after fixing one high and accepting four justified items
+  - deployable dependencies (101 resolved from requirements.txt) have no known vulnerabilities; the build
+    container's own system packages are reported for information
+  - no secrets, no card data
+- **Open (2):** the tokenisation key and the residency jurisdiction, both per-deployment settings.
+- **CI.** A new `security` job (bandit, pip-audit, self-assessment) gates the Docker build.
+
+**What the bank or operator must still do:**
+
+- Put human access behind SSO with MFA.
+- Write the ISMS policies, risk assessment and SoA approval, internal audit and management review.
+- Handle HR screening and training, and supplier contracts (cloud, SMS, LLM).
+- Write an incident-response plan and test it.
+- Run DR drills.
+- Hold an HSM key ceremony for the tokenisation edge, and segmentation testing.
+- Commission the external audits and penetration test.
+
+Tests: 14 security tests (API access, identity binding, maker-checker, hardening, redaction, artifact integrity,
+evidence pack, PAN discovery). The existing integration tests now authenticate.
+
+---|---|---|
 | SOC 2 Type II, ISO 27001, PCI DSS scope reduction, penetration test | New | Procurement gates. |
 
 ---

@@ -22,6 +22,8 @@ from bti.database.connection import get_db
 from bti.database.models import Base, ScoreLog, Transaction
 from bti.modeling import registry
 
+NOKEY = {"X-API-Key": ""}      # explicitly anonymous (the client sends the test key by default)
+
 SOURCE_REGISTRY = Path("models/registry")
 pytestmark = pytest.mark.skipif(not (SOURCE_REGISTRY / "index.json").exists(),
                                 reason="No v3 model registered — run python -m bti.modeling.train")
@@ -67,7 +69,7 @@ def client(tmp_path_factory):
                             merchant_name="Tesco", channel="Mobile Banking") for d in range(1, 15)])
     db.commit()
     db.close()
-    with TestClient(app) as c:
+    with TestClient(app, headers={"X-API-Key": os.environ["BTI_API_KEY"]}) as c:
         yield c
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=ENGINE)
@@ -133,7 +135,7 @@ class TestGovernance:
 
     def test_promotion_requires_api_key(self, client):
         passed, _ = _passed_and_failed()
-        r = client.post(f"/api/v1/governance/models/{passed}/promote",
+        r = client.post(f"/api/v1/governance/models/{passed}/promote", headers=NOKEY,
                         json={"role": "champion", "approver": "risk.officer", "rationale": "Independent validation"})
         assert r.status_code == 401
 
@@ -199,7 +201,7 @@ class TestOperations:
         assert client.post("/api/v1/operations/labels", headers=KEY, json=bad_source).status_code == 422
         contradiction = {"labels": [{"transaction_id": "V3-0002", "label_source": "CHARGEBACK", "label": 0}]}
         assert client.post("/api/v1/operations/labels", headers=KEY, json=contradiction).status_code == 422
-        assert client.post("/api/v1/operations/labels", json={"labels": []}).status_code == 401
+        assert client.post("/api/v1/operations/labels", headers=NOKEY, json={"labels": []}).status_code == 401
 
     def test_feedback_loop_feeds_kpis(self, client):
         r = client.post("/api/v1/operations/labels", headers=KEY, json={"labels": [
@@ -243,7 +245,7 @@ class TestFeeds:
         bad = client.post("/api/v1/v3/security-events", headers=KEY, json=[
             {"customer_id": "CUST-V3", "event_type": "horoscope_change", "event_time": "2024-09-20T09:00:00"}])
         assert bad.status_code == 422
-        anonymous = client.post("/api/v1/v3/security-events", json=[
+        anonymous = client.post("/api/v1/v3/security-events", headers=NOKEY, json=[
             {"customer_id": "CUST-V3", "event_type": "sim_swap", "event_time": "2024-09-20T09:00:00"}])
         assert anonymous.status_code in (401, 403)
 

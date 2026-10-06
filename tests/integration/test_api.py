@@ -21,6 +21,8 @@ os.environ.setdefault("BTI_API_KEY", "test-api-key")
 from bti.database.models import Base, Transaction, FraudAlert
 from bti.database.connection import get_db
 
+NOKEY = {"X-API-Key": ""}      # explicitly anonymous (the client sends the test key by default)
+
 # ── In-memory test DB (shared across all tests in this module) ────────────────
 
 TEST_ENGINE = create_engine(
@@ -80,7 +82,7 @@ def client():
     finally:
         db.close()
 
-    with TestClient(app) as c:
+    with TestClient(app, headers={"X-API-Key": os.environ["BTI_API_KEY"]}) as c:
         yield c
 
     app.dependency_overrides.clear()
@@ -208,7 +210,7 @@ class TestPipelineAPI:
         assert r.status_code == 200
 
     def test_trigger_requires_api_key(self, client):
-        r = client.post("/api/v1/pipeline/run", json={"force": False})
+        r = client.post("/api/v1/pipeline/run", headers=NOKEY, json={"force": False})
         assert r.status_code == 401
 
     def test_trigger_with_api_key_accepted(self, client):

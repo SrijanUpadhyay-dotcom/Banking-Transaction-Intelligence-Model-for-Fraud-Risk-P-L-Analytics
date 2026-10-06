@@ -153,7 +153,7 @@ def build_transaction_graph(transactions: List[dict]) -> nx.Graph:
 def _ring_id(nodes: Set[str]) -> str:
     """Stable short ID for a ring based on its transaction nodes."""
     txn_nodes = sorted(n for n in nodes if n.startswith("txn:"))
-    h = hashlib.sha1("|".join(txn_nodes).encode()).hexdigest()[:8]
+    h = hashlib.sha1("|".join(txn_nodes).encode(), usedforsecurity=False).hexdigest()[:8]   # an id, not security
     return f"RING-{h.upper()}"
 
 

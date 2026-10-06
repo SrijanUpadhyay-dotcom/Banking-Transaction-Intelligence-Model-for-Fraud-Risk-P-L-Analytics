@@ -201,11 +201,16 @@ class PipelineOrchestrator:
 
 
 def _exec_script(path: str) -> None:
-    """Execute a Python script file in its own global namespace."""
-    with open(path, "r", encoding="utf-8") as f:
+    """Execute one of the fixed pipeline stage scripts in its own global namespace (allow-list enforced)."""
+    allowed = {str(Path(st.script).resolve()) for st in STAGES}
+    resolved = str(Path(path).resolve())
+    if resolved not in allowed:
+        raise ValueError(f"{path} is not a registered pipeline stage script")
+    with open(resolved, "r", encoding="utf-8") as f:
         code = f.read()
-    ns = {"__name__": "__main__", "__file__": path}
-    exec(compile(code, path, "exec"), ns)
+    ns = {"__name__": "__main__", "__file__": resolved}
+    # Security review: fixed allow-list of repository stage scripts
+    exec(compile(code, resolved, "exec"), ns)  # nosec B102
 
 
 def run_full_pipeline(force: bool = False) -> dict:

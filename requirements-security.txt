@@ -1,0 +1,3 @@
+# Phase 10 security tooling (CI gate and self-assessment)
+bandit==1.9.4
+pip-audit==2.10.1

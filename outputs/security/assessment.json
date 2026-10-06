@@ -1,0 +1,188 @@
+{
+  "generated_at": "2026-10-06T13:53:14+00:00",
+  "nature": "Automated self-assessment; not a penetration test and not a certification",
+  "summary": {
+    "pass": 12,
+    "open": 2
+  },
+  "findings": [
+    {
+      "id": "AC-1",
+      "severity": "high",
+      "title": "Every route has an explicit access rule",
+      "status": "pass",
+      "evidence": {
+        "routes": 144,
+        "uncovered": []
+      }
+    },
+    {
+      "id": "AC-2",
+      "severity": "critical",
+      "title": "Protected routes refuse anonymous callers",
+      "status": "pass",
+      "evidence": {
+        "probed": 141,
+        "not_refused": []
+      }
+    },
+    {
+      "id": "AC-3",
+      "severity": "high",
+      "title": "Read-only auditor role is refused on every write route",
+      "status": "pass",
+      "evidence": {
+        "write_routes": 68,
+        "not_refused": []
+      }
+    },
+    {
+      "id": "IN-1",
+      "severity": "high",
+      "title": "Injection and traversal payloads in path parameters cause no server errors or reflection",
+      "status": "pass",
+      "evidence": {
+        "routes": 16,
+        "payloads": [
+          "' OR '1'='1",
+          "../../../../etc/passwd",
+          "<script>alert(1)</script>",
+          "%00",
+          "1;DROP TABLE x--"
+        ],
+        "server_errors": [],
+        "reflected": []
+      }
+    },
+    {
+      "id": "TR-1",
+      "severity": "medium",
+      "title": "Security headers present; API docs not exposed",
+      "status": "pass",
+      "evidence": {
+        "missing_headers": [],
+        "docs_status": 404
+      }
+    },
+    {
+      "id": "SA-1",
+      "severity": "low",
+      "title": "Static analysis (bandit)",
+      "status": "pass",
+      "evidence": {
+        "by_severity": {
+          "LOW": 18
+        },
+        "high": [],
+        "medium": []
+      }
+    },
+    {
+      "id": "SE-1",
+      "severity": "low",
+      "title": "No secrets in version-controlled files",
+      "status": "pass",
+      "evidence": {
+        "files_scanned": 306,
+        "hits": []
+      }
+    },
+    {
+      "id": "PC-1",
+      "severity": "low",
+      "title": "No card numbers stored at rest",
+      "status": "pass",
+      "evidence": {
+        "database_locations_with_pans": [],
+        "file_locations_with_pans": [],
+        "clean": true,
+        "scope": {
+          "database": "sqlite:///./data/bti.db",
+          "paths": [
+            "outputs",
+            "logs",
+            "models"
+          ]
+        }
+      }
+    },
+    {
+      "id": "DE-1",
+      "severity": "low",
+      "title": "No known vulnerabilities in the deployable dependencies",
+      "status": "pass",
+      "evidence": {
+        "requirements_txt": {
+          "packages_resolved": 101,
+          "vulnerabilities": []
+        },
+        "build_host_environment_info_only": {
+          "packages": 146,
+          "vulnerabilities": 36,
+          "packages_affected": [
+            "cryptography",
+            "httplib2",
+            "oauthlib",
+            "pip",
+            "pyjwt",
+            "urllib3",
+            "wheel"
+          ],
+          "note": "system packages of the development container (not shipped); the production image is built from requirements.txt and audited in CI"
+        }
+      }
+    },
+    {
+      "id": "CF-1",
+      "severity": "high",
+      "title": "Shared legacy API key disabled",
+      "status": "pass",
+      "evidence": {
+        "allow_legacy_api_key": false,
+        "note": "the test suite enables it; production must not"
+      }
+    },
+    {
+      "id": "CF-2",
+      "severity": "medium",
+      "title": "Environment is not 'development' (which bypasses authentication)",
+      "status": "pass",
+      "evidence": {
+        "environment": "production"
+      }
+    },
+    {
+      "id": "CF-3",
+      "severity": "medium",
+      "title": "Tokenisation key configured for card and account data",
+      "status": "open",
+      "evidence": {
+        "configured": false,
+        "note": "set BTI_TOKEN_KEY from the bank's HSM"
+      }
+    },
+    {
+      "id": "CF-4",
+      "severity": "medium",
+      "title": "CORS restricted to named origins",
+      "status": "pass",
+      "evidence": {
+        "origins": [
+          "http://localhost:8501",
+          "http://localhost:3000"
+        ]
+      }
+    },
+    {
+      "id": "CF-5",
+      "severity": "medium",
+      "title": "Data residency configured and compliant",
+      "status": "open",
+      "evidence": {
+        "jurisdiction": null,
+        "mode": "warn",
+        "violations": []
+      }
+    }
+  ]
+}

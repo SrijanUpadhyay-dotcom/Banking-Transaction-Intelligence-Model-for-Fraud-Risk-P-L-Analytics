@@ -14,6 +14,8 @@ os.environ.setdefault("BTI_API_KEY", "test-api-key")
 from bti.database.connection import get_db
 from bti.database.models import AuditLog, Base, MuleAlert
 
+NOKEY = {"X-API-Key": ""}      # explicitly anonymous (the client sends the test key by default)
+
 ENGINE = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 Session = sessionmaker(bind=ENGINE)
 KEY = {"X-API-Key": os.environ["BTI_API_KEY"]}
@@ -31,7 +33,7 @@ def client():
         finally:
             db.close()
     app.dependency_overrides[get_db] = _db
-    with TestClient(app) as c:
+    with TestClient(app, headers={"X-API-Key": os.environ["BTI_API_KEY"]}) as c:
         yield c
     app.dependency_overrides.pop(get_db, None)
 
@@ -45,7 +47,7 @@ def test_mule_alert_review_needs_key_and_evidence_and_is_final(client):
     assert [a["customer_id"] for a in client.get("/api/v1/scams/mule-alerts").json()] == ["CUST-X"]
     url = f"/api/v1/scams/mule-alerts/{alert}/review"
     body = {"status": "confirmed_mule", "reviewed_by": "A. Analyst", "note": "Inbound from 14 senders, all out by ATM"}
-    assert client.post(url, json=body).status_code in (401, 403)
+    assert client.post(url, headers=NOKEY, json=body).status_code in (401, 403)
     assert client.post(url, headers=KEY, json={**body, "note": "short"}).status_code == 422
     assert client.post(url, headers=KEY, json=body).json()["status"] == "confirmed_mule"
     assert client.post(url, headers=KEY, json=body).status_code == 409                # decided once

@@ -59,7 +59,9 @@ async def lifespan(app: FastAPI):
     log.info("BTI API starting up", extra={"version": settings.app_version,
                                             "env": settings.environment})
     from bti.operations.residency import enforce_at_startup
-    enforce_at_startup("api")                     # enforce mode: refuse to start with an out-of-country endpoint
+    enforce_at_startup("api")
+    from bti.security.hardening import enforce_secrets_at_startup
+    enforce_secrets_at_startup()                  # production: no default or shared secrets                     # enforce mode: refuse to start with an out-of-country endpoint
     create_tables()
     try:
         from bti.operations.scoring_service import warm_up
@@ -72,7 +74,12 @@ async def lifespan(app: FastAPI):
     log.info("BTI API shutting down")
 
 
+from fastapi import Depends  # noqa: E402
+from api.security import authorize  # noqa: E402
+
+_docs = settings.api_docs_enabled or settings.environment == "development"
 app = FastAPI(
+    dependencies=[Depends(authorize)],
     title="Banking Transaction Intelligence API",
     description=(
         "Production REST API for real-time fraud detection, risk scoring, "
@@ -80,9 +87,14 @@ app = FastAPI(
     ),
     version=settings.app_version,
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if _docs else None,              # off in production unless BTI_API_DOCS=true
+    redoc_url="/redoc" if _docs else None,
+    openapi_url="/openapi.json" if _docs else None,
 )
+
+from bti.security.hardening import install as install_hardening, install_log_redaction  # noqa: E402
+install_hardening(app)
+install_log_redaction()
 
 app.add_middleware(
     CORSMiddleware,
@@ -150,11 +162,14 @@ def health():
 
 
 @app.get("/readyz", tags=["Health"])
-def readyz():
+def readyz(request: Request):
     """Readiness: database, scoring model and data residency (critical); feature store, graph snapshot,
-    explanation backlog and tokenisation key (degraded). 503 when not ready."""
+    explanation backlog and tokenisation key (degraded). 503 when not ready. Details only for authenticated
+    callers; a load balancer sees ready / not ready."""
     from bti.operations.readiness import readiness
     result = readiness()
+    if getattr(request.state, "principal", None) is None:
+        result = {"ready": result["ready"]}
     return JSONResponse(status_code=200 if result["ready"] else 503, content=result)
 
 

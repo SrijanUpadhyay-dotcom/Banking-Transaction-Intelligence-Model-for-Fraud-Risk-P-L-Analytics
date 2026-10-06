@@ -1500,6 +1500,50 @@
       "subject": "Finding: missing-input hazard",
       "detail": "amount_vs_hist_avg and login_attempts were never missing in training. With either input absent, 100% of a 2,000-customer genuine sample scored above p=0.5 (amount_vs_hist_avg +8.4 log-odds, login_attempts +6.8). Found in the Phase 2 live smoke run, where transactions without the profile average all scored 0.97. Replaced as challenger by bti-v3-lgbm-rn-20260925011359, trained with missingness augmentation and checked by the new missing_input_robustness gate (worst increase 0.05%).",
       "data": {}
+    },
+    {
+      "at": "2026-10-06T13:46:54.504551+00:00",
+      "model_id": "*",
+      "author": "Srijan Upadhyay (Phase 10 sealing)",
+      "subject": "Artifact hashes sealed",
+      "detail": "SHA-256 recorded for artifacts registered before integrity checks existed (trust on first use); later loads are verified against these hashes.",
+      "data": {
+        "models": [
+          "bti-v3-hgb-20260923160131",
+          "bti-v3-hgb-20260923160241",
+          "bti-v3-hgb-20260923175252",
+          "bti-v3-hgb-20260923180154",
+          "bti-v3-hgb-20260923180856",
+          "bti-v3-hgb-r-20260923181435",
+          "bti-v3-hgb-rn-20260925003518",
+          "bti-v3-hgb-rn-20260925011349",
+          "bti-v3-hgb-ro-20260925003524",
+          "bti-v3-hgb-ro-20260925011356",
+          "bti-v3-hgb-x-20260923180244",
+          "bti-v3-hgb-x-20260923180902",
+          "bti-v3-hgb-xr-20260923181441",
+          "bti-v3-lgbm-20260923180324",
+          "bti-v3-lgbm-20260923180905",
+          "bti-v3-lgbm-r-20260923181444",
+          "bti-v3-lgbm-rn-20260925003527",
+          "bti-v3-lgbm-rn-20260925011359",
+          "bti-v3-lgbm-ro-20260925003530",
+          "bti-v3-lgbm-ro-20260925011403",
+          "bti-v3-lgbm-x-20260923180404",
+          "bti-v3-lgbm-x-20260923180908",
+          "bti-v3-lgbm-xr-20260923181447",
+          "bti-v3-xgb-20260923180442",
+          "bti-v3-xgb-20260923180911",
+          "bti-v3-xgb-r-20260923181450",
+          "bti-v3-xgb-rn-20260925003533",
+          "bti-v3-xgb-rn-20260925011406",
+          "bti-v3-xgb-ro-20260925003535",
+          "bti-v3-xgb-ro-20260925011409",
+          "bti-v3-xgb-x-20260923180523",
+          "bti-v3-xgb-x-20260923180914",
+          "bti-v3-xgb-xr-20260923181453"
+        ]
+      }
     }
   ]
 }

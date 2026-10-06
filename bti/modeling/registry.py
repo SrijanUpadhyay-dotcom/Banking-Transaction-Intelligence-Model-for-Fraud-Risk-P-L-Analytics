@@ -21,6 +21,13 @@ unchanged. Keeping families apart means jobs that iterate the fraud registry,
 such as tournaments, fairness reassessment and the validation inventory,
 never meet a scam or mule artifact they cannot score.
 
+**Artifact integrity.** Model artifacts are joblib (pickle) files, and
+loading one runs code. Each artifact's SHA-256 is therefore recorded when it
+is registered, in `artifact_hashes.json` per family. `load_artifact` refuses
+a file whose hash no longer matches. For models registered before this
+existed, `seal_artifacts` records the current hashes (trust on first use,
+noted in the index).
+
 Registered cards are never edited. When a model is re-assessed after
 registration (a corrected test, a new finding, a retraction), the result is
 appended to `notes` in the index, so the record shows both what was believed at
@@ -82,12 +89,57 @@ def read_index(family: str = "fraud") -> Dict:
     return json.loads(path.read_text())
 
 
+def _hashes_path(family: str) -> Path:
+    return registry_dir(family) / "artifact_hashes.json"
+
+
+def _file_sha256(path: Path) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _record_hash(model_id: str, family: str) -> str:
+    digest = _file_sha256(registry_dir(family) / model_id / "model.joblib")
+    path = _hashes_path(family)
+    hashes = json.loads(path.read_text()) if path.exists() else {}
+    if model_id in hashes and hashes[model_id] != digest:
+        raise RegistryError(f"Artifact hash for {model_id} already recorded and differs; refusing to overwrite")
+    hashes[model_id] = digest
+    _atomic_write_json(path, hashes)
+    return digest
+
+
+def seal_artifacts(family: str = "fraud", author: str = "bti.modeling.registry") -> Dict[str, str]:
+    """Record hashes for registered artifacts that have none yet (trust on first use), noted in the index."""
+    sealed = {}
+    known = json.loads(_hashes_path(family).read_text()) if _hashes_path(family).exists() else {}
+    for m in read_index(family).get("models", []):
+        mid = m["model_id"]
+        if mid not in known and (registry_dir(family) / mid / "model.joblib").exists():
+            sealed[mid] = _record_hash(mid, family)
+    if sealed:
+        with _lock:
+            index = read_index(family)
+            index.setdefault("notes", []).append({
+                "at": _now(), "model_id": "*", "author": author, "subject": "Artifact hashes sealed",
+                "detail": "SHA-256 recorded for artifacts registered before integrity checks existed (trust on "
+                          "first use); later loads are verified against these hashes.",
+                "data": {"models": sorted(sealed)}})
+            _atomic_write_json(_index_path(family), index)
+    return sealed
+
+
 def save_model(model_id: str, artifact: Dict, card: Dict, family: str = "fraud") -> Path:
     folder = registry_dir(family) / model_id
     if folder.exists():
         raise RegistryError(f"Model {model_id} already registered; registry entries are immutable")
     folder.mkdir(parents=True)
     joblib.dump(artifact, folder / "model.joblib", compress=3)
+    _record_hash(model_id, family)
     _atomic_write_json(folder / "card.json", card)
     with _lock:
         index = read_index(family)
@@ -115,7 +167,12 @@ def load_artifact(model_id: str, family: str = "fraud") -> Dict:
             path = registry_dir(family) / model_id / "model.joblib"
             if not path.exists():
                 raise RegistryError(f"Unknown model {model_id}")
-            _cache[key] = joblib.load(path)
+            hashes = json.loads(_hashes_path(family).read_text()) if _hashes_path(family).exists() else {}
+            expected = hashes.get(model_id)
+            if expected and _file_sha256(path) != expected:
+                raise RegistryError(f"Artifact integrity check failed for {model_id}: the file changed after "
+                                    f"registration; refusing to load it")
+            _cache[key] = joblib.load(path)  # nosec B301
         return _cache[key]
 
 

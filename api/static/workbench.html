@@ -351,9 +351,16 @@
     const fraudFields = el("div", { class: "fields", hidden: true },
       el("label", {}, "Fraud type", el("input", { name: "fraud_type", placeholder: "e.g. Account Takeover" })),
       el("label", {}, "Loss (USD)", el("input", { name: "loss_amount", type: "number", min: "0", step: "0.01" })));
+    const confirmCheck = async () => {
+      const me = $("analyst").value.trim();
+      if (!me) return toast("Enter your analyst ID first.", true);
+      await act(`/cases/${c.id}/check`, { checker: me }, "Recorded as second reviewer");
+    };
     const checker = el("div", { class: "fields", hidden: true },
-      el("label", {}, `Second reviewer (clearing ${money(ctx.checker_threshold_usd)}+ needs one)`,
-         el("input", { name: "checked_by", placeholder: "Reviewer ID, not your own" })));
+      el("p", { class: "muted", text: c.checked_by
+        ? `Second reviewer: ${c.checked_by} confirmed this case.`
+        : `Clearing ${money(ctx.checker_threshold_usd)}+ needs a second reviewer. They open this case with their own key and confirm below.` }),
+      c.checked_by ? null : el("button", { class: "btn", type: "button", onclick: confirmCheck }, "Confirm as second reviewer"));
     const form = el("form", { class: "dispose", onsubmit: async (ev) => {
         ev.preventDefault();
         const me = $("analyst").value.trim();
@@ -363,7 +370,10 @@
         const body = { disposition: disp, analyst: me, notes: form.notes.value.trim() || null };
         if (isFraud()) { body.fraud_type = form.fraud_type.value.trim() || null;
                          body.loss_amount = form.loss_amount.value ? Number(form.loss_amount.value) : null; }
-        if (needsChecker()) body.checked_by = form.checked_by.value.trim() || null;
+        if (needsChecker()) {
+          if (!c.checked_by) return toast("A second reviewer must confirm this case first.", true);
+          body.checked_by = c.checked_by;
+        }
         await act(`/cases/${c.id}/disposition`, body, disp === "confirmed_fraud" || disp === "confirmed_genuine"
                   ? "Case closed — outcome written as a confirmed label" : "Case closed");
       } },
