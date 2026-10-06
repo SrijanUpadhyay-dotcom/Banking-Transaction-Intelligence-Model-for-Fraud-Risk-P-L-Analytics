@@ -1,0 +1,450 @@
+{
+  "model_id": "bti-scam-lgbm-20261006103935",
+  "family": "scam",
+  "purpose": "Risk that an outbound payment is an authorised push payment scam",
+  "ownership": {
+    "developer": "Srijan Upadhyay",
+    "business_owner": null
+  },
+  "data": {
+    "path": "data/processed/scams/banking_transactions_with_scams.csv",
+    "sha256": "d2f865fe7bec534bfa16b892e7776abdd1f9941f9561ae4bd694f8c604363fc0",
+    "synthetic": true
+  },
+  "features": [
+    {
+      "name": "payee_new_for_customer",
+      "sources": [
+        "customer_id",
+        "payee_id",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "reason_code": "NEW_PAYEE",
+      "description": "First payment from this customer to this payee"
+    },
+    {
+      "name": "payee_account_age_days",
+      "sources": [
+        "payee_id",
+        "payee_account_opened_date",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "reason_code": "PAYEE_RISK",
+      "description": "Days since the payee's account was opened (unknown without the payee-intelligence feed)"
+    },
+    {
+      "name": "cop_no_match",
+      "sources": [
+        "cop_result"
+      ],
+      "reason_code": "COP_MISMATCH",
+      "description": "Confirmation of Payee: name does not match"
+    },
+    {
+      "name": "cop_close_match",
+      "sources": [
+        "cop_result"
+      ],
+      "reason_code": "COP_MISMATCH",
+      "description": "Confirmation of Payee: close match"
+    },
+    {
+      "name": "cop_unavailable",
+      "sources": [
+        "cop_result"
+      ],
+      "reason_code": "COP_MISMATCH",
+      "description": "Confirmation of Payee: check not possible"
+    },
+    {
+      "name": "payee_new_to_bank",
+      "sources": [
+        "customer_id",
+        "payee_id",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "reason_code": "PAYEE_RISK",
+      "description": "No customer of the bank has paid this payee before"
+    },
+    {
+      "name": "payee_first_seen_days",
+      "sources": [
+        "customer_id",
+        "payee_id",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "reason_code": "PAYEE_RISK",
+      "description": "Days since anyone at the bank first paid this payee"
+    },
+    {
+      "name": "payee_distinct_senders_30d",
+      "sources": [
+        "customer_id",
+        "payee_id",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "reason_code": "PAYEE_VELOCITY",
+      "description": "Other customers who paid this payee in the last 30 days (mule fan-in)"
+    },
+    {
+      "name": "payee_payments_24h",
+      "sources": [
+        "customer_id",
+        "payee_id",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "reason_code": "PAYEE_VELOCITY",
+      "description": "Payments to this payee by anyone in the last 24 hours"
+    },
+    {
+      "name": "payee_on_us",
+      "sources": [
+        "payee_customer_id"
+      ],
+      "reason_code": "PAYEE_RISK",
+      "description": "Payee account is held at this bank"
+    },
+    {
+      "name": "cust_payments_to_payee_30d",
+      "sources": [
+        "customer_id",
+        "payee_id",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "reason_code": "SCAM_PATTERN",
+      "description": "This customer's earlier payments to this payee in 30 days (escalating scams)"
+    },
+    {
+      "name": "cust_new_payees_7d",
+      "sources": [
+        "customer_id",
+        "payee_id",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "reason_code": "NEW_PAYEE",
+      "description": "New payees this customer paid in the last 7 days"
+    },
+    {
+      "name": "amount_vs_cust_max_payment",
+      "sources": [
+        "customer_id",
+        "transaction_amount",
+        "currency",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "reason_code": "AMT_VS_HISTORY",
+      "description": "Amount \u00f7 the customer's largest earlier outbound payment (365 days)"
+    },
+    {
+      "name": "amount_vs_hist_avg",
+      "sources": [
+        "transaction_amount",
+        "historical_average_transaction_amount"
+      ],
+      "reason_code": "AMT_VS_HISTORY",
+      "description": "Amount \u00f7 customer's historical average"
+    },
+    {
+      "name": "amount_to_balance",
+      "sources": [
+        "transaction_amount",
+        "account_balance_before"
+      ],
+      "reason_code": "AMT_VS_BALANCE",
+      "description": "Amount \u00f7 available balance"
+    },
+    {
+      "name": "txn_hour",
+      "sources": [
+        "transaction_time"
+      ],
+      "reason_code": "TIME_OF_DAY",
+      "description": "Hour of day"
+    },
+    {
+      "name": "is_off_hours",
+      "sources": [
+        "transaction_time"
+      ],
+      "reason_code": "TIME_OF_DAY",
+      "description": "Between 22:00 and 06:00"
+    },
+    {
+      "name": "graph_payee_senders",
+      "sources": [
+        "payee_id",
+        "customer_id",
+        "confirmed_fraud_labels",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "reason_code": "MULE_PAYEE",
+      "description": "Other customers who have paid this payee (graph, day lag)"
+    },
+    {
+      "name": "graph_payee_known_fraud_share",
+      "sources": [
+        "payee_id",
+        "customer_id",
+        "confirmed_fraud_labels",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "reason_code": "MULE_PAYEE",
+      "description": "Confirmed frauds paid to this payee per sender (fraud confirmed before the day)"
+    }
+  ],
+  "calibration": {
+    "method": "platt_sigmoid_on_logit",
+    "slope": 2.637127,
+    "intercept": 5.13265
+  },
+  "performance": {
+    "population": {
+      "payments": 29646,
+      "scams": 1177,
+      "train": [
+        "2022-12-30",
+        "2024-03-13"
+      ],
+      "calibration_to": "2024-08-06",
+      "test_to": "2024-12-30",
+      "test_payments": 5661,
+      "test_scams": 295
+    },
+    "scam_model": {
+      "pr_auc": 0.6312,
+      "roc_auc": 0.9229,
+      "ece": 0.0123,
+      "budgets": [
+        {
+          "budget": 0.005,
+          "flagged": 28,
+          "scams_caught": 28,
+          "recall": 0.0949,
+          "value_recall": 0.0166,
+          "exposure_caught_gbp": 10172.0,
+          "precision": 1.0
+        },
+        {
+          "budget": 0.01,
+          "flagged": 57,
+          "scams_caught": 55,
+          "recall": 0.1864,
+          "value_recall": 0.0888,
+          "exposure_caught_gbp": 15468.0,
+          "precision": 0.9649
+        },
+        {
+          "budget": 0.02,
+          "flagged": 113,
+          "scams_caught": 93,
+          "recall": 0.3153,
+          "value_recall": 0.3747,
+          "exposure_caught_gbp": 101401.0,
+          "precision": 0.823
+        },
+        {
+          "budget": 0.05,
+          "flagged": 283,
+          "scams_caught": 175,
+          "recall": 0.5932,
+          "value_recall": 0.7396,
+          "exposure_caught_gbp": 123191.0,
+          "precision": 0.6184
+        }
+      ]
+    },
+    "best_iteration": 22,
+    "transaction_model": {
+      "model_id": "bti-v3-lgbm-rn-20260925011359",
+      "pr_auc": 0.0797,
+      "roc_auc": 0.6394,
+      "budgets": [
+        {
+          "budget": 0.005,
+          "flagged": 28,
+          "scams_caught": 2,
+          "recall": 0.0068,
+          "value_recall": 0.004,
+          "exposure_caught_gbp": 0.0,
+          "precision": 0.0714
+        },
+        {
+          "budget": 0.01,
+          "flagged": 57,
+          "scams_caught": 5,
+          "recall": 0.0169,
+          "value_recall": 0.0321,
+          "exposure_caught_gbp": 0.0,
+          "precision": 0.0877
+        },
+        {
+          "budget": 0.02,
+          "flagged": 113,
+          "scams_caught": 9,
+          "recall": 0.0305,
+          "value_recall": 0.0449,
+          "exposure_caught_gbp": 3145.0,
+          "precision": 0.0796
+        },
+        {
+          "budget": 0.05,
+          "flagged": 283,
+          "scams_caught": 25,
+          "recall": 0.0847,
+          "value_recall": 0.0872,
+          "exposure_caught_gbp": 13847.0,
+          "precision": 0.0883
+        }
+      ]
+    },
+    "recall_by_typology_at_2pct": {
+      "impersonation": 0.571,
+      "investment": 0.303,
+      "purchase": 0.133,
+      "ring / base": 0.58,
+      "romance": 0.085
+    },
+    "fairness": {
+      "status": "pass",
+      "unit": "customer",
+      "method": "False-positive-rate parity at each operating point on the pooled out-of-sample windows (out_of_time, calibration); two-proportion z-test with Benjamini\u2013Hochberg correction across groups; a finding needs pooled FPR ratio > 1.25, q < 0.05, and an FPR above the overall rate in every window. Single-window signals are kept on a non-gating watchlist.",
+      "findings": [],
+      "watchlist": [
+        {
+          "operating_point": "budget_5.0pct",
+          "attribute": "customer_segment",
+          "group": "Private Banking",
+          "pooled_fpr_ratio": 2.098,
+          "pooled_q_value": 0.0192,
+          "legit_flagged": 16,
+          "window_ratios": {
+            "out_of_time": null,
+            "calibration": null
+          },
+          "reason": "too few customers to test in out_of_time, calibration"
+        }
+      ],
+      "payment_level_for_reference": {
+        "status": "review_required",
+        "findings": [
+          {
+            "operating_point": "budget_5.0pct",
+            "attribute": "customer_segment",
+            "group": "Premium",
+            "pooled_fpr_ratio": 1.394,
+            "pooled_q_value": 0.0078,
+            "legit_flagged": 77,
+            "window_ratios": {
+              "out_of_time": 1.636,
+              "calibration": 1.194
+            }
+          },
+          {
+            "operating_point": "budget_5.0pct",
+            "attribute": "customer_segment",
+            "group": "Private Banking",
+            "pooled_fpr_ratio": 1.785,
+            "pooled_q_value": 0.0078,
+            "legit_flagged": 28,
+            "window_ratios": {
+              "out_of_time": 2.759,
+              "calibration": 1.145
+            }
+          }
+        ]
+      }
+    },
+    "feature_importance_gain_share": {
+      "payee_account_age_days": 0.411,
+      "payee_on_us": 0.157,
+      "payee_first_seen_days": 0.094,
+      "graph_payee_senders": 0.064,
+      "amount_vs_cust_max_payment": 0.055,
+      "cust_payments_to_payee_30d": 0.042,
+      "cop_no_match": 0.04,
+      "amount_vs_hist_avg": 0.035,
+      "cop_close_match": 0.027,
+      "graph_payee_known_fraud_share": 0.026,
+      "cop_unavailable": 0.022,
+      "txn_hour": 0.016,
+      "amount_to_balance": 0.01,
+      "cust_new_payees_7d": 0.001,
+      "payee_payments_24h": 0.001,
+      "payee_new_for_customer": 0.0,
+      "payee_new_to_bank": 0.0,
+      "payee_distinct_senders_30d": 0.0,
+      "is_off_hours": 0.0
+    },
+    "gates": [
+      {
+        "gate": "feature_lineage",
+        "passed": true,
+        "detail": "All scam features trace to pre-authorisation fields"
+      },
+      {
+        "gate": "leakage_screen",
+        "passed": true,
+        "detail": "max single-feature AUC 0.868"
+      },
+      {
+        "gate": "lift_over_transaction_model",
+        "passed": true,
+        "detail": "OOT PR-AUC 0.6312 vs 0.0797"
+      },
+      {
+        "gate": "calibration",
+        "passed": true,
+        "detail": "OOT ECE 0.0123"
+      },
+      {
+        "gate": "fairness",
+        "passed": true,
+        "detail": "0 findings, 1 on the watchlist"
+      }
+    ],
+    "validation_status": "passed",
+    "notice": "Synthetic scams injected into synthetic data: capability evidence, not performance on a real book. Re-train and re-validate on the bank's confirmed scam outcomes."
+  },
+  "validation": {
+    "status": "passed",
+    "gates": [
+      {
+        "gate": "feature_lineage",
+        "passed": true,
+        "detail": "All scam features trace to pre-authorisation fields"
+      },
+      {
+        "gate": "leakage_screen",
+        "passed": true,
+        "detail": "max single-feature AUC 0.868"
+      },
+      {
+        "gate": "lift_over_transaction_model",
+        "passed": true,
+        "detail": "OOT PR-AUC 0.6312 vs 0.0797"
+      },
+      {
+        "gate": "calibration",
+        "passed": true,
+        "detail": "OOT ECE 0.0123"
+      },
+      {
+        "gate": "fairness",
+        "passed": true,
+        "detail": "0 findings, 1 on the watchlist"
+      }
+    ]
+  },
+  "registered_at": "2026-10-06T10:39:35.524613+00:00"
+}

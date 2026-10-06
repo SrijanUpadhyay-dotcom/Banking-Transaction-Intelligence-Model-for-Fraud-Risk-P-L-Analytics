@@ -1,0 +1,41 @@
+{
+  "champion": null,
+  "challenger": "bti-scam-lgbm-20261006103935",
+  "models": [
+    {
+      "model_id": "bti-scam-lgbm-20261006103935",
+      "registered_at": "2026-10-06T10:39:35.530251+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-06T10:39:35.530746+00:00",
+      "role": "challenger",
+      "model_id": "bti-scam-lgbm-20261006103935",
+      "previous": null,
+      "approver": "bti.scams.app_model",
+      "rationale": "Registered for shadow scoring; promotion needs validation and four-eyes"
+    }
+  ],
+  "notes": [
+    {
+      "at": "2026-10-06T10:42:43.380446+00:00",
+      "model_id": "bti-scam-lgbm-20261006103935",
+      "author": "Srijan Upadhyay (developer)",
+      "subject": "Development history: fairness method and data revisions",
+      "detail": "During development (not registered models): on an earlier synthetic draw the payment-level fairness test flagged Premium 2.96x and age 26-35 at the 2% budget. Repeat payments by one customer counted as independent evidence, so the test now counts customers (clustered), with the payment-level result reported alongside. A remaining Premium signal on that draw did not reproduce across generator seeds 22 and 23. The generator then gained benign recurring payments, households sharing devices and IPs, benign pass-through accounts and new customers; this model is trained on that final data and passes the customer-level test (Private Banking on the watchlist, one window). Re-test on bank data.",
+      "data": {
+        "earlier_draw": {
+          "payment_level": [
+            "Premium 2.96x",
+            "26-35 1.79x"
+          ],
+          "customer_level": "Premium 2.50x",
+          "seeds_22_23": "pass"
+        }
+      }
+    }
+  ]
+}

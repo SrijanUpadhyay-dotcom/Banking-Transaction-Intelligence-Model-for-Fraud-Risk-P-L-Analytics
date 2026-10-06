@@ -217,3 +217,19 @@ planning:                        # Phase 8 staffing assumptions (illustrative: r
   analysts_fte: null             # rostered analysts, for the review-capacity proposal
   forecast_cron: "30 6 * * mon"  # weekly loss and staffing forecasts (UTC)
   early_warning_cron: "45 5 * * *"   # daily attack early warning (UTC)
+
+scams:                           # Phase 9 APP-scam and mule models (bti.scams)
+  mode: "shadow"                 # shadow: score and log only | active: interventions change live decisions
+  reimbursement:                 # UK PSR APP-scam reimbursement (from 7 Oct 2024); confirm the rules in force
+    max_claim_gbp: 85000
+    sending_share: 0.5           # sending PSP's share; the receiving PSP pays the rest (100% to us if on-us)
+    excess_gbp: 0                # optional excess (up to £100), never for vulnerable customers
+    claim_window_months: 13
+    in_scope_types: [Transfer, Payment]   # Faster Payments / CHAPS; international wires are out of scope
+    jurisdiction: "GB"
+  interventions:                 # illustrative: replace with measured effectiveness
+    warning: {cost_gbp: 0.0, friction_gbp: 0.5, effectiveness: 0.15}
+    hold_and_call: {cost_gbp: 8.0, friction_gbp: 5.0, effectiveness: 0.60}
+  customer_harm_weight: 0.5      # weight on the customer's own unreimbursed loss
+  mule_alert_budget: 0.005       # share of active accounts raised as mule alerts per scan
+  mule_scan_cron: "30 4 * * *"

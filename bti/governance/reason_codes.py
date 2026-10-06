@@ -15,7 +15,7 @@ action notices and a reasonable default for GDPR Art. 22 explanations.
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from bti.modeling.features import FEATURE_BY_NAME
 
@@ -110,6 +110,22 @@ REASON_CODES: Dict[str, Dict[str, str]] = {
         "analyst": "Payee has received payments later confirmed as fraud from several customers (possible mule account)",
         "customer": "The account you are paying",
     },
+    "PAYEE_RISK": {
+        "analyst": "Payee account recently opened, new to the bank, or held here (possible mule or scam account)",
+        "customer": "The account you are paying",
+    },
+    "COP_MISMATCH": {
+        "analyst": "Confirmation of Payee did not match, closely matched, or could not check the payee's name",
+        "customer": "The name on the account you are paying",
+    },
+    "SCAM_PATTERN": {
+        "analyst": "Repeated or escalating payments to the same new payee (investment / romance scam pattern)",
+        "customer": "The pattern of your recent payments",
+    },
+    "MULE_FLOW": {
+        "analyst": "Many inbound payments from new senders moved straight out (money-mule flow pattern)",
+        "customer": "Recent activity on your account",
+    },
     "SECURITY_EVENT": {
         "analyst": "Recent password reset, SIM swap, contact-detail change or new device enrolment",
         "customer": "Recent changes to your account security settings",
@@ -118,14 +134,14 @@ REASON_CODES: Dict[str, Dict[str, str]] = {
 
 
 def principal_reasons(contributions: Dict[str, float], feature_values: Dict[str, object],
-                      max_reasons: int = MAX_REASONS) -> List[dict]:
+                      max_reasons: int = MAX_REASONS, specs: Optional[Dict] = None) -> List[dict]:
     """
     Aggregate per-feature SHAP contributions (log-odds) into reason codes and
     return the codes that pushed risk up the most.
     """
     by_code: Dict[str, dict] = {}
     for feature, value in contributions.items():
-        spec = FEATURE_BY_NAME.get(feature)
+        spec = (specs or FEATURE_BY_NAME).get(feature)
         if spec is None:
             continue
         entry = by_code.setdefault(spec.reason_code, {"contribution": 0.0, "features": []})

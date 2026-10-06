@@ -122,9 +122,27 @@ def benjamini_hochberg(p_values: List[float]) -> List[float]:
     return q.tolist()
 
 
+def _by_cluster(y: np.ndarray, flag: np.ndarray, groups: Dict[str, pd.Series], clusters: np.ndarray):
+    """
+    Collapse rows to units (e.g. customers). A genuine unit is one with genuine rows; it counts as flagged if any
+    of them was flagged. A fraud unit likewise for its fraud rows. A unit's group is its most frequent value.
+    """
+    frame = pd.DataFrame({"c": clusters, "y": y, "f": flag, **{a: np.asarray(v) for a, v in groups.items()}})
+    parts = []
+    for label in (0, 1):
+        g = frame[frame["y"] == label].groupby("c")
+        unit = pd.DataFrame({"y": label, "f": g["f"].any()})
+        for a in groups:
+            unit[a] = g[a].agg(lambda s: s.mode().iloc[0] if not s.mode().empty else None)
+        parts.append(unit)
+    u = pd.concat(parts, ignore_index=True)
+    return u["y"].to_numpy(int), u["f"].to_numpy(bool), {a: u[a].reset_index(drop=True) for a in groups}
+
+
 def fairness_assessment(
     y, p, thresholds: Dict[str, float], windows: Dict[str, np.ndarray], groups: Dict[str, pd.Series],
     ratio_threshold: float = DEFAULT_RATIO_THRESHOLD, alpha: float = DEFAULT_ALPHA, min_n: int = DEFAULT_MIN_N,
+    clusters=None,
 ) -> Dict:
     """
     Gate-grade fairness assessment over two or more out-of-sample windows.
@@ -139,6 +157,11 @@ def fairness_assessment(
     A group that is material and nominally significant (uncorrected p < alpha)
     in any single window but is not a finding goes on the *watchlist*: reported,
     not gating, and re-tested by production monitoring.
+
+    `clusters` (e.g. customer ids) makes the unit of analysis the customer
+    rather than the row. Use it when one customer contributes many correlated
+    rows, such as a series of rent payments. Otherwise a single customer's
+    repeats count as independent evidence and overstate significance.
     """
     y = np.asarray(y, dtype=int)
     p = np.asarray(p, dtype=float)
@@ -146,9 +169,13 @@ def fairness_assessment(
     pooled = np.logical_or.reduce(list(masks.values()))
     columns = {a: pd.Series(np.asarray(v)) for a, v in groups.items()}
 
+    cl = None if clusters is None else np.asarray(clusters)
+
     def report(mask, cut):
-        return fairness_report(y[mask], p[mask] >= cut, {a: v[mask] for a, v in columns.items()},
-                               ratio_threshold=ratio_threshold, alpha=alpha, min_n=min_n)
+        yy, ff, gg = y[mask], p[mask] >= cut, {a: v[mask].reset_index(drop=True) for a, v in columns.items()}
+        if cl is not None:
+            yy, ff, gg = _by_cluster(yy, ff, gg, cl[mask])
+        return fairness_report(yy, ff, gg, ratio_threshold=ratio_threshold, alpha=alpha, min_n=min_n)
 
     def index(r):
         return {(a["attribute"], g["group"]): g for a in r["attributes"] for g in a["groups"]}
@@ -191,6 +218,7 @@ def fairness_assessment(
 
     return {
         "status": "review_required" if findings else "pass",
+        "unit": "row" if cl is None else "cluster (e.g. customer)",
         "method": (f"False-positive-rate parity at each operating point on the pooled out-of-sample windows "
                    f"({', '.join(masks)}); two-proportion z-test with Benjamini–Hochberg correction across groups; "
                    f"a finding needs pooled FPR ratio > {ratio_threshold}, q < {alpha}, and an FPR above the overall "

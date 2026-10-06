@@ -34,6 +34,7 @@ VALUES_JOB_ID = "daily_customer_values"
 GRAPH_JOB_ID = "nightly_graph_snapshot"
 FORECAST_JOB_ID = "weekly_planning_forecast"
 EARLY_WARNING_JOB_ID = "daily_early_warning"
+MULE_SCAN_JOB_ID = "daily_mule_scan"
 _scheduler: Optional[BackgroundScheduler] = None
 
 
@@ -113,6 +114,11 @@ def _early_warning_job() -> None:
     _run("early warning", run_daily)
 
 
+def _mule_scan_job() -> None:
+    from bti.scams.mule import run_scan
+    _run("mule scan", run_scan)
+
+
 def _recalibration_job() -> None:
     from bti.modeling import registry
     from bti.modeling.recalibration import recalibrate
@@ -144,7 +150,8 @@ def start() -> Optional[BackgroundScheduler]:
                              (_values_job, settings.customer_value_cron, VALUES_JOB_ID),
                              (_graph_job, settings.graph_snapshot_cron, GRAPH_JOB_ID),
                              (_forecast_job, settings.planning_forecast_cron, FORECAST_JOB_ID),
-                             (_early_warning_job, settings.early_warning_cron, EARLY_WARNING_JOB_ID)):
+                             (_early_warning_job, settings.early_warning_cron, EARLY_WARNING_JOB_ID),
+                             (_mule_scan_job, settings.mule_scan_cron, MULE_SCAN_JOB_ID)):
         _scheduler.add_job(fn, CronTrigger.from_crontab(cron, timezone="UTC"), id=job_id, max_instances=1,
                            coalesce=True, misfire_grace_time=3600)
     _scheduler.start()
@@ -186,5 +193,6 @@ def status() -> dict:
             FORECAST_JOB_ID: {"cron_utc": settings.planning_forecast_cron, "next_run": next_run(FORECAST_JOB_ID)},
             EARLY_WARNING_JOB_ID: {"cron_utc": settings.early_warning_cron,
                                    "next_run": next_run(EARLY_WARNING_JOB_ID)},
+            MULE_SCAN_JOB_ID: {"cron_utc": settings.mule_scan_cron, "next_run": next_run(MULE_SCAN_JOB_ID)},
         },
     }

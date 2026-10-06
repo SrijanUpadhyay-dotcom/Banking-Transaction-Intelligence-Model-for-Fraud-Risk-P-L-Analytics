@@ -68,6 +68,12 @@ class Transaction(Base):
     latitude           = Column(Float)
     longitude          = Column(Float)
     payee_id           = Column(String(100), index=True)
+    # Phase 9 scam and mule feeds (null when the source system lacks them)
+    payee_customer_id  = Column(String(50), index=True)     # on-us payee: the receiving customer
+    counterparty_id    = Column(String(100))                # sender of an inbound credit (tokenised)
+    account_opened_date = Column(String(10))                # customer master
+    cop_result         = Column(String(20))                 # Confirmation of Payee
+    payee_account_opened_date = Column(String(10))          # payee-intelligence feed
     historical_average_transaction_amount = Column(Float)
     monthly_customer_transaction_count    = Column(Integer)
     fee_income         = Column(Float, default=0)
@@ -225,6 +231,10 @@ class ScoreLog(Base):
     latency_ms        = Column(Float)
     model_probability = Column(Float)        # before any recalibration overlay (bti.modeling.recalibration)
     calibration_overlay = Column(Integer)     # overlay version applied, if any
+    scam_model_id     = Column(String(64))       # Phase 9 APP-scam overlay (outbound payments only)
+    scam_probability  = Column(Float)
+    scam_exposure_gbp = Column(Float)
+    scam_action       = Column(String(20))       # none | warning | hold_and_call
     # Segment, age band and country for fairness monitoring on matured outcomes — never model inputs.
     monitoring_attributes = Column(JSON)
     scored_at         = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
@@ -563,3 +573,21 @@ class EarlyWarning(Base):
     reviewed_by = Column(String(100))
     reviewed_at = Column(DateTime)
     note        = Column(Text)
+
+
+class MuleAlert(Base):
+    """Mule-account alerts (Phase 9): accounts the mule model ranks in the daily review budget."""
+    __tablename__ = "mule_alerts"
+
+    id            = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id   = Column(String(50), nullable=False, index=True)
+    snapshot_date = Column(String(10), nullable=False, index=True)
+    model_id      = Column(String(64), nullable=False)
+    score         = Column(Float, nullable=False)
+    rank          = Column(Integer)
+    reasons       = Column(JSON)
+    status        = Column(String(20), nullable=False, default="open", index=True)  # open | confirmed_mule | cleared
+    created_at    = Column(DateTime, default=datetime.utcnow, nullable=False)
+    reviewed_by   = Column(String(100))
+    reviewed_at   = Column(DateTime)
+    note          = Column(Text)

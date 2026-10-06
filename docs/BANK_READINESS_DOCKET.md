@@ -834,10 +834,143 @@ Tests: 9 unit tests (Phase 8) and 3 API tests.
 
 ## Phase 9 — Scam and mule models
 
-| Item | Status | Scope |
-|---|---|---|
-| Payee risk and APP-scam model | New | New payee, payee account age, Confirmation-of-Payee mismatch; UK reimbursement exposure. |
-| Mule-account detection | New | Inbound-flow patterns plus Phase 6 graph signals. |
+All of this is in `bti.scams`, served under `/api/v1/scams`, with a daily mule scan (15 scheduled jobs in all).
+
+**Governance.**
+
+- **Model families.** Scam and mule models live in their own registry families (`models/registry_scam`,
+  `models/registry_mule`), with the same rules as the fraud model: immutable entries, a validation gate,
+  four-eyes promotion and append-only notes. Fraud-registry jobs never see them.
+- **Mode.** Both models are registered as **challengers**, shadow only.
+- **Lineage.** The new feeds go through the same lineage catalogue as everything else:
+  - pre-authorisation: payee account opening date, Confirmation-of-Payee result, account opening date
+  - identifiers: on-us payee customer, inbound counterparty
+  - protected (reimbursement exposure only, never a model input): vulnerability flag
+  - label-derived: scam typology
+
+**Synthetic scams and mules** (`python -m bti.scams.synthetic`). A capability harness on a copy of the data, built
+on the Phase 6 rings.
+
+| Scams | Mule accounts |
+|---|---|
+| 1,177 scam payments among 29,646 payments | 128 accounts: 88 ring mules, 40 standalone |
+
+- **Scam typologies.** Purchase, impersonation/safe-account, investment and romance scams, plus ring victims. All
+  are paid from the victim's own device.
+- **Benign lookalikes,** so no single signal gives the answer away:
+  - large first payments to new payees, some to young accounts or with name near-misses
+  - recurring rent and savings payments, 8% to young accounts
+  - on-us payees that are ordinary customers
+  - households sharing a device and home IP
+  - pass-through salary accounts
+  - 12% new customers
+- **How they were found.** Each lookalike was added after a first model leaned on a synthetic artefact: repeat
+  payments, on-us payees, shared devices and IPs. Mules and victims are drawn at random across segments and ages,
+  so no group is labelled by construction.
+
+**APP-scam model** (`python -m bti.scams.app_model`; challenger `bti-scam-lgbm-20261006103935`).
+
+- **Features.** Point-in-time payee risk, under the same lineage gate:
+  - new payee for the customer
+  - payee account age
+  - Confirmation-of-Payee no-match / close-match / unavailable
+  - payee new to the bank, and days since anyone first paid it
+  - distinct senders to the payee in 30 days, and payments in 24 hours
+  - payee held at the bank
+  - repeat and escalating payments
+  - new payees in 7 days
+  - amount against the customer's largest earlier payment
+  - Phase 6 payee graph signals (day-lagged)
+- **Population and split.** Outbound payments to a payee, split by time.
+- **Out-of-time results** (295 scams among 5,661 payments), scam model vs transaction model:
+
+  | | Scam model | Transaction model |
+  |---|---|---|
+  | PR-AUC | 0.63 | 0.08 |
+  | Recall at 2% of payments | 32% (37% of scam value, 82% precision) | 3% |
+  | Recall at 5% of payments | 59% (74% of value) | 8% |
+
+- **Recall by typology at 2%.** Impersonation 57%, investment 30%, romance 9%, purchase 13%. Romance and purchase
+  scams look like ordinary payments to a new payee, which is why the typologies differ so much.
+- **Drivers.** Payee account age (41% of gain), payee held here, payee first seen.
+- **Gates (all passed).** Lineage, leakage screen (no single feature at AUC ≥ 0.97), lift over the transaction
+  model, calibration (ECE 0.012) and fairness.
+- **Fairness method change.** The unit is now the **customer**, not the payment. A series of rent payments to a new
+  landlord is one customer's experience, and counted per payment it overstated significance: an earlier
+  synthetic draw gave Premium 2.96× and age 26–35 1.79× per payment. On that draw a remaining Premium signal did
+  not reproduce across two other generator seeds. `fairness_assessment(clusters=…)` now supports any model.
+- **Fairness result.** The final model passes, with Private Banking on the watchlist (one window). The development
+  history is recorded as a registry note.
+
+**UK reimbursement exposure and the scam overlay.**
+
+- **The rules modelled.** The PSR mandatory reimbursement rules from 7 October 2024, configurable; compliance to
+  confirm the rules in force as the PSR moves into the FCA:
+  - Faster Payments and CHAPS between UK accounts
+  - up to £85,000 per claim, split 50:50 between sending and receiving bank (100% when the payee is on-us)
+  - an optional excess of up to £100, never for vulnerable customers
+- **Not netted off.** The consumer-caution exception, so exposure is conservative.
+- **Per payment.** Bank exposure and the customer's unreimbursed loss. Interventions are chosen by expected cost:
+  none, a tailored warning, or hold and call. Effectiveness and friction figures are illustrative until measured.
+- **Live overlay.**
+  - It runs on every outbound payment inside `score_and_decide`, logs to the score log (four new columns), and
+    returns `scam` in the v3 response.
+  - Payments to an on-us payee under an open or confirmed mule alert are held for a call.
+  - It is in **shadow mode by default**. A challenger-only scam model can never act, and the overlay never lowers
+    a decision.
+- **Smoke test.** £4,800 to a 13-day-old account with a name mismatch: probability 0.48, exposure £2,400,
+  hold-and-call (logged, not applied). £80 to a biller: 0.004, no action.
+- **Portfolio replay** (154 out-of-time days):
+  - 305 scams, of which 41 are UK in-scope in 20 claims, are £147k of bank exposure if nothing is done
+  - the overlay would make 6.3 calls a day and show 1,377 warnings
+  - it would interrupt 801 genuine payments with calls and 1,309 with warnings
+  - expected averted: £85k of bank exposure and £969k of customers' losses (most outside UK reimbursement
+    scope), for £12k of intervention cost
+
+**Mule-account detection** (`python -m bti.scams.mule`; challenger `bti-mule-lgbm-20261006104223`).
+
+- **Unit.** Weekly account snapshots: 220,443 across 8,113 accounts.
+- **Features.**
+  - inbound credits, distinct and new senders
+  - pass-through ratio, and the share of inflow sent on within two days (each outflow counted once)
+  - cash or crypto share of outflow
+  - new payees paid
+  - account age
+  - inbound payments already reported as fraud (sending-bank reports, confirmed before the snapshot)
+  - Phase 6 network signals
+- **Labels.** Positive only while a mule is active; snapshots before activation or after closure are left out.
+- **Out-of-time, at 0.5% of active accounts per weekly scan** (11 alerts, 70% precision):
+
+  | | Mules detected | Detected after activation (median) | Lead before uncovered (median) | PR-AUC |
+  |---|---|---|---|---|
+  | Model | 36 of 42 (86%): ring 31/34, standalone 5/8 | 8.5 days | 54 days | 0.98 |
+  | Without network features | same 86% | 13 days | 49 days | 0.77 |
+  | Rule (5+ senders, 70% pass-through) | 4 of 42 (10%) | — | — | — |
+
+- **Reading.** The high PR-AUC reflects how visible ring structure is in synthetic data. The ablation shows inflow
+  and outflow patterns alone still catch most mules.
+- **Fairness.** Passes at the customer level; SME and 65+ are on the watchlist (one window each).
+- **Live scan** (`run_scan`, daily job, `POST /scams/mule-alerts/run`).
+  - It scores today's snapshot from the last 120 days of transactions and raises the budget as `mule_alerts`, with
+    audit events and the webhook.
+  - Analysts confirm or clear an alert with evidence (key required; decided once).
+  - On a database copy: 1 June 2024 raised 11 alerts, 6 of them mules. 15 October 2024 raised 11, all mules. A
+    re-run created no duplicates.
+- **Schema.** The transactions table gained the scam and mule feed columns (additive migration).
+
+**Bug found by a test** and fixed before results were recorded: fast-out matched one outflow against several
+inflows.
+
+**Still needed from the bank:**
+
+- Confirmation-of-Payee responses and the payee-intelligence feed (payee account age).
+- Inbound credit counterparties.
+- Sending-bank scam reports.
+- The vulnerability register.
+- Measured warning and call effectiveness.
+- Confirmed scam and mule outcomes to retrain on.
+
+Tests: 8 unit tests (Phase 9) and 2 API tests.
 
 ## Phase 10 — Certification
 

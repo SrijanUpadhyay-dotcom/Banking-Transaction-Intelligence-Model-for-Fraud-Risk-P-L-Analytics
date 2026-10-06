@@ -1,0 +1,22 @@
+{
+  "champion": null,
+  "challenger": "bti-mule-lgbm-20261006104223",
+  "models": [
+    {
+      "model_id": "bti-mule-lgbm-20261006104223",
+      "registered_at": "2026-10-06T10:42:24.062752+00:00",
+      "developer": "Srijan Upadhyay",
+      "validation_status": "passed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-06T10:42:24.063155+00:00",
+      "role": "challenger",
+      "model_id": "bti-mule-lgbm-20261006104223",
+      "previous": null,
+      "approver": "bti.scams.mule",
+      "rationale": "Registered for shadow mule scans; promotion needs validation and four-eyes"
+    }
+  ]
+}

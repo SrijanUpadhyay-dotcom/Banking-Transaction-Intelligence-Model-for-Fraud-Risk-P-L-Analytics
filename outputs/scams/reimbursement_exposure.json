@@ -1,0 +1,62 @@
+{
+  "model_id": "bti-scam-lgbm-20261006103935",
+  "window": [
+    "2024-07-30",
+    "2024-12-30"
+  ],
+  "days": 154,
+  "payments": 5941,
+  "confirmed_scams": 305,
+  "uk_in_scope_scams": 41,
+  "claims_exposure_if_no_intervention": {
+    "claims": 20,
+    "claims_at_cap": 0,
+    "reimbursable_gbp": 183340.0,
+    "bank_exposure_gbp": 147441.0,
+    "on_us_claims": 8
+  },
+  "interventions": {
+    "none": 3598,
+    "warning": 1377,
+    "hold_and_call": 966
+  },
+  "calls_per_day": 6.27,
+  "genuine_payments_interrupted": {
+    "warning": 1309,
+    "hold_and_call": 801
+  },
+  "scams_intervened": {
+    "warning": 68,
+    "hold_and_call": 165
+  },
+  "expected_bank_exposure_averted_gbp": 84944.0,
+  "expected_customer_loss_averted_gbp": 968702.0,
+  "intervention_cost_gbp": 12388.0,
+  "assumptions": {
+    "interventions": {
+      "warning": {
+        "cost_gbp": 0.0,
+        "friction_gbp": 0.5,
+        "effectiveness": 0.15
+      },
+      "hold_and_call": {
+        "cost_gbp": 8.0,
+        "friction_gbp": 5.0,
+        "effectiveness": 0.6
+      }
+    },
+    "reimbursement": {
+      "max_claim_gbp": 85000,
+      "sending_share": 0.5,
+      "excess_gbp": 0,
+      "claim_window_months": 13,
+      "in_scope_types": [
+        "Transfer",
+        "Payment"
+      ],
+      "jurisdiction": "GB"
+    },
+    "customer_harm_weight": 0.5
+  },
+  "note": "Expected values: an intervention stops a scam with its configured effectiveness (illustrative until measured). Synthetic data; the consumer-caution exception is not netted off."
+}

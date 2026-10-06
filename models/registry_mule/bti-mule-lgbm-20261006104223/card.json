@@ -1,0 +1,392 @@
+{
+  "model_id": "bti-mule-lgbm-20261006104223",
+  "family": "mule",
+  "purpose": "Risk that an account is operating as a money mule",
+  "ownership": {
+    "developer": "Srijan Upadhyay",
+    "business_owner": null
+  },
+  "data": {
+    "path": "data/processed/scams/banking_transactions_with_scams.csv",
+    "sha256": "d2f865fe7bec534bfa16b892e7776abdd1f9941f9561ae4bd694f8c604363fc0",
+    "synthetic": true
+  },
+  "features": [
+    {
+      "name": "account_age_days",
+      "sources": [
+        "account_opened_date",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "description": "Days since the account opened"
+    },
+    {
+      "name": "in_count_7d",
+      "sources": [
+        "customer_id",
+        "counterparty_id",
+        "debit_credit_flag",
+        "transaction_amount",
+        "currency",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "description": "Inbound credits in 7 days"
+    },
+    {
+      "name": "in_count_30d",
+      "sources": [
+        "customer_id",
+        "counterparty_id",
+        "debit_credit_flag",
+        "transaction_amount",
+        "currency",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "description": "Inbound credits in 30 days"
+    },
+    {
+      "name": "in_value_30d_usd",
+      "sources": [
+        "customer_id",
+        "counterparty_id",
+        "debit_credit_flag",
+        "transaction_amount",
+        "currency",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "description": "Inbound value in 30 days (USD)"
+    },
+    {
+      "name": "in_distinct_senders_30d",
+      "sources": [
+        "customer_id",
+        "counterparty_id",
+        "debit_credit_flag",
+        "transaction_amount",
+        "currency",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "description": "Distinct senders in 30 days"
+    },
+    {
+      "name": "in_new_sender_share",
+      "sources": [
+        "customer_id",
+        "counterparty_id",
+        "debit_credit_flag",
+        "transaction_amount",
+        "currency",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "description": "Share of 30-day senders never seen before"
+    },
+    {
+      "name": "out_value_30d_usd",
+      "sources": [
+        "customer_id",
+        "debit_credit_flag",
+        "transaction_type",
+        "transaction_amount",
+        "currency",
+        "merchant_category",
+        "channel",
+        "payee_id",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "description": "Outbound value in 30 days (USD)"
+    },
+    {
+      "name": "pass_through_ratio",
+      "sources": [
+        "customer_id",
+        "counterparty_id",
+        "debit_credit_flag",
+        "transaction_amount",
+        "currency",
+        "transaction_date",
+        "transaction_time",
+        "customer_id",
+        "debit_credit_flag",
+        "transaction_type",
+        "transaction_amount",
+        "currency",
+        "merchant_category",
+        "channel",
+        "payee_id",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "description": "Outbound \u00f7 inbound value over 30 days"
+    },
+    {
+      "name": "fast_out_share",
+      "sources": [
+        "customer_id",
+        "counterparty_id",
+        "debit_credit_flag",
+        "transaction_amount",
+        "currency",
+        "transaction_date",
+        "transaction_time",
+        "customer_id",
+        "debit_credit_flag",
+        "transaction_type",
+        "transaction_amount",
+        "currency",
+        "merchant_category",
+        "channel",
+        "payee_id",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "description": "Share of inbound value sent on within two days"
+    },
+    {
+      "name": "cashout_share",
+      "sources": [
+        "customer_id",
+        "debit_credit_flag",
+        "transaction_type",
+        "transaction_amount",
+        "currency",
+        "merchant_category",
+        "channel",
+        "payee_id",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "description": "Share of outflow taken as cash (ATM) or crypto"
+    },
+    {
+      "name": "out_new_payees_30d",
+      "sources": [
+        "customer_id",
+        "debit_credit_flag",
+        "transaction_type",
+        "transaction_amount",
+        "currency",
+        "merchant_category",
+        "channel",
+        "payee_id",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "description": "New payees paid in 30 days"
+    },
+    {
+      "name": "inbound_reported_fraud_30d",
+      "sources": [
+        "payee_customer_id",
+        "confirmed_fraud_labels",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "description": "Payments into this account confirmed as fraud before the snapshot (sending-bank reports)"
+    },
+    {
+      "name": "graph_shared_entity_customers",
+      "sources": [
+        "customer_id",
+        "device_id",
+        "ip_location",
+        "confirmed_fraud_labels",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "description": "Most other customers seen on this account's devices or IPs"
+    },
+    {
+      "name": "graph_component_known_fraud",
+      "sources": [
+        "customer_id",
+        "device_id",
+        "ip_location",
+        "confirmed_fraud_labels",
+        "transaction_date",
+        "transaction_time"
+      ],
+      "description": "Confirmed fraud in this account's network"
+    }
+  ],
+  "calibration": {
+    "method": "platt_sigmoid_on_logit",
+    "slope": 0.885334,
+    "intercept": 1.454182
+  },
+  "performance": {
+    "snapshots": {
+      "total": 220443,
+      "positive": 893,
+      "test": 43525,
+      "test_positive": 211,
+      "accounts": 8113,
+      "test_from": "2024-08-16"
+    },
+    "model": {
+      "pr_auc": 0.978,
+      "roc_auc": 0.9987,
+      "alert_budget": 0.005,
+      "alerts_per_scan": 11.0,
+      "alert_precision": 0.695,
+      "detection": {
+        "mules_in_window": 42,
+        "detected": 36,
+        "by_kind": {
+          "ring": {
+            "mules": 34,
+            "detected": 31
+          },
+          "standalone": {
+            "mules": 8,
+            "detected": 5
+          }
+        },
+        "detection_rate": 0.857,
+        "median_days_after_activation": 8.5,
+        "median_lead_days_before_uncovered": 53.5
+      }
+    },
+    "rule_baseline": {
+      "rule": "5+ distinct senders and pass-through >= 70% in 30 days",
+      "alerts_per_scan": 0.8,
+      "alert_precision": 0.75,
+      "detection": {
+        "mules_in_window": 42,
+        "detected": 4,
+        "by_kind": {
+          "ring": {
+            "mules": 34,
+            "detected": 2
+          },
+          "standalone": {
+            "mules": 8,
+            "detected": 2
+          }
+        },
+        "detection_rate": 0.095,
+        "median_days_after_activation": 16.0,
+        "median_lead_days_before_uncovered": 39.0
+      }
+    },
+    "fairness": {
+      "status": "pass",
+      "unit": "customer",
+      "findings": [],
+      "watchlist": [
+        {
+          "operating_point": "budget_0.5%",
+          "attribute": "customer_segment",
+          "group": "SME",
+          "window": "out_of_time",
+          "fpr_ratio": 2.168,
+          "fpr_p_value": 0.0384,
+          "pooled_fpr_ratio": 1.397,
+          "pooled_q_value": 0.7445,
+          "window_ratios": {
+            "out_of_time": 2.168,
+            "calibration": 0.796
+          },
+          "reason": "material in one window only; not significant once windows are pooled and corrected"
+        },
+        {
+          "operating_point": "budget_0.5%",
+          "attribute": "customer_age_band",
+          "group": "65+",
+          "window": "calibration",
+          "fpr_ratio": 3.147,
+          "fpr_p_value": 0.005,
+          "pooled_fpr_ratio": 2.255,
+          "pooled_q_value": 0.2782,
+          "window_ratios": {
+            "out_of_time": 1.731,
+            "calibration": 3.147
+          },
+          "reason": "material in one window only; not significant once windows are pooled and corrected"
+        }
+      ]
+    },
+    "ablation_without_network_features": {
+      "pr_auc": 0.7726,
+      "detection": {
+        "mules_in_window": 42,
+        "detected": 36,
+        "by_kind": {
+          "ring": {
+            "mules": 34,
+            "detected": 29
+          },
+          "standalone": {
+            "mules": 8,
+            "detected": 7
+          }
+        },
+        "detection_rate": 0.857,
+        "median_days_after_activation": 13.0,
+        "median_lead_days_before_uncovered": 48.5
+      }
+    },
+    "feature_importance_gain_share": {
+      "graph_shared_entity_customers": 0.474,
+      "out_new_payees_30d": 0.212,
+      "inbound_reported_fraud_30d": 0.165,
+      "account_age_days": 0.061,
+      "out_value_30d_usd": 0.025,
+      "in_distinct_senders_30d": 0.015,
+      "pass_through_ratio": 0.012,
+      "cashout_share": 0.012,
+      "in_count_7d": 0.009,
+      "fast_out_share": 0.005,
+      "in_count_30d": 0.003,
+      "in_new_sender_share": 0.003,
+      "graph_component_known_fraud": 0.002,
+      "in_value_30d_usd": 0.002
+    },
+    "gates": [
+      {
+        "gate": "feature_lineage",
+        "passed": true,
+        "detail": "All mule features trace to pre-authorisation fields"
+      },
+      {
+        "gate": "beats_rule_baseline",
+        "passed": true,
+        "detail": "detection 0.857 vs rule 0.095"
+      },
+      {
+        "gate": "fairness",
+        "passed": true,
+        "detail": "0 findings, 2 on the watchlist"
+      }
+    ],
+    "validation_status": "passed",
+    "notice": "Synthetic mules in synthetic data: capability evidence, not performance on a real book."
+  },
+  "validation": {
+    "status": "passed",
+    "gates": [
+      {
+        "gate": "feature_lineage",
+        "passed": true,
+        "detail": "All mule features trace to pre-authorisation fields"
+      },
+      {
+        "gate": "beats_rule_baseline",
+        "passed": true,
+        "detail": "detection 0.857 vs rule 0.095"
+      },
+      {
+        "gate": "fairness",
+        "passed": true,
+        "detail": "0 findings, 2 on the watchlist"
+      }
+    ]
+  },
+  "registered_at": "2026-10-06T10:42:24.036662+00:00"
+}

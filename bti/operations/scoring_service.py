@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Optional
 
+import pandas as pd
 from sqlalchemy import null
 from sqlalchemy.orm import Session
 
@@ -44,6 +45,7 @@ class ScoredDecision:
     rules: list = field(default_factory=list)
     step_up: Optional[dict] = None
     explanation: str = "inline"          # inline | pending (async, see bti.operations.explanations) | none
+    scam: Optional[dict] = None          # APP-scam overlay for outbound payments (Phase 9)
 
 
 def model_available() -> bool:
@@ -86,7 +88,7 @@ def prepare_transaction(txn: dict) -> dict:
 
 
 def _log(db: Session, s: V3Score, txn: dict, decision: Decision, jurisdiction: Optional[str],
-         amount_usd: float, shadow: bool, pending: bool = False) -> None:
+         amount_usd: float, shadow: bool, pending: bool = False, scam: Optional[dict] = None) -> None:
     """Score-log row; `pending` leaves reason_codes null until the asynchronous explanation fills it."""
     db.add(ScoreLog(
         transaction_id=s.transaction_id, customer_id=txn.get("customer_id"), model_id=s.model_id,
@@ -97,6 +99,8 @@ def _log(db: Session, s: V3Score, txn: dict, decision: Decision, jurisdiction: O
         features=s.features, guardrails=decision.guardrails_applied, latency_ms=s.latency_ms,
         monitoring_attributes={k: txn[k] for k in MONITORING_ATTRIBUTES if txn.get(k)} or None,
         model_probability=s.model_probability, calibration_overlay=s.calibration_overlay,
+        scam_model_id=(scam or {}).get("model_id"), scam_probability=(scam or {}).get("probability"),
+        scam_exposure_gbp=(scam or {}).get("exposure_gbp"), scam_action=(scam or {}).get("action"),
         scored_at=datetime.utcnow(),
     ))
 
@@ -117,6 +121,17 @@ def score_and_decide(txn: dict, db: Optional[Session] = None, explain: bool = Tr
         decision.guardrails_applied.append("No capacity policy fitted for this model: review and step-up volumes "
                                            "are unconstrained (python -m bti.operations.capacity)")
     iso = policy.iso2 if policy else None
+
+    scam = None
+    from bti.scams.overlay import apply as apply_scam, assess as assess_scam, is_payment
+    if is_payment(txn):
+        try:
+            from bti.modeling.scorer import fetch_history
+            history = fetch_history(db, txn, 365) if db is not None else pd.DataFrame()
+            scam = assess_scam(txn, history, db, explain=explain)
+            apply_scam(decision, scam)
+        except Exception as exc:                       # the overlay must never break a payment decision
+            log.error("Scam overlay failed", extra={"transaction_id": txn.get("transaction_id"), "error": str(exc)})
 
     rule_hits = []
     if db is not None:
@@ -143,7 +158,7 @@ def score_and_decide(txn: dict, db: Optional[Session] = None, explain: bool = Tr
     step_up = None
     if db is not None and log_scores:
         try:
-            _log(db, live, txn, decision, iso, amount_usd, shadow=False, pending=deferred)
+            _log(db, live, txn, decision, iso, amount_usd, shadow=False, pending=deferred, scam=scam)
             if rule_hits:
                 from bti.rules.lifecycle import record_hits
                 record_hits(db, live.transaction_id, rule_hits)
@@ -176,4 +191,4 @@ def score_and_decide(txn: dict, db: Optional[Session] = None, explain: bool = Tr
                             db if (db is not None and log_scores) else None)
         explanation = "pending"
     return ScoredDecision(live=live, decision=decision, policy=policy, amount_usd=amount_usd, shadow=shadow,
-                          rules=rule_hits, step_up=step_up, explanation=explanation)
+                          rules=rule_hits, step_up=step_up, explanation=explanation, scam=scam)

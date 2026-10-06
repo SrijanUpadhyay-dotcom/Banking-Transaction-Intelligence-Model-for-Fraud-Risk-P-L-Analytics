@@ -192,6 +192,19 @@ class Settings(BaseSettings):
     case_checker_threshold_usd: float = _yaml.get("cases", {}).get("checker_threshold_usd", 10000.0)
     case_sla_check_cron: str = _yaml.get("cases", {}).get("sla_check_cron", "*/15 * * * *")
 
+    # Scams (Phase 9): UK APP-scam reimbursement (PSR) and scam intervention economics. Illustrative defaults;
+    # the bank's compliance team confirms the rules in force and its own excess policy.
+    scam_reimbursement: dict = _yaml.get("scams", {}).get("reimbursement", {
+        "max_claim_gbp": 85000, "sending_share": 0.5, "excess_gbp": 0, "claim_window_months": 13,
+        "in_scope_types": ["Transfer", "Payment"], "jurisdiction": "GB"})
+    scam_interventions: dict = _yaml.get("scams", {}).get("interventions", {
+        "warning": {"cost_gbp": 0.0, "friction_gbp": 0.5, "effectiveness": 0.15},
+        "hold_and_call": {"cost_gbp": 8.0, "friction_gbp": 5.0, "effectiveness": 0.60}})
+    scam_customer_harm_weight: float = _yaml.get("scams", {}).get("customer_harm_weight", 0.5)
+    scam_mode: str = Field(default=_yaml.get("scams", {}).get("mode", "shadow"), alias="BTI_SCAM_MODE")
+    mule_alert_budget: float = _yaml.get("scams", {}).get("mule_alert_budget", 0.005)
+    mule_scan_cron: str = _yaml.get("scams", {}).get("mule_scan_cron", "30 4 * * *")
+
     # Planning (Phase 8): staffing assumptions (illustrative; replace with the bank's operations data)
     planning_aht_minutes: dict = _yaml.get("planning", {}).get("aht_minutes", {"urgent": 20, "high_value": 30,
                                                                                "standard": 15})

@@ -57,6 +57,12 @@ class V3Transaction(BaseModel):
                                                                         "happened (terminal, device GPS or IP geo)")
     longitude: Optional[float] = Field(None, ge=-180, le=180)
     payee_id: Optional[str] = Field(None, description="Payee feed: beneficiary account key (tokenised is fine)")
+    cop_result: Optional[str] = Field(None, pattern="^(match|close_match|no_match|unavailable)$",
+                                      description="Confirmation-of-Payee result for this payment (scam overlay)")
+    payee_account_opened_date: Optional[str] = Field(None, description="YYYY-MM-DD, from the payee-intelligence feed")
+    payee_customer_id: Optional[str] = Field(None, description="Set when the payee account is held at this bank")
+    is_vulnerable: Optional[bool] = Field(None, description="Vulnerability register; reimbursement exposure only, "
+                                                            "never a model input")
     customer_segment: Optional[str] = Field(None, description="Fairness monitoring only — never a model input")
     customer_age_band: Optional[str] = Field(None, description="Fairness monitoring only — never a model input")
 
@@ -104,6 +110,7 @@ def _score_one(txn_model: V3Transaction, db: Session, explain: bool = True) -> d
         "shadow": sd.shadow,
         "rules": [{k: h[k] for k in ("rule_id", "version", "name", "mode", "action", "enforced")} for h in sd.rules],
         "step_up": sd.step_up,
+        "scam": sd.scam,
         "history_rows_used": live.history_rows_used,
         "latency_ms": live.latency_ms,
         "notes": live.notes + ([] if policy else ["Unknown or missing country — default cost model applied."]),
